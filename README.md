@@ -58,6 +58,8 @@ Henüz bir sürüme konmamış fikirler; sırası gelince yukarıya taşınır.
 
 Fikir ya da hata bildirmek için [Issues](../../issues) sayfasını kullanabilirsiniz.
 
+Geliştirmek isteyenler için: [GELISTIRME.md](GELISTIRME.md) (derleme, imza, sürüm çıkarma, kod haritası).
+
 ---
 
 Kotlin + Jetpack Compose, Media3 ExoPlayer, libVLC, Coil. [Claude Code](https://claude.com/claude-code) ile geliştiriliyor.

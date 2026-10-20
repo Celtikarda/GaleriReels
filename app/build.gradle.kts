@@ -1,6 +1,14 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Release imza bilgileri repoda değil, bilgisayardaki keystore.properties dosyasında (.gitignore'da)
+val keystoreProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.reader(Charsets.UTF_8).use { load(it) }
 }
 
 android {
@@ -18,11 +26,33 @@ android {
         ndk { abiFilters += "arm64-v8a" }
     }
 
+    signingConfigs {
+        if (!keystoreProps.isEmpty) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // keystore.properties yoksa (ör. GitHub'dan indirip derleyen biri) imzasız APK çıkar
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        debug {
+            // Debug da aynı anahtarla imzalanır; telefondaki sürüm silinmeden debug ↔ release
+            // birbirinin üstüne kurulabilir (silmek beğenileri, izlenmeleri götürür)
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
+    }
+    packaging {
+        // VLC'nin kütüphanesi 46 MB; sıkıştırılınca APK neredeyse yarıya iniyor (indirmesi hızlı)
+        jniLibs.useLegacyPackaging = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

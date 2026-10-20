@@ -44,3 +44,9 @@ fun formatDuration(ms: Long): String {
 }
 
 fun formatCount(n: Int): String = String.format(tr, "%,d", n)
+
+/** 15492676 → "14,8 MB" */
+fun formatSize(bytes: Long): String {
+    val mb = bytes / (1024.0 * 1024.0)
+    return if (mb >= 1024) String.format(tr, "%.1f GB", mb / 1024) else String.format(tr, "%.1f MB", mb)
+}

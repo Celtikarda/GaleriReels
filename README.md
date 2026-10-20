@@ -6,6 +6,7 @@ Telefonun galerisindeki videoları Instagram Reels gibi, kaydırarak izlemeye ya
 - Çift dokunarak beğenme, paylaşma, sesi kapatma, karışık / yeniden eskiye sıralama
 - Her videonun beğenisi ve kaç kez izlendiği kaydedilir; kayıt seçilen bir klasörde de
   (Documents › GaleriReels) tutulur, uygulama silinip yeniden kurulsa da geri gelir
+- Favoriler (telefonun galerisiyle ortak) ve Temizlik modu: istemediğin videoları sola kaydırıp sil, ne kadar yer açtığını gör
 - Telefonun donanımının açamadığı büyük videolar (ör. 1440x1600@60) VLC motoruyla oynatılır
 
 Sadece Android (64-bit ARM, Android 8.0+). APK'yı [Releases](../../releases) sayfasından indirebilirsiniz.
@@ -21,17 +22,17 @@ kolaylaştırmak.
 - [x] **0.3** Videolar doğru boyutta ve çok daha hızlı açılıyor (kaydırınca ~10 ms)
 - [x] **0.4** Kalıcı beğeniler ve izlenme sayısı; uygulama silinse de geri gelir
 - [x] **0.4.1** Bazı videolarda donma ve açılmama düzeltildi
+- [x] **0.5 + 0.6** (birlikte yayınlandı)
+  - **Favoriler:** Üç nokta menüsünden "Favorilere ekle"; telefonun kendi galerisindeki
+    favorilerle aynı liste. Menüde ayrıca "Video bilgisi" (boyut, çözünürlük, izlenme...).
+  - **Temizlik modu:** Ana ekrandaki Temizlik kartından başlar. Önce hiç izlemediğin ve en çok
+    yer kaplayan videolar gelir; silmek istediğini sola kaydır, sonra tek onayla sil.
+    Beğendiklerin ve favorilerin listeye hiç girmez. Silinenler Android'in çöp kutusuna gider:
+    30 gün içinde Ayarlar'dan geri getirebilir ya da hemen kalıcı olarak silebilirsin.
+  - Her videoyu hangi gün izlediğin de kaydedilmeye başladı (aylık özet ve başarımlar için).
+    Bu bilgi sadece senin telefonunda ve seçtiğin klasörde durur; uygulamanın internet izni yoktur.
 
 ### Sıradakiler
-- [ ] **0.5 Favoriler** · Üç nokta menüsünden "Favorilere ekle"; favoriler telefonun kendi
-  galerisindeki favorilerle aynı liste olur.
-  *Bu sürümden itibaren her videoyu hangi gün izlediğin de kaydedilmeye başlar (aylık özet için,
-  aşağıya bakın). Bu bilgi sadece senin telefonunda ve seçtiğin klasörde durur; uygulamanın
-  internet izni yoktur.*
-- [ ] **0.6 Temizlik modu** · Videoları kaydırırken artık istemediğini tek hareketle sil, uygulama
-  ne kadar yer açtığını göstersin ("Bugün 2,3 GB yer açtın"). Silinen videolar önce çöp kutusuna
-  gider, yanlışlıkla silineni geri alabilirsin. Hiç izlemediğin ya da en çok yer kaplayan
-  videoları öne çıkarır.
 - [ ] **0.7 Yeni görünüm** · Daha küçük ve düzenli klasörler, parlak videolarda da okunan
   yazılar, siyah çıkan küçük resimlerin düzeltilmesi.
 - [ ] **0.8 Aylık özet** · "Bu ay en çok izlediğin videolar", toplam izlenme, en sevdiğin klasör;

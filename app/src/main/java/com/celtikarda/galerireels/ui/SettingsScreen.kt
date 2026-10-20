@@ -1,5 +1,9 @@
 package com.celtikarda.galerireels.ui
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -17,12 +21,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +43,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.celtikarda.galerireels.DataFolder
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.celtikarda.galerireels.GalleryViewModel
+import com.celtikarda.galerireels.MediaActions
+import com.celtikarda.galerireels.MediaRepository
 import com.celtikarda.galerireels.R
 
 private val WarningOrange = Color(0xFFFFB020)
@@ -44,6 +58,40 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
     val folder = stats.folder
     val context = LocalContext.current
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
+    // Ayarlardan izin verip dönünce durumu yeniden oku
+    var resumeTick by remember { mutableIntStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumeTick++ }
+
+    // Çöp kutusu: 30 günü dolup telefonun sildiklerini listeden düş
+    LaunchedEffect(Unit) {
+        val ids = stats.trashed.map { it.id }
+        if (ids.isNotEmpty()) {
+            val still = MediaRepository.trashedIds(context, ids)
+            stats.recordDeleted(ids.filterNot { it in still }.toSet())
+        }
+    }
+    // Geri getirme / kalıcı silme: Android önce kullanıcıya sorar
+    var pendingTrash by remember { mutableStateOf<Pair<List<Long>, Boolean>?>(null) }
+    val trashLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        val (ids, restore) = pendingTrash ?: return@rememberLauncherForActivityResult
+        pendingTrash = null
+        if (result.resultCode == Activity.RESULT_OK) {
+            if (restore) {
+                stats.recordRestored(ids.toSet())
+                vm.reloadVideos()
+            } else {
+                stats.recordDeleted(ids.toSet())
+            }
+        }
+    }
+    val trashAction = { ids: List<Long>, restore: Boolean ->
+        val uris = ids.map { MediaRepository.uriOf(it) }
+        val request = if (restore) MediaActions.trashRequest(context, uris, trash = false) else MediaActions.deleteRequest(context, uris)
+        if (request != null) {
+            pendingTrash = ids to restore
+            trashLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+        }
+    }
 
     Column(
         Modifier
@@ -111,6 +159,64 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 color = Color.White.copy(alpha = 0.55f),
                 fontSize = 13.sp,
             )
+        }
+
+        if (MediaActions.trashSupported) {
+            SectionTitle("Temizlik")
+            Card {
+                InfoLine("Bugün", formatSize(stats.cleanedToday))
+                InfoLine("Toplam", formatSize(stats.cleanedTotal))
+                Spacer(Modifier.height(10.dp))
+                val trash = stats.trashed.toList()
+                if (trash.isEmpty()) {
+                    Text("Çöp kutusunda uygulamanın sildiği video yok.", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                } else {
+                    Text(
+                        "Çöp kutusunda ${formatCount(trash.size)} video (${formatSize(trash.sumOf { it.bytes })}). " +
+                            "Telefon bunları silindikten 30 gün sonra kendiliğinden siler; o zamana kadar geri getirebilirsin. " +
+                            "Yerin hemen açılması için kalıcı olarak silebilirsin.",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row {
+                        OutlinedButton(onClick = { trashAction(trash.map { it.id }, true) }) { Text("Geri getir") }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = { trashAction(trash.map { it.id }, false) },
+                            colors = ButtonDefaults.buttonColors(containerColor = DeleteRed, contentColor = Color.White),
+                        ) { Text("Kalıcı olarak sil") }
+                    }
+                }
+            }
+        }
+
+        if (MediaActions.favoritesSupported) {
+            SectionTitle("Favoriler")
+            Card {
+                val canManage = remember(resumeTick) { MediaActions.canManageMedia(context) }
+                Text(
+                    "Favoriler telefonunun galerisindeki favorilerle aynı listedir; burada eklediğin " +
+                        "galeride de favori olur.",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                if (canManage) {
+                    InfoLine("Onay", "Sorulmuyor (Medya yönetimi izni var)")
+                } else {
+                    Text(
+                        "Videoları çöp kutusuna taşırken (ve bazı telefonlarda favori eklerken) telefon " +
+                            "her seferinde onay sorar. \"Medya yönetimi\" izni verirsen sormaz.",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                    )
+                    MediaActions.manageMediaSettings(context)?.let { intent ->
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(onClick = { context.startActivity(intent) }) { Text("İzni aç") }
+                    }
+                }
+            }
         }
 
         SectionTitle("Uygulama")

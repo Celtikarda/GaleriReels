@@ -22,12 +22,14 @@ class MainActivity : ComponentActivity() {
 
         // Sadece debug sürümde: adb ile belirli bir videoyu doğrudan açıp test etmek için
         // adb shell am start -S -n com.celtikarda.galerireels/.MainActivity --el open_video_id <id>
+        // Temizliği verilen videolarla başlatmak için: --ela open_cleanup_ids <id>,<id>
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val openVideoId = if (debuggable) intent.getLongExtra("open_video_id", -1L).takeIf { it > 0 } else null
+        val openCleanupIds = if (debuggable) intent.getLongArrayExtra("open_cleanup_ids")?.toList() else null
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                GaleriReelsApp(openVideoId = openVideoId)
+                GaleriReelsApp(openVideoId = openVideoId, openCleanupIds = openCleanupIds)
             }
         }
     }

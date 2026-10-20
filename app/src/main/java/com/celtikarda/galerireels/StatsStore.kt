@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.AtomicFile
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,8 +19,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /** Bir videonun kayıtlı bilgileri */
 data class VideoStat(
@@ -30,10 +36,26 @@ data class VideoStat(
     val lastViewedAt: Long = 0,
 )
 
+/** Uygulamanın Android çöp kutusuna taşıdığı video (30 gün sonra Android kendisi siler) */
+data class TrashedVideo(val id: Long, val key: String, val name: String, val bytes: Long, val at: Long)
+
+/** Dosyadan okunan ya da dosyaya yazılacak her şey */
+private class SavedData(
+    val videos: Map<String, VideoStat>,
+    /** gün ("2026-10-20") → video anahtarı → o gün kaç kez izlendi */
+    val days: Map<String, Map<String, Int>>,
+    /** Uygulamanın açıldığı günler */
+    val activeDays: Set<String>,
+    /** gün → o gün temizlenen (çöp kutusuna taşınan) bayt */
+    val cleaned: Map<String, Long>,
+    val trash: List<TrashedVideo>,
+)
+
 /**
- * Beğeniler ve izlenme sayıları. Aynı JSON dosyası iki yerde tutulur: uygulamanın kendi
- * klasöründe (hızlı açılış için) ve kullanıcının seçtiği klasörde (uygulama silinse de kalsın
- * diye). Videolar dosya adı + boyutuyla tanınır ([VideoItem.key]).
+ * Beğeniler, izlenme sayıları ve günlük izleme geçmişi. Aynı JSON dosyası iki yerde tutulur:
+ * uygulamanın kendi klasöründe (hızlı açılış için) ve kullanıcının seçtiği klasörde (uygulama
+ * silinse de kalsın diye). Videolar dosya adı + boyutuyla tanınır ([VideoItem.key]).
+ * Günlük geçmiş aylık özet ve başarımlar ("7 gün üst üste") için tutulur.
  */
 class StatsStore(context: Context, private val scope: CoroutineScope) {
 
@@ -43,6 +65,16 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
 
     /** video anahtarı → bilgiler */
     private val stats = mutableStateMapOf<String, VideoStat>()
+    /** gün → video anahtarı → o gün kaç kez izlendi (sadece ana iş parçacığında) */
+    private val days = HashMap<String, HashMap<String, Int>>()
+    private val activeDays = sortedSetOf<String>()
+    /** gün → o gün temizlenen bayt */
+    private val cleaned = mutableStateMapOf<String, Long>()
+
+    /** Çöp kutusuna taşıdıklarımız; geri getirilebilir ya da kalıcı silinebilir */
+    val trashed = mutableStateListOf<TrashedVideo>()
+    val cleanedToday: Long get() = cleaned[today()] ?: 0L
+    val cleanedTotal: Long get() = cleaned.values.sum()
 
     var loaded by mutableStateOf(false)
         private set
@@ -76,9 +108,13 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 val saved = readLocal() ?: folder?.let { f -> runCatching { f.readData(appContext)?.let(::parse) }.getOrNull() }
                 saved to folder
             }
-            saved?.let { stats.putAll(it) }
+            saved?.let { absorb(it) }
+            // Android çöp kutusundakileri 30 gün sonra siliyor
+            val expired = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+            trashed.removeAll { it.at < expired }
             folder = savedFolder
             loaded = true
+            markActiveToday()
         }
     }
 
@@ -95,7 +131,40 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     fun addView(key: String) {
         val current = stat(key)
         stats[key] = current.copy(views = current.views + 1, lastViewedAt = System.currentTimeMillis())
+        val day = days.getOrPut(today()) { HashMap() }
+        day[key] = (day[key] ?: 0) + 1
+        markActiveToday()
         scheduleSave()
+    }
+
+    /** Temizlikte çöp kutusuna taşındılar; bugün temizlenene eklenir */
+    fun recordTrashed(videos: List<VideoItem>) {
+        val now = System.currentTimeMillis()
+        videos.forEach { trashed += TrashedVideo(it.id, it.key, it.name, it.sizeBytes, now) }
+        cleaned[today()] = cleanedToday + videos.sumOf { it.sizeBytes }
+        markActiveToday()
+        scheduleSave()
+    }
+
+    /** Çöp kutusundan geri getirildiler: temizlenmiş sayılmazlar */
+    fun recordRestored(ids: Set<Long>) {
+        val restored = trashed.filter { it.id in ids }
+        trashed.removeAll(restored)
+        restored.forEach { t ->
+            val day = dayOf(t.at)
+            cleaned[day] = ((cleaned[day] ?: 0L) - t.bytes).coerceAtLeast(0L)
+        }
+        scheduleSave()
+    }
+
+    /** Kalıcı silindiler (ya da 30 gün doldu): temizlenmiş sayılmaya devam ederler */
+    fun recordDeleted(ids: Set<Long>) {
+        if (trashed.removeAll { it.id in ids }) scheduleSave()
+    }
+
+    /** Uygulamanın bugün açıldığını kaydeder (başarımlarda "üst üste gün" için) */
+    fun markActiveToday() {
+        if (activeDays.add(today())) scheduleSave()
     }
 
     /**
@@ -109,7 +178,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             val opened = DataFolder.open(appContext, treeUri)
             opened to opened.readData(appContext)?.let { runCatching { parse(it) }.getOrNull() }
         }
-        existing?.forEach { (key, other) -> stats[key] = merge(stat(key), other) }
+        existing?.let { absorb(it) }
 
         val old = folder
         if (old != null && old.treeUri != treeUri) {
@@ -123,7 +192,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         }
         save()
         folderError?.let { error(it) }
-        existing?.size ?: 0
+        existing?.videos?.size ?: 0
     }
 
     fun dismissFolderPrompt() {
@@ -147,8 +216,22 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** Okunan veriyi şimdikilerle birleştirir: en çok izlenme, en son değişen beğeni */
+    private fun absorb(saved: SavedData) {
+        saved.videos.forEach { (key, other) -> stats[key] = merge(stat(key), other) }
+        saved.days.forEach { (date, counts) ->
+            val day = days.getOrPut(date) { HashMap() }
+            counts.forEach { (key, n) -> day[key] = maxOf(day[key] ?: 0, n) }
+        }
+        activeDays += saved.activeDays
+        saved.cleaned.forEach { (date, bytes) -> cleaned[date] = maxOf(cleaned[date] ?: 0L, bytes) }
+        saved.trash.forEach { t -> if (trashed.none { it.id == t.id }) trashed += t }
+    }
+
     private suspend fun save() {
-        val json = toJson(stats.toMap())
+        val json = toJson(
+            SavedData(stats.toMap(), days.mapValues { it.value.toMap() }, activeDays.toSet(), cleaned.toMap(), trashed.toList()),
+        )
         val target = folder
         val written: Result<DataFolder>? = withContext(Dispatchers.IO) {
             writeLocal(json)
@@ -189,7 +272,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         return if (granted) DataFolder.restore(tree, dirId) else null
     }
 
-    private fun readLocal(): Map<String, VideoStat>? {
+    private fun readLocal(): SavedData? {
         if (!localFile.baseFile.exists()) return null
         return runCatching { parse(localFile.readFully().toString(Charsets.UTF_8)) }.getOrNull()
     }
@@ -210,9 +293,16 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_DISMISSED = "prompt_dismissed"
         const val KEY_LAST_SAVE = "last_folder_save"
 
-        fun toJson(stats: Map<String, VideoStat>): String {
+        private val dayFormat = DateTimeFormatter.ISO_LOCAL_DATE
+
+        fun today(): String = LocalDate.now().format(dayFormat)
+
+        fun dayOf(millis: Long): String =
+            Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().format(dayFormat)
+
+        fun toJson(data: SavedData): String {
             val videos = JSONObject()
-            for ((key, s) in stats) {
+            for ((key, s) in data.videos) {
                 if (!s.liked && s.views == 0 && s.likeChangedAt == 0L) continue
                 videos.put(
                     key,
@@ -223,17 +313,33 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                         .put("lastViewedAt", s.lastViewedAt),
                 )
             }
+            val days = JSONObject()
+            for ((date, counts) in data.days.toSortedMap()) {
+                days.put(date, JSONObject(counts as Map<*, *>))
+            }
             return JSONObject()
                 .put("app", "Galeri Reels")
-                .put("format", 1)
+                .put("format", 2)
                 .put("updatedAt", System.currentTimeMillis())
                 .put("videos", videos)
+                .put("days", days)
+                .put("activeDays", JSONArray(data.activeDays.sorted()))
+                .put("cleaned", JSONObject(data.cleaned.toSortedMap() as Map<*, *>))
+                .put(
+                    "trash",
+                    JSONArray(
+                        data.trash.map {
+                            JSONObject().put("id", it.id).put("key", it.key).put("name", it.name).put("bytes", it.bytes).put("at", it.at)
+                        },
+                    ),
+                )
                 .toString(2)
         }
 
-        fun parse(text: String): Map<String, VideoStat> {
-            val videos = JSONObject(text).optJSONObject("videos") ?: return emptyMap()
-            return videos.keys().asSequence().associateWith { key ->
+        fun parse(text: String): SavedData {
+            val root = JSONObject(text)
+            val videos = root.optJSONObject("videos")
+            val videoStats = videos?.keys()?.asSequence()?.associateWith { key ->
                 val o = videos.getJSONObject(key)
                 VideoStat(
                     liked = o.optBoolean("liked"),
@@ -241,7 +347,23 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                     views = o.optInt("views"),
                     lastViewedAt = o.optLong("lastViewedAt"),
                 )
+            }.orEmpty()
+            // 0.4'ün dosyalarında (format 1) günlük geçmiş yok
+            val days = root.optJSONObject("days")
+            val dayCounts = days?.keys()?.asSequence()?.associateWith { date ->
+                val o = days.getJSONObject(date)
+                o.keys().asSequence().associateWith { key -> o.optInt(key) }
+            }.orEmpty()
+            val active = root.optJSONArray("activeDays")
+            val activeDays = (0 until (active?.length() ?: 0)).map { active!!.getString(it) }.toSet()
+            val cleanedJson = root.optJSONObject("cleaned")
+            val cleaned = cleanedJson?.keys()?.asSequence()?.associateWith { cleanedJson.optLong(it) }.orEmpty()
+            val trashJson = root.optJSONArray("trash")
+            val trash = (0 until (trashJson?.length() ?: 0)).map { i ->
+                val o = trashJson!!.getJSONObject(i)
+                TrashedVideo(o.optLong("id"), o.optString("key"), o.optString("name"), o.optLong("bytes"), o.optLong("at"))
             }
+            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash)
         }
 
         /** İki kaydı birleştirir: en çok izlenme, en son değişen beğeni */

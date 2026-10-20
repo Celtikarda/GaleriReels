@@ -4,6 +4,9 @@ import androidx.compose.ui.graphics.Color
 
 val LikeRed = Color(0xFFFF3040)
 val InstaBlue = Color(0xFF0095F6)
+val FavoriteYellow = Color(0xFFFFC83D)
+val DeleteRed = Color(0xFFE5383B)
+val CleanupGreen = Color(0xFF34C759)
 
 /** Profil resminin etrafındaki hikâye halkası renkleri */
 val StoryRing = listOf(

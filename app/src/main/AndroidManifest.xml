@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <!-- Android 14+: kullanıcı "sadece seçili fotoğraflar" diyebilsin -->
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <!-- Android 12+: kullanıcı Ayarlar'dan "Medya yönetimi" izni verirse favori ekleme / silme
+         her seferinde onay sormaz (özel izin, kendiliğinden verilmez) -->
+    <uses-permission android:name="android.permission.MANAGE_MEDIA" />
 
     <application
         android:name=".GaleriApp"

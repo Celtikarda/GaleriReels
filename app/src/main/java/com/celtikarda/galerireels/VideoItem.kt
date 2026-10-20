@@ -9,6 +9,11 @@ data class VideoItem(
      * telefon sıfırlanınca ya da video başka klasöre taşınınca değişebiliyor, bu değişmez.
      */
     val key: String,
+    /** Dosya adı, ör. "VID-20251015-WA0005.mp4" */
+    val name: String,
+    val sizeBytes: Long,
+    /** Galeri açıldığında telefonun favorilerinde miydi (sonraki değişiklikler GalleryViewModel'de) */
+    val favorite: Boolean,
     val uri: Uri,
     val dateMillis: Long,
     val durationMs: Long,
@@ -35,5 +40,7 @@ data class Album(
     companion object {
         const val ALL = "__all__"
         const val LIKED = "__liked__"
+        const val FAVORITES = "__favorites__"
+        const val CLEANUP = "__cleanup__"
     }
 }

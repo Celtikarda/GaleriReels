@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()) {
+fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null, vm: GalleryViewModel = viewModel()) {
     val context = LocalContext.current
     var access by rememberSaveable { mutableStateOf(MediaAccess.current(context)) }
     var askedOnce by rememberSaveable { mutableStateOf(false) }
@@ -85,6 +85,9 @@ fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()
     // Kullanıcı ayarlardan izni değiştirip dönmüş olabilir
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         access = MediaAccess.current(context)
+        // Favoriler galeri uygulamasından değişmiş olabilir; gün de değişmiş olabilir
+        vm.refreshFavorites()
+        if (vm.stats.loaded) vm.stats.markActiveToday()
     }
     // Uygulama arka plana geçerken bekleyen beğeni / izlenme kaydını hemen yaz
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
@@ -93,6 +96,10 @@ fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()
 
     LaunchedEffect(access, reloadKey) {
         if (access != MediaAccess.NONE) vm.load(access to reloadKey)
+    }
+
+    LaunchedEffect(openCleanupIds, vm.loaded) {
+        if (openCleanupIds != null && vm.loaded) vm.openCleanup(firstIds = openCleanupIds)
     }
 
     LaunchedEffect(openVideoId) {

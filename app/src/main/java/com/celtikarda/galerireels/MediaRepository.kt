@@ -1,9 +1,11 @@
 package com.celtikarda.galerireels
 
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,6 +39,8 @@ object MediaRepository {
             MediaStore.MediaColumns.HEIGHT,
             // Videonun dönüklüğü (dik çekilmişse 90) Android 10'dan önce yok
             if (Build.VERSION.SDK_INT >= 29) MediaStore.MediaColumns.ORIENTATION else null,
+            // Telefonun galerisindeki favoriler Android 11'den önce yok
+            if (Build.VERSION.SDK_INT >= 30) MediaStore.MediaColumns.IS_FAVORITE else null,
             pathColumn,
         ).toTypedArray()
         // 0 baytlık (yarım kalmış indirme) dosyaları hiç gösterme
@@ -57,6 +61,7 @@ object MediaRepository {
             val widthCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
             val heightCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
             val orientationCol = c.getColumnIndex(MediaStore.MediaColumns.ORIENTATION)
+            val favoriteCol = c.getColumnIndex(MediaStore.MediaColumns.IS_FAVORITE)
             val pathCol = c.getColumnIndexOrThrow(pathColumn)
 
             while (c.moveToNext()) {
@@ -69,9 +74,14 @@ object MediaRepository {
                 val rawHeight = if (c.isNull(heightCol)) 0 else c.getInt(heightCol)
                 val orientation = if (orientationCol < 0 || c.isNull(orientationCol)) 0 else c.getInt(orientationCol)
                 val sideways = orientation == 90 || orientation == 270
+                val name = c.getString(nameCol) ?: id.toString()
+                val size = c.getLong(sizeCol)
                 result += VideoItem(
                     id = id,
-                    key = "${c.getString(nameCol) ?: id}|${c.getLong(sizeCol)}",
+                    key = "$name|$size",
+                    name = name,
+                    sizeBytes = size,
+                    favorite = favoriteCol >= 0 && c.getInt(favoriteCol) == 1,
                     uri = ContentUris.withAppendedId(collection, id),
                     dateMillis = if (taken > 0) taken else c.getLong(addedCol) * 1000,
                     durationMs = c.getLong(durationCol),
@@ -85,6 +95,35 @@ object MediaRepository {
             }
         }
         return result
+    }
+
+    fun uriOf(id: Long): Uri = ContentUris.withAppendedId(collection(), id)
+
+    /** Verilen videolardan hâlâ çöp kutusunda duranlar (30 gün dolunca Android siliyor) */
+    suspend fun trashedIds(context: Context, ids: Collection<Long>): Set<Long> = withContext(Dispatchers.IO) {
+        if (Build.VERSION.SDK_INT < 30 || ids.isEmpty()) return@withContext emptySet()
+        runCatching {
+            val args = Bundle().apply {
+                putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.MediaColumns._ID} IN (${ids.joinToString(",")})")
+            }
+            context.contentResolver.query(collection(), arrayOf(MediaStore.MediaColumns._ID), args, null)
+                ?.use { c -> buildSet { while (c.moveToNext()) add(c.getLong(0)) } }
+        }.getOrNull().orEmpty()
+    }
+
+    /** Galerideki favori videoların numaraları (başka uygulamalardan, ör. galeriden değişmiş olabilir) */
+    suspend fun favoriteIds(context: Context): Set<Long> = withContext(Dispatchers.IO) {
+        if (Build.VERSION.SDK_INT < 30) return@withContext emptySet()
+        runCatching {
+            context.contentResolver.query(
+                collection(),
+                arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns.IS_FAVORITE} = 1",
+                null,
+                null,
+            )?.use { c -> buildSet { while (c.moveToNext()) add(c.getLong(0)) } }
+        }.getOrNull().orEmpty()
     }
 
     /** "Download/YTDLnis/Video/" ya da "/storage/emulated/0/Download/x.mp4" → "Download/YTDLnis/Video" */

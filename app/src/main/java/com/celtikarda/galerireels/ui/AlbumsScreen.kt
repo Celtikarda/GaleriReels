@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.celtikarda.galerireels.Album
 import com.celtikarda.galerireels.GalleryViewModel
+import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.VideoThumb
 
@@ -105,6 +108,18 @@ fun AlbumsScreen(
             }
         }
 
+        if (MediaActions.trashSupported) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                val unwatched = vm.unwatched()
+                CleanupCard(
+                    unwatchedCount = unwatched.size,
+                    unwatchedBytes = unwatched.sumOf { it.sizeBytes },
+                    cleanedToday = vm.stats.cleanedToday,
+                    onStart = vm::openCleanup,
+                )
+            }
+        }
+
         items(tiles, key = { it.id }) { album ->
             AlbumTile(album, onClick = { vm.open(album) })
         }
@@ -118,6 +133,53 @@ fun AlbumsScreen(
                 modifier = Modifier.navigationBarsPadding().padding(top = 12.dp, bottom = 16.dp),
             )
         }
+    }
+}
+
+/** Temizlik modunun girişi: hiç izlenmeyenlerin kapladığı yer, bugün temizlenen */
+@Composable
+private fun CleanupCard(unwatchedCount: Int, unwatchedBytes: Long, cleanedToday: Long, onStart: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF1C1C1E))
+            .clickable(onClick = onStart)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(CleanupGreen.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(painterResource(R.drawable.ic_delete_sweep), contentDescription = null, tint = CleanupGreen, modifier = Modifier.size(26.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Temizlik", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                if (unwatchedCount > 0) {
+                    "Hiç izlemediğin ${formatCount(unwatchedCount)} video ${formatSize(unwatchedBytes)} yer kaplıyor"
+                } else {
+                    "Artık istemediğin videoları sil, yer aç"
+                },
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 13.sp,
+            )
+            if (cleanedToday > 0) {
+                Text(
+                    "Bugün ${formatSize(cleanedToday)} temizledin",
+                    color = CleanupGreen,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Text("Başla", color = InstaBlue, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -149,6 +211,14 @@ private fun AlbumTile(album: Album, onClick: () -> Unit) {
                 contentDescription = null,
                 tint = LikeRed,
                 modifier = Modifier.align(Alignment.TopStart).padding(10.dp).size(22.dp),
+            )
+        }
+        if (album.id == Album.FAVORITES) {
+            Icon(
+                painterResource(R.drawable.ic_star),
+                contentDescription = null,
+                tint = FavoriteYellow,
+                modifier = Modifier.align(Alignment.TopStart).padding(10.dp).size(24.dp),
             )
         }
 

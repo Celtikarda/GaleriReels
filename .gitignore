@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+.kotlin/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# İmza anahtarı ve şifresi asla repoya girmez
+*.jks
+*.keystore
+keystore.properties

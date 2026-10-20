@@ -1,0 +1,146 @@
+package com.celtikarda.galerireels.ui
+
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.celtikarda.galerireels.GalleryViewModel
+import com.celtikarda.galerireels.MediaAccess
+
+@Composable
+fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()) {
+    val context = LocalContext.current
+    var access by rememberSaveable { mutableStateOf(MediaAccess.current(context)) }
+    var askedOnce by rememberSaveable { mutableStateOf(false) }
+    // İzin penceresinden her dönüşte artar; "daha fazla seç" sonrası yeniden yüklemeyi tetikler
+    var reloadKey by rememberSaveable { mutableIntStateOf(0) }
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        askedOnce = true
+        access = MediaAccess.current(context)
+        reloadKey++
+    }
+    val requestAccess = { launcher.launch(MediaAccess.permissions) }
+
+    // Kullanıcı ayarlardan izni değiştirip dönmüş olabilir
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        access = MediaAccess.current(context)
+    }
+
+    LaunchedEffect(access, reloadKey) {
+        if (access != MediaAccess.NONE) vm.load(access to reloadKey)
+    }
+
+    LaunchedEffect(openVideoId) {
+        if (openVideoId != null) vm.openVideo(openVideoId)
+    }
+
+    val openAlbum = vm.openAlbum
+    BackHandler(enabled = openAlbum != null) { vm.close() }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        when {
+            access == MediaAccess.NONE -> PermissionScreen(
+                deniedBefore = askedOnce,
+                onRequest = requestAccess,
+                onOpenSettings = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                    )
+                },
+            )
+            !vm.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+            vm.videoCount == 0 -> MessageScreen(
+                title = "Video bulunamadı",
+                body = if (access == MediaAccess.PARTIAL) "Sadece seçtiğin videoları görebiliyorum." else "Galeride hiç video yok gibi görünüyor.",
+                buttonText = if (access == MediaAccess.PARTIAL) "Video seç" else null,
+                onButton = requestAccess,
+            )
+            openAlbum != null -> key(openAlbum.id) {
+                ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
+            }
+            else -> AlbumsScreen(
+                vm = vm,
+                partialAccess = access == MediaAccess.PARTIAL,
+                onSelectMore = requestAccess,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PermissionScreen(deniedBefore: Boolean, onRequest: () -> Unit, onOpenSettings: () -> Unit) {
+    MessageScreen(
+        title = "Videoların, reels gibi",
+        body = if (deniedBefore) {
+            "İzin verilmedi. Pencere tekrar açılmazsa izni Ayarlar > İzinler > Fotoğraflar ve videolar kısmından açabilirsin."
+        } else {
+            "Telefonundaki videoları dikey kaydırarak izlemek için galeri erişimi gerekiyor. Uygulamanın internet izni yok, hiçbir şey telefonundan çıkmaz."
+        },
+        buttonText = "Galeriye izin ver",
+        onButton = onRequest,
+        secondaryText = if (deniedBefore) "Ayarları aç" else null,
+        onSecondary = onOpenSettings,
+    )
+}
+
+@Composable
+private fun MessageScreen(
+    title: String,
+    body: String,
+    buttonText: String?,
+    onButton: () -> Unit,
+    secondaryText: String? = null,
+    onSecondary: () -> Unit = {},
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(title, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(12.dp))
+        Text(body, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, textAlign = TextAlign.Center)
+        if (buttonText != null) {
+            Spacer(Modifier.height(28.dp))
+            Button(onClick = onButton) { Text(buttonText) }
+        }
+        if (secondaryText != null) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onSecondary) { Text(secondaryText) }
+        }
+    }
+}

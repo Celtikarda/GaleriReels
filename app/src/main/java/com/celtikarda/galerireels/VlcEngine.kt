@@ -163,6 +163,14 @@ class VlcEngine private constructor(private val appContext: Context, private val
         onControl { if (gen == controlGeneration) player.play() }
     }
 
+    /** 0..1 arası konuma sarar */
+    fun seek(fraction: Float) {
+        if (!hasMedia) return
+        positionCache = fraction
+        val gen = generation
+        onControl { if (gen == controlGeneration) player.position = fraction }
+    }
+
     fun setMuted(muted: Boolean) {
         this.muted = muted
         if (hasMedia) applyVolume()

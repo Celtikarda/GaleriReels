@@ -74,7 +74,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -242,6 +244,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     }
                 },
                 onInfo = { infoItem = item },
+                onSeek = { fraction -> playback.seekTo(item, fraction) },
                 onDelete = if (cleanup) {
                     {
                         vm.markForCleanup(item)
@@ -389,9 +392,11 @@ private fun ReelPage(
     onToggleMute: () -> Unit,
     onToggleFavorite: () -> Unit,
     onInfo: () -> Unit,
+    onSeek: (Float) -> Unit,
     /** Temizlik modunda: videoyu silinecekler listesine ekler (sola kaydırma ya da çöp kutusu) */
     onDelete: (() -> Unit)?,
 ) {
+    val haptic = LocalHapticFeedback.current
     var burstId by remember { mutableIntStateOf(0) }
     var burstAt by remember { mutableStateOf(Offset.Zero) }
     val tap by rememberUpdatedState(onTogglePause)
@@ -407,6 +412,7 @@ private fun ReelPage(
                 pageScope.launch {
                     if (swipeX.value < -size.width * 0.28f) {
                         swipeX.animateTo(-size.width.toFloat(), tween(160))
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         delete?.invoke()
                     } else {
                         swipeX.animateTo(0f, spring())
@@ -436,6 +442,7 @@ private fun ReelPage(
                             onDoubleTap = { offset ->
                                 burstAt = offset
                                 burstId++
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 doubleTap()
                             },
                         )
@@ -484,6 +491,8 @@ private fun ReelPage(
                             else -> 0f
                         }
                     },
+                    durationMs = item.durationMs,
+                    onSeek = onSeek,
                     modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
                 )
             }
@@ -940,27 +949,69 @@ private fun TopBar(title: String, shuffled: Boolean, showShuffle: Boolean, onBac
 }
 
 @Composable
-private fun VideoProgress(progress: () -> Float, modifier: Modifier) {
+/** Alttaki ilerleme çubuğu; parmakla sürükleyince video o noktaya sarılır */
+private fun VideoProgress(progress: () -> Float, durationMs: Long, onSeek: (Float) -> Unit, modifier: Modifier) {
     val read by rememberUpdatedState(progress)
+    val seek by rememberUpdatedState(onSeek)
     var value by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         while (true) {
-            value = read().coerceIn(0f, 1f)
+            if (!dragging) value = read().coerceIn(0f, 1f)
             delay(100)
         }
     }
+    val shown = if (dragging) dragValue else value
+
+    // Çizgi ince ama dokunma alanı geniş
     Box(
         modifier
             .fillMaxWidth()
-            .height(2.dp)
-            .background(Color.White.copy(alpha = 0.25f))
+            .height(if (dragging) 120.dp else 24.dp)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        dragging = true
+                        dragValue = (offset.x / size.width).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        seek(dragValue)
+                        value = dragValue
+                        dragging = false
+                    },
+                    onDragCancel = { dragging = false },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        dragValue = (change.position.x / size.width).coerceIn(0f, 1f)
+                    },
+                )
+            },
+        contentAlignment = Alignment.BottomStart,
     ) {
+        if (dragging && durationMs > 0) {
+            Text(
+                "${formatDuration((durationMs * dragValue).toLong())} / ${formatDuration(durationMs)}",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                style = textShadow,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
         Box(
             Modifier
-                .fillMaxWidth(value)
-                .fillMaxHeight()
-                .background(Color.White)
-        )
+                .fillMaxWidth()
+                .height(if (dragging) 6.dp else 2.dp)
+                .background(Color.White.copy(alpha = 0.25f))
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(shown)
+                    .fillMaxHeight()
+                    .background(Color.White)
+            )
+        }
     }
 }
 

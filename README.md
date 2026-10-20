@@ -34,18 +34,22 @@ kolaylaştırmak.
 - [x] **0.7 Yeni görünüm** · Klasörler 3 sütun, kare kapaklı ve adları altta (telefonun
   galerisi gibi); parlak videolarda da okunan yazılar; kararmayla başlayan videolarda simsiyah
   çıkan küçük resimler artık videonun içinden bir kareyle gösteriliyor.
+- [x] **0.8 Başarımlar ve yeni görünüm**
+  - **Başarımlar:** Ana ekrandaki kupadan; izledikçe, temizledikçe, beğendikçe ve uygulamayı her
+    gün açtıkça açılan 16 rozet ("İzleyici", "Temizlikçi", "7 gün üst üste"...). Yenisi açılınca
+    üstte kısa bir kutlama çıkar.
+  - **Yeni simge ve açılış ekranı**
+  - **Son izlediklerin:** Ana ekranda en son izlediğin videolar.
+  - **Sarma:** Alttaki çizgiyi parmakla sürükleyerek videoyu ileri / geri sar.
+  - Beğenince ve silinecekler listesine atınca hafif titreşim; ayarlarda bölüm simgeleri.
 
 ### Sıradakiler
-- [ ] **0.8 Aylık özet** · "Bu ay en çok izlediğin videolar", toplam izlenme, en sevdiğin klasör;
+- [ ] **0.9 Aylık özet** · "Bu ay en çok izlediğin videolar", toplam izlenme, en sevdiğin klasör;
   arkadaşlarınla paylaşabileceğin bir kart olarak (Spotify Wrapped gibi).
-- [ ] **Açılış ekranı ve yeni uygulama simgesi**
 
 ### Fikir havuzu
 Henüz bir sürüme konmamış fikirler; sırası gelince yukarıya taşınır.
 
-- **Başarımlar** · "100 video izledin", "1 GB yer açtın", "7 gün üst üste açtın", "Bütün
-  klasörleri gezdin" gibi rozetler. Uygulamayı tekrar açmak için güzel bir sebep olur; temizlik
-  modu ve 0.5'te başlayan günlük izleme kaydıyla birlikte çalışır.
 - **Arka planda oynatma** · Uygulamadan çıkınca ya da ekran kapanınca videonun sesi devam etsin.
   Android bunun için bildirim çubuğunda bir oynatıcı göstermeyi zorunlu tutuyor (oynat /
   durdur / sonraki).

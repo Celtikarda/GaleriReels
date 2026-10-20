@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,6 +48,7 @@ import com.celtikarda.galerireels.Album
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
 
 @Composable
@@ -54,6 +57,7 @@ fun AlbumsScreen(
     partialAccess: Boolean,
     onSelectMore: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAchievements: () -> Unit,
 ) {
     val tiles = vm.albumTiles()
     val context = LocalContext.current
@@ -80,6 +84,9 @@ fun AlbumsScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f),
                     )
+                    IconButton(onClick = onOpenAchievements) {
+                        Icon(painterResource(R.drawable.ic_trophy), contentDescription = "Başarımlar", tint = FavoriteYellow)
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(painterResource(R.drawable.ic_settings), contentDescription = "Ayarlar", tint = Color.White)
                     }
@@ -121,6 +128,26 @@ fun AlbumsScreen(
                     cleanedToday = vm.stats.cleanedToday,
                     onStart = vm::openCleanup,
                 )
+            }
+        }
+
+        val recent = vm.recentVideos(15)
+        if (recent.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Text(
+                        "Son izlediklerin",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(recent, key = { it.id }) { video ->
+                            RecentTile(video, views = vm.viewsOf(video), onClick = { vm.openRecent(video) })
+                        }
+                    }
+                }
             }
         }
 
@@ -198,6 +225,39 @@ private fun CleanupCard(unwatchedCount: Int, unwatchedBytes: Long, cleanedToday:
         }
         Spacer(Modifier.width(8.dp))
         Text("Başla", color = InstaBlue, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Son izlenen video: dikey küçük resim, köşede kaç kez izlendiği */
+@Composable
+private fun RecentTile(video: VideoItem, views: Int, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .width(88.dp)
+            .aspectRatio(9f / 16f)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF1C1C1E))
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = VideoThumb(video.uri, 320),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f)))
+        )
+        Row(
+            Modifier.align(Alignment.BottomStart).padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(painterResource(R.drawable.ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(3.dp))
+            Text(formatCount(views), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 

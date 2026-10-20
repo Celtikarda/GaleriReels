@@ -7,6 +7,10 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +19,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -25,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -43,6 +50,7 @@ import com.celtikarda.galerireels.DataFolder
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaAccess
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -62,6 +70,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     val requestAccess = { launcher.launch(MediaAccess.permissions) }
 
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showAchievements by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // Android'in klasör seçme penceresi; seçilen klasöre beğeni ve izlenmeler yazılır
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
@@ -87,7 +96,10 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
         access = MediaAccess.current(context)
         // Favoriler galeri uygulamasından değişmiş olabilir; gün de değişmiş olabilir
         vm.refreshFavorites()
-        if (vm.stats.loaded) vm.stats.markActiveToday()
+        if (vm.stats.loaded) {
+            vm.stats.markActiveToday()
+            vm.checkAchievements()
+        }
     }
     // Uygulama arka plana geçerken bekleyen beğeni / izlenme kaydını hemen yaz
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
@@ -109,6 +121,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     val openAlbum = vm.openAlbum
     BackHandler(enabled = openAlbum != null) { vm.close() }
     BackHandler(enabled = openAlbum == null && showSettings) { showSettings = false }
+    BackHandler(enabled = openAlbum == null && showAchievements) { showAchievements = false }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
@@ -121,7 +134,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                     )
                 },
             )
-            !vm.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+            !vm.loaded -> LoadingScreen()
             vm.stats.folder == null && !vm.stats.folderPromptDismissed -> FolderSetupScreen(
                 onPick = pickFolder,
                 onLater = vm.stats::dismissFolderPrompt,
@@ -135,14 +148,66 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
             openAlbum != null -> key(openAlbum.id) {
                 ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
             }
+            showAchievements -> AchievementsScreen(vm = vm, onBack = { showAchievements = false })
             showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
             else -> AlbumsScreen(
                 vm = vm,
                 partialAccess = access == MediaAccess.PARTIAL,
                 onSelectMore = requestAccess,
                 onOpenSettings = { showSettings = true },
+                onOpenAchievements = { showAchievements = true },
             )
         }
+        // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar) durum çubuğunun arkası
+        if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
+
+        // Yeni başarım açılınca üstte birkaç saniye kutlama
+        val unlocked = vm.newlyUnlocked
+        var shownUnlocked by remember { mutableStateOf(unlocked) }
+        if (unlocked.isNotEmpty()) shownUnlocked = unlocked
+        LaunchedEffect(unlocked) {
+            if (unlocked.isNotEmpty()) {
+                delay(4000)
+                vm.consumeUnlocked()
+            }
+        }
+        AnimatedVisibility(
+            visible = unlocked.isNotEmpty(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 8.dp),
+            enter = fadeIn() + slideInVertically(),
+            exit = fadeOut(),
+        ) {
+            AchievementBanner(
+                unlocked = shownUnlocked,
+                onClick = {
+                    vm.consumeUnlocked()
+                    vm.close()
+                    showSettings = false
+                    showAchievements = true
+                },
+            )
+        }
+    }
+}
+
+/** Videolar galeriden okunurken (çok videoda bir iki saniye sürebiliyor) */
+@Composable
+private fun LoadingScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        AppLogo(size = 96.dp)
+        Spacer(Modifier.height(18.dp))
+        Text("Galeri Reels", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text("Videoların hazırlanıyor…", color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
+        Spacer(Modifier.height(24.dp))
+        CircularProgressIndicator(color = Color.White.copy(alpha = 0.7f), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -192,6 +257,8 @@ private fun MessageScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        AppLogo(size = 72.dp)
+        Spacer(Modifier.height(20.dp))
         Text(title, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         Text(body, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, textAlign = TextAlign.Center)

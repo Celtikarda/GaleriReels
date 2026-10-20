@@ -49,6 +49,8 @@ private class SavedData(
     /** gün → o gün temizlenen (çöp kutusuna taşınan) bayt */
     val cleaned: Map<String, Long>,
     val trash: List<TrashedVideo>,
+    /** başarım → açıldığı an */
+    val achievements: Map<String, Long>,
 )
 
 /**
@@ -75,6 +77,37 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     val trashed = mutableStateListOf<TrashedVideo>()
     val cleanedToday: Long get() = cleaned[today()] ?: 0L
     val cleanedTotal: Long get() = cleaned.values.sum()
+
+    /** Açılmış başarımlar → açıldığı an */
+    val unlocked = mutableStateMapOf<String, Long>()
+
+    /** En son izlenen videoların anahtarları, yeniden eskiye */
+    fun recentKeys(limit: Int): List<String> =
+        stats.entries.filter { it.value.views > 0 }.sortedByDescending { it.value.lastViewedAt }.take(limit).map { it.key }
+
+    /** En az bir kez izlenmiş videoların anahtarları */
+    fun watchedKeys(): Set<String> = stats.filterValues { it.views > 0 }.keys
+
+    val maxViewsOfOne: Int get() = stats.values.maxOfOrNull { it.views } ?: 0
+
+    /** Uygulamanın üst üste açıldığı en uzun gün sayısı */
+    fun bestStreak(): Int {
+        var best = 0
+        var run = 0
+        var previous: LocalDate? = null
+        for (day in activeDays.map { LocalDate.parse(it, dayFormat) }.sorted()) {
+            run = if (previous != null && previous.plusDays(1) == day) run + 1 else 1
+            best = maxOf(best, run)
+            previous = day
+        }
+        return best
+    }
+
+    fun recordUnlocked(ids: List<String>) {
+        val now = System.currentTimeMillis()
+        ids.forEach { if (it !in unlocked) unlocked[it] = now }
+        scheduleSave()
+    }
 
     var loaded by mutableStateOf(false)
         private set
@@ -226,11 +259,16 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         activeDays += saved.activeDays
         saved.cleaned.forEach { (date, bytes) -> cleaned[date] = maxOf(cleaned[date] ?: 0L, bytes) }
         saved.trash.forEach { t -> if (trashed.none { it.id == t.id }) trashed += t }
+        // Aynı başarım iki kayıtta da açılmışsa ilk açıldığı an geçerli
+        saved.achievements.forEach { (id, at) -> unlocked[id] = minOf(unlocked[id] ?: at, at) }
     }
 
     private suspend fun save() {
         val json = toJson(
-            SavedData(stats.toMap(), days.mapValues { it.value.toMap() }, activeDays.toSet(), cleaned.toMap(), trashed.toList()),
+            SavedData(
+                stats.toMap(), days.mapValues { it.value.toMap() }, activeDays.toSet(), cleaned.toMap(), trashed.toList(),
+                unlocked.toMap(),
+            ),
         )
         val target = folder
         val written: Result<DataFolder>? = withContext(Dispatchers.IO) {
@@ -325,6 +363,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 .put("days", days)
                 .put("activeDays", JSONArray(data.activeDays.sorted()))
                 .put("cleaned", JSONObject(data.cleaned.toSortedMap() as Map<*, *>))
+                .put("achievements", JSONObject(data.achievements.toSortedMap() as Map<*, *>))
                 .put(
                     "trash",
                     JSONArray(
@@ -363,7 +402,9 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 val o = trashJson!!.getJSONObject(i)
                 TrashedVideo(o.optLong("id"), o.optString("key"), o.optString("name"), o.optLong("bytes"), o.optLong("at"))
             }
-            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash)
+            val achievementsJson = root.optJSONObject("achievements")
+            val achievements = achievementsJson?.keys()?.asSequence()?.associateWith { achievementsJson.optLong(it) }.orEmpty()
+            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash, achievements)
         }
 
         /** İki kaydı birleştirir: en çok izlenme, en son değişen beğeni */

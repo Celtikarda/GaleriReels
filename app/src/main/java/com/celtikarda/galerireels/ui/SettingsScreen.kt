@@ -1,6 +1,9 @@
 package com.celtikarda.galerireels.ui
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -108,7 +111,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             Text("Ayarlar", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         }
 
-        SectionTitle("Beğeniler ve izlenmeler")
+        SectionTitle("Beğeniler ve izlenmeler", R.drawable.ic_eye)
         Card {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -162,7 +165,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
         }
 
         if (MediaActions.trashSupported) {
-            SectionTitle("Temizlik")
+            SectionTitle("Temizlik", R.drawable.ic_delete_sweep)
             Card {
                 InfoLine("Bugün", formatSize(stats.cleanedToday))
                 InfoLine("Toplam", formatSize(stats.cleanedTotal))
@@ -192,7 +195,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
         }
 
         if (MediaActions.favoritesSupported) {
-            SectionTitle("Favoriler")
+            SectionTitle("Favoriler", R.drawable.ic_star)
             Card {
                 val canManage = remember(resumeTick) { MediaActions.canManageMedia(context) }
                 Text(
@@ -219,24 +222,34 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             }
         }
 
-        SectionTitle("Uygulama")
+        SectionTitle("Uygulama", R.drawable.ic_info)
         Card {
             InfoLine("Sürüm", version ?: "")
-            InfoLine("Kaynak kodu", "github.com/Celtikarda/GaleriReels")
+            Row(
+                Modifier
+                    .clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Celtikarda/GaleriReels")))
+                    }
+                    .padding(vertical = 3.dp)
+            ) {
+                Text("Kaynak kodu", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text("github.com/Celtikarda/GaleriReels", color = InstaBlue, fontSize = 14.sp)
+            }
         }
         Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        color = Color.White.copy(alpha = 0.6f),
-        fontSize = 13.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
-    )
+private fun SectionTitle(text: String, icon: Int) {
+    Row(
+        Modifier.padding(start = 4.dp, top = 18.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 @Composable

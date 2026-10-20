@@ -50,6 +50,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             stats.awaitLoaded()
             migrateOldLikes()
             loaded = true
+            checkAchievements()
             pendingVideoId?.let { openVideo(it) }
         }
     }
@@ -127,17 +128,75 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         all = all.filter { it.id !in ids }
         folders = buildFolders(all)
         cleanupMarked = emptyList()
+        checkAchievements()
     }
 
     /** Favori isteği telefon tarafından onaylandı (ya da onay gerekmedi) */
     fun setFavorite(item: VideoItem, favorite: Boolean) {
         favoriteIds = if (favorite) favoriteIds + item.id else favoriteIds - item.id
+        checkAchievements()
     }
 
     /** Uygulamaya dönülünce: favoriler galeri uygulamasından değişmiş olabilir */
     fun refreshFavorites() {
         if (!loaded) return
-        viewModelScope.launch { favoriteIds = MediaRepository.favoriteIds(getApplication()) }
+        viewModelScope.launch {
+            favoriteIds = MediaRepository.favoriteIds(getApplication())
+            checkAchievements()
+        }
+    }
+
+    // --- Son izlenenler
+
+    /** En son izlenen videolar, yeniden eskiye */
+    fun recentVideos(limit: Int): List<VideoItem> {
+        val byKey = all.associateBy { it.key }
+        return stats.recentKeys(limit).mapNotNull { byKey[it] }
+    }
+
+    /** "Son izlediklerin"i dokunulan videodan başlatır */
+    fun openRecent(first: VideoItem) {
+        val recent = recentVideos(200)
+        if (recent.isEmpty()) return
+        source = recent
+        items = listOf(first) + recent.filter { it.id != first.id }
+        openAlbum = Album(Album.RECENT, "Son izlediklerin", recent.size, first)
+    }
+
+    // --- Başarımlar
+
+    /** Yeni açılan başarımlar; ekranda kutlama gösterilince boşaltılır */
+    var newlyUnlocked by mutableStateOf<List<Achievement>>(emptyList())
+        private set
+
+    fun achievementInput(): AchievementInput {
+        val watched = stats.watchedKeys()
+        val albumOfKey = all.associate { it.key to it.albumId }
+        return AchievementInput(
+            totalViews = stats.totalViews.toLong(),
+            watchedVideos = watched.size.toLong(),
+            maxViewsOfOne = stats.maxViewsOfOne.toLong(),
+            likes = stats.totalLikes.toLong(),
+            favorites = favoriteIds.size.toLong(),
+            foldersVisited = watched.mapNotNullTo(HashSet()) { albumOfKey[it] }.size.toLong(),
+            totalFolders = folders.size.toLong(),
+            cleanedBytes = stats.cleanedTotal,
+            bestStreak = stats.bestStreak().toLong(),
+        )
+    }
+
+    /** Koşulu sağlanıp henüz açılmamış başarımları açar */
+    fun checkAchievements() {
+        if (!loaded) return
+        val input = achievementInput()
+        val fresh = achievements.filter { it.id !in stats.unlocked && it.isUnlocked(input) }
+        if (fresh.isEmpty()) return
+        stats.recordUnlocked(fresh.map { it.id })
+        newlyUnlocked = newlyUnlocked + fresh
+    }
+
+    fun consumeUnlocked() {
+        newlyUnlocked = emptyList()
     }
 
     fun coverOf(albumId: String): VideoItem? = folders.firstOrNull { it.id == albumId }?.cover
@@ -190,15 +249,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleLike(item: VideoItem) {
         stats.setLiked(item.key, !isLiked(item))
+        checkAchievements()
     }
 
     /** Çift dokunma: Instagram'daki gibi sadece beğenir, beğeniyi geri almaz */
     fun like(item: VideoItem) {
         if (!isLiked(item)) stats.setLiked(item.key, true)
+        checkAchievements()
     }
 
     fun addView(item: VideoItem) {
         stats.addView(item.key)
+        checkAchievements()
     }
 
     /** 0.2–0.3'te beğenilenleri (galeri numarasıyla tutuluyordu) bir kez yeni kayda taşır */

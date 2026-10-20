@@ -84,6 +84,8 @@ class ReelsPlayback(
     private var viewItemId: Long? = null
     private var viewCounted = false
     private var lastPositionMs = 0L
+    /** Bu oynatmada gerçekten oynayan süre (sarma ile atlanan kısım hariç) */
+    private var watchedMs = 0L
 
     init {
         scope.launch {
@@ -127,6 +129,18 @@ class ReelsPlayback(
         applyPlaying()
     }
 
+    /** İlerleme çubuğundan sarma: [fraction] 0..1 */
+    fun seekTo(item: VideoItem, fraction: Float) {
+        if (vlcItemId == item.id) {
+            vlc?.seek(fraction)
+        } else {
+            players[item.id]?.let { player ->
+                val duration = player.duration
+                if (duration > 0) player.seekTo((duration * fraction).toLong())
+            }
+        }
+    }
+
     /** VLC ile oynayan videonun 0..1 arası konumu */
     val vlcProgress: Float get() = vlc?.progress ?: 0f
 
@@ -150,16 +164,24 @@ class ReelsPlayback(
             viewItemId = item.id
             viewCounted = false
             lastPositionMs = 0L
+            watchedMs = 0L
         }
         val position = when {
             vlcItemId == item.id -> vlc?.timeMs
             else -> players[item.id]?.currentPosition
         } ?: return
-        // Konum geriye gittiyse video başa sardı
-        if (position < lastPositionMs - 500) viewCounted = false
+        val delta = position - lastPositionMs
+        if (position < lastPositionMs - 500 && position < 1500) {
+            // Video başa sardı: yeni oynatma (çubuktan ortalara geri sarmak yeni izlenme sayılmaz)
+            viewCounted = false
+            watchedMs = position
+        } else if (delta in 1..1500) {
+            // Normal oynama; daha büyük sıçrama çubuktan ileri sarmadır, izlenmiş sayılmaz
+            watchedMs += delta
+        }
         lastPositionMs = position
         val threshold = if (item.durationMs in 1 until VIEW_AFTER_MS) item.durationMs * 8 / 10 else VIEW_AFTER_MS
-        if (!viewCounted && position >= threshold) {
+        if (!viewCounted && watchedMs >= threshold) {
             viewCounted = true
             onViewed(item)
         }

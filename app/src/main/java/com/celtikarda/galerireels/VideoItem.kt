@@ -42,5 +42,6 @@ data class Album(
         const val LIKED = "__liked__"
         const val FAVORITES = "__favorites__"
         const val CLEANUP = "__cleanup__"
+        const val RECENT = "__recent__"
     }
 }

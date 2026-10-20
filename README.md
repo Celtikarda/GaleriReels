@@ -31,10 +31,11 @@ kolaylaştırmak.
     30 gün içinde Ayarlar'dan geri getirebilir ya da hemen kalıcı olarak silebilirsin.
   - Her videoyu hangi gün izlediğin de kaydedilmeye başladı (aylık özet ve başarımlar için).
     Bu bilgi sadece senin telefonunda ve seçtiğin klasörde durur; uygulamanın internet izni yoktur.
+- [x] **0.7 Yeni görünüm** · Klasörler 3 sütun, kare kapaklı ve adları altta (telefonun
+  galerisi gibi); parlak videolarda da okunan yazılar; kararmayla başlayan videolarda simsiyah
+  çıkan küçük resimler artık videonun içinden bir kareyle gösteriliyor.
 
 ### Sıradakiler
-- [ ] **0.7 Yeni görünüm** · Daha küçük ve düzenli klasörler, parlak videolarda da okunan
-  yazılar, siyah çıkan küçük resimlerin düzeltilmesi.
 - [ ] **0.8 Aylık özet** · "Bu ay en çok izlediğin videolar", toplam izlenme, en sevdiğin klasör;
   arkadaşlarınla paylaşabileceğin bir kart olarak (Spotify Wrapped gibi).
 - [ ] **Açılış ekranı ve yeni uygulama simgesi**

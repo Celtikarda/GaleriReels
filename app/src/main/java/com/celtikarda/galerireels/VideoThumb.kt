@@ -2,6 +2,7 @@ package com.celtikarda.galerireels
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -27,7 +28,10 @@ class VideoThumbFetcher(private val data: VideoThumb, private val options: Optio
 
     override suspend fun fetch(): FetchResult {
         val context = options.context
-        val bitmap = systemThumbnail(context) ?: grabFrame(context)
+        val system = systemThumbnail(context)
+        // Kararmayla açılan videolarda sistemin küçük resmi simsiyah çıkıyor (ilk kareden alınmış);
+        // o zaman videonun ortalarından bir kare al, o da yoksa siyahı kullan
+        val bitmap = system?.takeUnless { isNearlyBlack(it) } ?: grabFrame(context) ?: system
             ?: throw IOException("Küçük resim alınamadı: ${data.uri}")
         return ImageFetchResult(image = bitmap.asImage(), isSampled = true, dataSource = DataSource.DISK)
     }
@@ -43,15 +47,43 @@ class VideoThumbFetcher(private val data: VideoThumb, private val options: Optio
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, data.uri)
-            val frame = retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                ?: retriever.frameAtTime
-            frame?.let { scaleDown(it) }
+            val durationUs = (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) * 1000
+            // Kararmayla açılan videolarda başlangıç birkaç saniye simsiyah olabiliyor (5 sn'yi
+            // geçeni de var); videonun üçte birine, yarısına, üçte ikisine sırayla bakılır
+            val positions = if (durationUs > 0) listOf(durationUs / 3, durationUs / 2, durationUs * 2 / 3) else listOf(1_000_000L)
+            var fallback: Bitmap? = null
+            for (atUs in positions) {
+                // Önce en yakın anahtar kare (hızlı); o da siyahsa tam o andaki kare (yavaş ama doğru)
+                val sync = retriever.getFrameAtTime(atUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                if (sync != null && !isNearlyBlack(sync)) return scaleDown(sync)
+                val exact = retriever.getFrameAtTime(atUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                if (exact != null && !isNearlyBlack(exact)) return scaleDown(exact)
+                fallback = fallback ?: exact ?: sync
+            }
+            (fallback ?: retriever.frameAtTime)?.let { scaleDown(it) }
         } catch (e: Exception) {
             null
         } finally {
             runCatching { retriever.release() }
         }
     }
+
+    /** Ortalama parlaklık çok düşükse (neredeyse simsiyah kare) true */
+    private fun isNearlyBlack(bitmap: Bitmap): Boolean = runCatching {
+        // Donanım belleğindeki resmin piksellerine doğrudan bakılamıyor
+        val readable = if (Build.VERSION.SDK_INT >= 26 && bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            bitmap
+        }
+        val small = Bitmap.createScaledBitmap(readable, 12, 12, true)
+        var sum = 0.0
+        for (y in 0 until 12) for (x in 0 until 12) {
+            val c = small.getPixel(x, y)
+            sum += 0.299 * Color.red(c) + 0.587 * Color.green(c) + 0.114 * Color.blue(c)
+        }
+        sum / 144 < 16
+    }.getOrDefault(false)
 
     private fun scaleDown(bitmap: Bitmap): Bitmap {
         val longest = maxOf(bitmap.width, bitmap.height)

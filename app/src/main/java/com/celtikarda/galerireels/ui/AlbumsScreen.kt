@@ -59,12 +59,16 @@ fun AlbumsScreen(
     val context = LocalContext.current
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
 
+    // Tüm videolar / Favoriler / Beğendiklerin üstte, klasörler ayrı başlık altında
+    val collections = tiles.filter { it.id in setOf(Album.ALL, Album.FAVORITES, Album.LIKED) }
+    val folders = tiles.filterNot { it in collections }
+
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        columns = GridCells.Fixed(3),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(Modifier.statusBarsPadding().padding(start = 4.dp, top = 16.dp, bottom = 8.dp)) {
@@ -120,7 +124,21 @@ fun AlbumsScreen(
             }
         }
 
-        items(tiles, key = { it.id }) { album ->
+        items(collections, key = { it.id }) { album ->
+            AlbumTile(album, onClick = { vm.open(album) })
+        }
+
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text(
+                "Klasörler",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 2.dp, top = 6.dp),
+            )
+        }
+
+        items(folders, key = { it.id }) { album ->
             AlbumTile(album, onClick = { vm.open(album) })
         }
 
@@ -183,55 +201,57 @@ private fun CleanupCard(unwatchedCount: Int, unwatchedBytes: Long, cleanedToday:
     }
 }
 
+/** Telefonun galerisindeki gibi: kare kapak, altında klasör adı ve video sayısı */
 @Composable
 private fun AlbumTile(album: Album, onClick: () -> Unit) {
-    Box(
+    Column(
         Modifier
             .fillMaxWidth()
-            .aspectRatio(3f / 4f)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF1C1C1E))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
-        AsyncImage(
-            model = VideoThumb(album.cover.uri, 480),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
         Box(
             Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.75f)))
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF1C1C1E))
+        ) {
+            AsyncImage(
+                model = VideoThumb(album.cover.uri, 360),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            when (album.id) {
+                Album.LIKED -> TileBadge(R.drawable.ic_heart_filled, LikeRed)
+                Album.FAVORITES -> TileBadge(R.drawable.ic_star, FavoriteYellow)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            album.name,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
+        Text("${formatCount(album.count)} video", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+    }
+}
 
-        if (album.id == Album.LIKED) {
-            Icon(
-                painterResource(R.drawable.ic_heart_filled),
-                contentDescription = null,
-                tint = LikeRed,
-                modifier = Modifier.align(Alignment.TopStart).padding(10.dp).size(22.dp),
-            )
-        }
-        if (album.id == Album.FAVORITES) {
-            Icon(
-                painterResource(R.drawable.ic_star),
-                contentDescription = null,
-                tint = FavoriteYellow,
-                modifier = Modifier.align(Alignment.TopStart).padding(10.dp).size(24.dp),
-            )
-        }
-
-        Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
-            Text(
-                album.name,
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text("${formatCount(album.count)} video", color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
-        }
+/** Kapağın köşesinde koyu daire içinde simge (kapak parlak olsa da görünsün) */
+@Composable
+private fun TileBadge(icon: Int, tint: Color) {
+    Box(
+        Modifier
+            .padding(6.dp)
+            .size(26.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.5f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painterResource(icon), contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
     }
 }

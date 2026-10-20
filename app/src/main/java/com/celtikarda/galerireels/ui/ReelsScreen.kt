@@ -105,7 +105,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val textShadow = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 6f))
+private val textShadow = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.85f), offset = Offset(0f, 1.5f), blurRadius = 8f))
 
 @Composable
 fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
@@ -447,6 +447,15 @@ private fun ReelPage(
             if (burstId > 0) key(burstId) { HeartBurst(burstAt) }
 
             BottomInfo(item, albumName, avatar, favorite, Modifier.align(Alignment.BottomStart))
+
+            // Sağdaki butonların arkasında hafif karartma: parlak videolarda simge ve sayılar okunsun
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .width(96.dp)
+                    .fillMaxHeight(0.65f)
+                    .background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f))))
+            )
 
             ActionRail(
                 liked = liked,
@@ -835,7 +844,7 @@ private fun RailButton(
                 },
         )
         Spacer(Modifier.height(4.dp))
-        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, style = textShadow)
+        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, style = textShadow)
     }
 }
 

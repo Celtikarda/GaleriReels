@@ -3,7 +3,6 @@ package com.celtikarda.galerireels.ui
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.animation.AnimatedVisibility
@@ -78,35 +77,21 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.doOnAttach
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.Format
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DecoderReuseEvaluation
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.analytics.AnalyticsListener
-import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
-import androidx.media3.exoplayer.util.EventLogger
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.celtikarda.galerireels.Album
 import com.celtikarda.galerireels.GalleryViewModel
-import com.celtikarda.galerireels.VlcEngine
 import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.ReelsPlayback
 import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
+import com.celtikarda.galerireels.VlcEngine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val textShadow = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 6f))
 
-@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val items = vm.items
@@ -114,20 +99,9 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Tek bir oynatıcı, sadece ekrandaki videoya bağlanır (her sayfaya ayrı oynatıcı belleği doldurur)
-    val player = remember { createPlayer(context) }
-    DisposableEffect(player) { onDispose { player.release() } }
+    val playback = remember { ReelsPlayback(context, scope) }
+    DisposableEffect(playback) { onDispose { playback.release() } }
 
-    // VLC motoru sadece gerektiğinde açılır (açılışı ~yarım saniye sürer)
-    val vlcHolder = remember { lazy { VlcEngine(context) } }
-    DisposableEffect(vlcHolder) { onDispose { if (vlcHolder.isInitialized()) vlcHolder.value.release() } }
-    // ExoPlayer'ın oynatamadığı ya da takılarak oynattığı videolar; bunlar VLC ile oynatılır
-    var vlcIds by remember { mutableStateOf(emptySet<Long>()) }
-
-    // İlk karesi ekrana çizilmiş videonun id'si; o zamana kadar küçük resim üstte kalır
-    var renderedId by remember { mutableStateOf<String?>(null) }
-    // Oynatılamayan video: mediaId → kullanıcıya gösterilecek açıklama
-    var error by remember { mutableStateOf<Pair<String, String>?>(null) }
     var userPaused by remember { mutableStateOf(false) }
     var muted by rememberSaveable { mutableStateOf(false) }
 
@@ -136,103 +110,17 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var chipTick by remember { mutableIntStateOf(0) }
     var chipVisible by remember { mutableStateOf(false) }
 
-    val current = items.getOrNull(pagerState.settledPage)
-    val currentItem by rememberUpdatedState(current)
-    val useVlc = current != null && current.id in vlcIds
+    val page = pagerState.settledPage
+    val current = items.getOrNull(page)
+    val previous = items.getOrNull(page - 1)
+    val next = items.getOrNull(page + 1)
 
-    DisposableEffect(player) {
-        var decoderName: String? = null
-        var videoFormat: Format? = null
-
-        fun switchToVlc() {
-            val id = currentItem?.id ?: return
-            if (id !in vlcIds) vlcIds = vlcIds + id
-        }
-
-        // Yazılım çözücü, videoyu kapasitesinin üstünde bulduysa en baştan VLC'ye geç
-        fun checkOverload() {
-            val name = decoderName ?: return
-            val format = videoFormat ?: return
-            if (isOverloadedSoftwareDecoder(name, format)) switchToVlc()
-        }
-
-        val listener = object : Player.Listener {
-            override fun onRenderedFirstFrame() {
-                renderedId = player.currentMediaItem?.mediaId
-            }
-
-            override fun onPlayerError(e: PlaybackException) {
-                val id = currentItem?.id
-                if (id != null && id !in vlcIds) switchToVlc()
-                else error = (player.currentMediaItem?.mediaId ?: "") to describe(e)
-            }
-        }
-        val analytics = object : AnalyticsListener {
-            override fun onVideoDecoderInitialized(
-                eventTime: AnalyticsListener.EventTime,
-                name: String,
-                initializedTimestampMs: Long,
-                initializationDurationMs: Long,
-            ) {
-                decoderName = name
-                checkOverload()
-            }
-
-            override fun onVideoInputFormatChanged(
-                eventTime: AnalyticsListener.EventTime,
-                format: Format,
-                decoderReuseEvaluation: DecoderReuseEvaluation?,
-            ) {
-                videoFormat = format
-                checkOverload()
-            }
-
-            // Yazılım çözücü 4 saniyeden kısa sürede 50 kare atladıysa video takılıyor demektir
-            override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
-                val name = decoderName ?: return
-                if (droppedFrames >= 50 && elapsedMs < 4000 && isSoftwareDecoder(name)) switchToVlc()
-            }
-        }
-        player.addListener(listener)
-        player.addAnalyticsListener(analytics)
-        onDispose {
-            player.removeListener(listener)
-            player.removeAnalyticsListener(analytics)
-        }
+    // Kaydırma bitip sayfa oturunca o video oynar; komşuları (önce sıradaki) arkada hazırlanır
+    LaunchedEffect(current?.id, previous?.id, next?.id) {
+        playback.show(current, listOfNotNull(next, previous))
     }
-
-    // Kaydırma bitip sayfa oturunca o videoyu oynat (gerekiyorsa VLC ile)
-    LaunchedEffect(current?.id, useVlc) {
-        userPaused = false
-        renderedId = null
-        error = null
-        if (current == null) {
-            player.stop()
-            player.clearMediaItems()
-            if (vlcHolder.isInitialized()) vlcHolder.value.stop()
-        } else if (useVlc) {
-            player.stop()
-            player.clearMediaItems()
-            val mediaId = current.id.toString()
-            vlcHolder.value.play(
-                current.uri,
-                onFirstFrame = { renderedId = mediaId },
-                onError = { error = mediaId to "Dosya bozuk ya da gerçek bir video değil." },
-            )
-        } else {
-            if (vlcHolder.isInitialized()) vlcHolder.value.stop()
-            player.setMediaItem(
-                MediaItem.Builder().setUri(current.uri).setMediaId(current.id.toString()).build()
-            )
-            player.prepare()
-            player.playWhenReady = true
-        }
-    }
-
-    LaunchedEffect(muted) {
-        player.volume = if (muted) 0f else 1f
-        if (vlcHolder.isInitialized()) vlcHolder.value.setMuted(muted)
-    }
+    LaunchedEffect(current?.id) { userPaused = false }
+    LaunchedEffect(muted) { playback.setMuted(muted) }
 
     LaunchedEffect(chipTick) {
         if (chipTick == 0) return@LaunchedEffect
@@ -241,21 +129,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         chipVisible = false
     }
 
-    fun setPlaying(playing: Boolean) {
-        if (useVlc) {
-            if (playing) vlcHolder.value.resume() else vlcHolder.value.pause()
-        } else {
-            player.playWhenReady = playing
-        }
-    }
-
-    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
-        player.playWhenReady = false
-        if (vlcHolder.isInitialized()) vlcHolder.value.pause()
-    }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (current != null && !userPaused && error == null) setPlaying(true)
-    }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { playback.onHostPause() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { playback.onHostResume() }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         VerticalPager(
@@ -263,17 +138,20 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
             key = { items[it].id },
-        ) { page ->
-            val item = items[page]
-            val active = page == pagerState.settledPage
+        ) { index ->
+            val item = items[index]
+            val active = index == pagerState.settledPage
 
             ReelPage(
                 item = item,
                 active = active,
-                player = player,
-                vlc = if (active && useVlc) vlcHolder.value else null,
-                firstFrameShown = renderedId == item.id.toString(),
-                error = error?.takeIf { it.first == item.id.toString() }?.second,
+                player = playback.players[item.id],
+                vlc = playback.vlc?.takeIf { playback.vlcItemId == item.id },
+                aspectRatio = item.aspectRatio.takeIf { it > 0f } ?: playback.aspectRatios[item.id] ?: 0f,
+                // Hazırda bekleyen komşu, kaydırırken küçük resmiyle görünür: bazı videoların
+                // ilk karesi simsiyah (kararmadan açılan kurgular), küçük resim daha iyi duruyor
+                firstFrameShown = active && item.id in playback.renderedIds,
+                error = playback.error?.takeIf { it.first == item.id }?.second,
                 paused = active && userPaused,
                 liked = item.id in vm.likedIds,
                 muted = muted,
@@ -282,7 +160,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onTogglePause = {
                     if (active) {
                         userPaused = !userPaused
-                        setPlaying(!userPaused)
+                        playback.setPaused(userPaused)
                     }
                 },
                 onDoubleTapLike = { vm.like(item.id) },
@@ -331,9 +209,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
 private fun ReelPage(
     item: VideoItem,
     active: Boolean,
-    player: ExoPlayer,
+    /** Bu videoyu hazırlayan oynatıcı; yoksa sadece küçük resim görünür */
+    player: ExoPlayer?,
     /** Bu video VLC ile oynatılıyorsa motor, değilse null */
     vlc: VlcEngine?,
+    /** Videonun en / boy oranı; bilinmiyorsa 0 */
+    aspectRatio: Float,
     firstFrameShown: Boolean,
     error: String?,
     paused: Boolean,
@@ -353,7 +234,7 @@ private fun ReelPage(
     val doubleTap by rememberUpdatedState(onDoubleTapLike)
 
     Box(Modifier.fillMaxSize()) {
-        VideoSurface(item, active, player, vlc, firstFrameShown)
+        VideoSurface(item, player, vlc, aspectRatio, firstFrameShown)
 
         // Tek dokunma: durdur/oynat · Çift dokunma: beğen (kalp animasyonu)
         Box(
@@ -392,8 +273,11 @@ private fun ReelPage(
         if (active) {
             VideoProgress(
                 progress = {
-                    if (vlc != null) vlc.progress
-                    else player.duration.let { d -> if (d > 0) player.currentPosition.toFloat() / d else 0f }
+                    when {
+                        vlc != null -> vlc.progress
+                        player != null -> player.duration.let { d -> if (d > 0) player.currentPosition.toFloat() / d else 0f }
+                        else -> 0f
+                    }
                 },
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
             )
@@ -401,68 +285,82 @@ private fun ReelPage(
     }
 }
 
-@androidx.annotation.OptIn(UnstableApi::class)
+/**
+ * Video alanı en baştan videonun oranında açılır (boyutu galeri biliyor); oynatıcı videonun
+ * boyutunu söyleyene kadar tam ekran kalıp sonra küçülmez.
+ */
 @Composable
-private fun VideoSurface(item: VideoItem, active: Boolean, player: ExoPlayer, vlc: VlcEngine?, firstFrameShown: Boolean) {
-    Box(Modifier.fillMaxSize()) {
-        if (active && vlc != null) {
-            // VLC görüntüyü yüzeyin tamamına gerdiği için yüzeyi videonun oranında tutuyoruz
-            var aspect by remember(item.id) { mutableFloatStateOf(0f) }
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                AndroidView(
-                    factory = { ctx ->
-                        SurfaceView(ctx).apply {
-                            keepScreenOn = true
-                            // Ekran o an duruk ise Compose yeni eklenen SurfaceView için çizim turu
-                            // başlatmıyor ve yüzey (dolayısıyla VLC görüntüsü) bir dokunuşa kadar oluşmuyor
-                            doOnAttach { post { requestLayout(); invalidate() } }
-                            holder.addCallback(object : SurfaceHolder.Callback {
-                                override fun surfaceCreated(holder: SurfaceHolder) = Unit
+private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, aspectRatio: Float, firstFrameShown: Boolean) {
+    // Galeri boyutu bilmiyorsa ve video VLC'deyse oranı VLC'den öğreniriz
+    var vlcAspect by remember(item.id) { mutableFloatStateOf(0f) }
+    val ratio = if (aspectRatio > 0f) aspectRatio else vlcAspect
 
-                                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                                    vlc.attach(this@apply, width, height) { aspect = it }
-                                }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.fillMaxSize()) {
+            when {
+                vlc != null -> VlcSurface(vlc, onAspectRatio = { vlcAspect = it })
+                // Oynatıcı başka videoya geçerse yüzey de yenilenir
+                player != null -> key(player) { ExoSurface(player) }
+            }
 
-                                override fun surfaceDestroyed(holder: SurfaceHolder) = vlc.detach()
-                            })
-                        }
-                    },
-                    onRelease = { vlc.detach() },
-                    modifier = if (aspect > 0f) Modifier.aspectRatio(aspect) else Modifier.fillMaxSize(),
+            // İlk kare gelene kadar küçük resim videonun yerinde durur, sonra hızlıca kaybolur
+            val thumbAlpha by animateFloatAsState(
+                targetValue = if (firstFrameShown) 0f else 1f,
+                animationSpec = tween(150),
+                label = "thumbAlpha",
+            )
+            if (thumbAlpha > 0f) {
+                AsyncImage(
+                    model = VideoThumb(item.uri, 1080),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = thumbAlpha },
                 )
             }
-        } else if (active) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                        keepScreenOn = true
-                    }
-                },
-                update = { it.player = player },
-                onRelease = { it.player = null },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        // İlk kare gelene kadar küçük resim videonun üstünde durur, sonra yavaşça kaybolur
-        val thumbAlpha by animateFloatAsState(
-            targetValue = if (active && firstFrameShown) 0f else 1f,
-            label = "thumbAlpha",
-        )
-        if (thumbAlpha > 0f) {
-            AsyncImage(
-                model = VideoThumb(item.uri, 1080),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = thumbAlpha },
-            )
         }
     }
+}
+
+@Composable
+private fun ExoSurface(player: ExoPlayer) {
+    AndroidView(
+        factory = { ctx ->
+            SurfaceView(ctx).apply {
+                keepScreenOn = true
+                player.setVideoSurfaceView(this)
+            }
+        },
+        onRelease = { player.clearVideoSurfaceView(it) },
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+/** VLC görüntüyü yüzeyin tamamına gerer; yüzeyi videonun oranında tutmak çağıranın işi. */
+@Composable
+private fun VlcSurface(vlc: VlcEngine, onAspectRatio: (Float) -> Unit) {
+    AndroidView(
+        factory = { ctx ->
+            SurfaceView(ctx).apply {
+                keepScreenOn = true
+                // Ekran o an duruk ise Compose yeni eklenen SurfaceView için çizim turu
+                // başlatmıyor ve yüzey (dolayısıyla VLC görüntüsü) bir dokunuşa kadar oluşmuyor
+                doOnAttach { post { requestLayout(); invalidate() } }
+                holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) = Unit
+
+                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                        vlc.attach(this@apply, width, height, onAspectRatio)
+                    }
+
+                    override fun surfaceDestroyed(holder: SurfaceHolder) = vlc.detach()
+                })
+            }
+        },
+        onRelease = { vlc.detach() },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 @Composable
@@ -719,17 +617,6 @@ private fun VideoProgress(progress: () -> Float, modifier: Modifier) {
     }
 }
 
-private fun describe(e: PlaybackException): String = when (e.errorCode) {
-    PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
-    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> "Dosya bozuk ya da gerçek bir video değil."
-    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-    PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
-    PlaybackException.ERROR_CODE_DECODING_FAILED,
-    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
-    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED -> "Bu telefon bu video formatını çözemiyor."
-    else -> e.errorCodeName
-}
-
 private fun shareVideo(context: Context, item: VideoItem) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = item.mimeType ?: "video/*"
@@ -738,45 +625,4 @@ private fun shareVideo(context: Context, item: VideoItem) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(send, "Paylaş"))
-}
-
-private fun isSoftwareDecoder(name: String): Boolean =
-    name.startsWith("c2.android.") || name.startsWith("OMX.google.")
-
-/**
- * ExoPlayer donanım çözücüyü açamayınca (ör. 1440x1600 donanımın 1080p sınırını aşıyor)
- * Android'in yazılım çözücüsüne düşer; o da videoyu kapasitesinin üstünde bulursa takılır.
- */
-@androidx.annotation.OptIn(UnstableApi::class)
-private fun isOverloadedSoftwareDecoder(name: String, format: Format): Boolean {
-    if (!isSoftwareDecoder(name)) return false
-    val mime = format.sampleMimeType ?: return false
-    if (format.width <= 0 || format.height <= 0) return false
-    val info = runCatching { MediaCodecUtil.getDecoderInfos(mime, false, false) }.getOrNull()
-        ?.firstOrNull { it.name == name } ?: return false
-    val frameRate = if (format.frameRate > 0) format.frameRate.toDouble() else 30.0
-    return !info.isVideoSizeAndRateSupported(format.width, format.height, frameRate)
-}
-
-@androidx.annotation.OptIn(UnstableApi::class)
-private fun createPlayer(context: Context): ExoPlayer {
-    // Bir çözücü açılamazsa (ör. donanım NO_MEMORY verirse) sıradakini denesin
-    val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
-    return ExoPlayer.Builder(context, renderers)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .build(),
-            /* handleAudioFocus = */ true,
-        )
-        .setHandleAudioBecomingNoisy(true)
-        .build()
-        .apply {
-            repeatMode = Player.REPEAT_MODE_ONE
-            // Debug sürümde oynatma olaylarını (atlanan kareler, hatalar) logcat'e yazar
-            if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                addAnalyticsListener(EventLogger())
-            }
-        }
 }

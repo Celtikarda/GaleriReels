@@ -12,7 +12,13 @@ data class VideoItem(
     /** Örn. "Download/YTDLnis/Video" — aynı adlı klasörleri ayırt etmek için */
     val albumPath: String,
     val mimeType: String?,
-)
+    /** Ekranda görüneceği haliyle (döndürülmüş) boyut; galeri bilmiyorsa 0 */
+    val width: Int,
+    val height: Int,
+) {
+    /** En / boy; bilinmiyorsa 0 */
+    val aspectRatio: Float get() = if (width > 0 && height > 0) width.toFloat() / height else 0f
+}
 
 data class Album(
     val id: String,

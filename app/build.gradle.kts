@@ -11,8 +11,8 @@ android {
         applicationId = "com.celtikarda.galerireels"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.3"
 
         // libVLC her işlemci mimarisi için ~25 MB; sadece telefonlardaki 64-bit ARM
         ndk { abiFilters += "arm64-v8a" }
@@ -45,7 +45,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.ui)
     implementation(libs.coil.compose)
     implementation(libs.libvlc)
 }

@@ -23,7 +23,7 @@ object MediaRepository {
     @Suppress("DEPRECATION") // DATA sütunu sadece Android 9 ve öncesinde, klasör yolu için
     private fun query(context: Context): List<VideoItem> {
         val pathColumn = if (Build.VERSION.SDK_INT >= 29) MediaStore.MediaColumns.RELATIVE_PATH else MediaStore.MediaColumns.DATA
-        val projection = arrayOf(
+        val projection = listOfNotNull(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DATE_TAKEN,
             MediaStore.MediaColumns.DATE_ADDED,
@@ -31,8 +31,12 @@ object MediaRepository {
             MediaStore.MediaColumns.BUCKET_ID,
             MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
             MediaStore.MediaColumns.MIME_TYPE,
+            MediaStore.MediaColumns.WIDTH,
+            MediaStore.MediaColumns.HEIGHT,
+            // Videonun dönüklüğü (dik çekilmişse 90) Android 10'dan önce yok
+            if (Build.VERSION.SDK_INT >= 29) MediaStore.MediaColumns.ORIENTATION else null,
             pathColumn,
-        )
+        ).toTypedArray()
         // 0 baytlık (yarım kalmış indirme) dosyaları hiç gösterme
         val selection = "${MediaStore.MediaColumns.SIZE} > 0"
         val collection = collection()
@@ -46,6 +50,9 @@ object MediaRepository {
             val bucketIdCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_ID)
             val bucketNameCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
             val mimeCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+            val widthCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
+            val heightCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+            val orientationCol = c.getColumnIndex(MediaStore.MediaColumns.ORIENTATION)
             val pathCol = c.getColumnIndexOrThrow(pathColumn)
 
             while (c.moveToNext()) {
@@ -53,6 +60,11 @@ object MediaRepository {
                 // DATE_TAKEN milisaniye, DATE_ADDED saniye; çekim tarihi yoksa eklenme tarihini kullan
                 val taken = if (c.isNull(takenCol)) 0L else c.getLong(takenCol)
                 val path = folderPath(c.getString(pathCol), isFullPath = Build.VERSION.SDK_INT < 29)
+                // Galeri boyutu dosyadaki haliyle (döndürülmeden) yazıyor; dik videolarda en ve boy yer değiştirir
+                val rawWidth = if (c.isNull(widthCol)) 0 else c.getInt(widthCol)
+                val rawHeight = if (c.isNull(heightCol)) 0 else c.getInt(heightCol)
+                val orientation = if (orientationCol < 0 || c.isNull(orientationCol)) 0 else c.getInt(orientationCol)
+                val sideways = orientation == 90 || orientation == 270
                 result += VideoItem(
                     id = id,
                     uri = ContentUris.withAppendedId(collection, id),
@@ -62,6 +74,8 @@ object MediaRepository {
                     albumName = c.getString(bucketNameCol),
                     albumPath = path,
                     mimeType = c.getString(mimeCol),
+                    width = if (sideways) rawHeight else rawWidth,
+                    height = if (sideways) rawWidth else rawHeight,
                 )
             }
         }

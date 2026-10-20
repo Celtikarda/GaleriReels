@@ -12,22 +12,15 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IVLCVout
+import kotlin.concurrent.thread
 
 /**
  * VLC'nin oynatma motoru (FFmpeg + dav1d). Telefonun donanım çözücüsünün açamadığı ve
  * Android'in yazılım çözücüsünün yetişemediği videolar (ör. 1440x1600@60 H.264, AV1) için.
  * Çok çekirdekli yazılım çözme yaptığı için bu videoları takılmadan oynatabiliyor.
  */
-class VlcEngine(context: Context) {
+class VlcEngine private constructor(private val appContext: Context, private val libVlc: LibVLC) {
 
-    private val appContext = context.applicationContext
-    private val libVlc = LibVLC(
-        appContext,
-        arrayListOf(
-            "--no-osd",
-            "--avcodec-threads=0", // tüm çekirdekleri kullan
-        ),
-    )
     private val player = MediaPlayer(libVlc)
     private val vout: IVLCVout = player.vlcVout
     private var file: ParcelFileDescriptor? = null
@@ -146,7 +139,25 @@ class VlcEngine(context: Context) {
         libVlc.release()
     }
 
-    private companion object {
-        const val TAG = "VlcEngine"
+    companion object {
+        private const val TAG = "VlcEngine"
+
+        /**
+         * VLC'nin açılışı (kütüphaneleri yüklemesi) yarım saniye kadar sürüyor; bunu arka planda
+         * yapar, motor hazır olunca ana iş parçacığında [onReady]'yi çağırır.
+         */
+        fun createAsync(context: Context, onReady: (VlcEngine) -> Unit) {
+            val appContext = context.applicationContext
+            thread(name = "vlc-init") {
+                val libVlc = LibVLC(
+                    appContext,
+                    arrayListOf(
+                        "--no-osd",
+                        "--avcodec-threads=0", // tüm çekirdekleri kullan
+                    ),
+                )
+                Handler(Looper.getMainLooper()).post { onReady(VlcEngine(appContext, libVlc)) }
+            }
+        }
     }
 }

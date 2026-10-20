@@ -3,6 +3,7 @@ package com.celtikarda.galerireels.ui
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,8 +39,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.celtikarda.galerireels.DataFolder
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaAccess
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()) {
@@ -55,9 +61,34 @@ fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()
     }
     val requestAccess = { launcher.launch(MediaAccess.permissions) }
 
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    // Android'in klasör seçme penceresi; seçilen klasöre beğeni ve izlenmeler yazılır
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            vm.stats.useFolder(tree)
+                .onSuccess { restored ->
+                    val text = if (restored > 0) "Eski verilerin geri geldi ($restored video)" else "Veriler artık bu klasöre kaydediliyor"
+                    Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+                }
+                .onFailure { Toast.makeText(context, "Bu klasör kullanılamadı, başka bir klasör seç", Toast.LENGTH_LONG).show() }
+        }
+    }
+    val pickFolder: () -> Unit = {
+        scope.launch {
+            val start = withContext(Dispatchers.IO) { DataFolder.prepareSuggested(context) }
+            folderPicker.launch(start)
+        }
+    }
+
     // Kullanıcı ayarlardan izni değiştirip dönmüş olabilir
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         access = MediaAccess.current(context)
+    }
+    // Uygulama arka plana geçerken bekleyen beğeni / izlenme kaydını hemen yaz
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        vm.stats.flush()
     }
 
     LaunchedEffect(access, reloadKey) {
@@ -70,6 +101,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()
 
     val openAlbum = vm.openAlbum
     BackHandler(enabled = openAlbum != null) { vm.close() }
+    BackHandler(enabled = openAlbum == null && showSettings) { showSettings = false }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
@@ -83,6 +115,10 @@ fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()
                 },
             )
             !vm.loaded -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+            vm.stats.folder == null && !vm.stats.folderPromptDismissed -> FolderSetupScreen(
+                onPick = pickFolder,
+                onLater = vm.stats::dismissFolderPrompt,
+            )
             vm.videoCount == 0 -> MessageScreen(
                 title = "Video bulunamadı",
                 body = if (access == MediaAccess.PARTIAL) "Sadece seçtiğin videoları görebiliyorum." else "Galeride hiç video yok gibi görünüyor.",
@@ -92,10 +128,12 @@ fun GaleriReelsApp(openVideoId: Long? = null, vm: GalleryViewModel = viewModel()
             openAlbum != null -> key(openAlbum.id) {
                 ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
             }
+            showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
             else -> AlbumsScreen(
                 vm = vm,
                 partialAccess = access == MediaAccess.PARTIAL,
                 onSelectMore = requestAccess,
+                onOpenSettings = { showSettings = true },
             )
         }
     }
@@ -114,6 +152,22 @@ private fun PermissionScreen(deniedBefore: Boolean, onRequest: () -> Unit, onOpe
         onButton = onRequest,
         secondaryText = if (deniedBefore) "Ayarları aç" else null,
         onSecondary = onOpenSettings,
+    )
+}
+
+/** İlk açılışta: beğeni ve izlenmelerin uygulama silinse de kalması için klasör seçtirir */
+@Composable
+private fun FolderSetupScreen(onPick: () -> Unit, onLater: () -> Unit) {
+    MessageScreen(
+        title = "Verilerini koruyalım",
+        body = "Beğenilerin ve izlenme sayıların telefonunda bir klasörde saklanacak; uygulamayı silip " +
+            "yeniden kursan bile kaybolmazlar.\n\nAçılan pencerede Documents › GaleriReels klasörü açık " +
+            "olacak: \"Bu klasörü kullan\" ve ardından \"İzin ver\"e bas. Uygulama sadece bu klasörü görür. " +
+            "Daha önce kurduysan da aynısını yap, eski verilerin geri gelir.",
+        buttonText = "Klasör seç",
+        onButton = onPick,
+        secondaryText = "Şimdi değil",
+        onSecondary = onLater,
     )
 }
 

@@ -15,6 +15,11 @@ fun localDate(millis: Long): LocalDate =
 
 fun formatDate(millis: Long): String = dateFormat.format(localDate(millis))
 
+private val dateTimeFormat = DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", tr)
+
+fun formatDateTime(millis: Long): String =
+    dateTimeFormat.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
+
 /** "dün", "3 ay önce", "tam 5 yıl önce bugün" gibi */
 fun relativeDate(millis: Long, today: LocalDate = LocalDate.now()): String {
     val date = localDate(millis)

@@ -4,6 +4,11 @@ import android.net.Uri
 
 data class VideoItem(
     val id: Long,
+    /**
+     * Beğeni ve izlenmelerin kaydedildiği kimlik: dosya adı + boyutu. Galerinin verdiği [id]
+     * telefon sıfırlanınca ya da video başka klasöre taşınınca değişebiliyor, bu değişmez.
+     */
+    val key: String,
     val uri: Uri,
     val dateMillis: Long,
     val durationMs: Long,

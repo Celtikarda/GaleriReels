@@ -109,6 +109,9 @@ class VlcEngine private constructor(private val appContext: Context, private val
     /** 0..1 arası oynatma konumu */
     val progress: Float get() = if (hasMedia) player.position else 0f
 
+    /** Oynatma konumu (ms) */
+    val timeMs: Long get() = if (hasMedia) player.time else 0L
+
     /**
      * Yüzey oluşup boyutu belli olduğunda (SurfaceHolder.Callback.surfaceChanged) çağrılır.
      * VLC görüntüyü yüzeyin tamamına gerer; [onAspectRatio] ile gelen orana göre yüzeyi

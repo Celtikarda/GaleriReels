@@ -10,7 +10,8 @@ import kotlinx.coroutines.launch
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val likesStore = LikesStore(app)
+    /** Beğeniler ve izlenmeler; uygulama silinse de kalsın diye kullanıcının seçtiği klasöre de yazılır */
+    val stats = StatsStore(app, viewModelScope).also { it.load() }
     private var all: List<VideoItem> = emptyList()
     private var folders: List<Album> = emptyList()
     private var lastToken: Any? = null
@@ -20,8 +21,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private var source: List<VideoItem> = emptyList()
 
     var loaded by mutableStateOf(false)
-        private set
-    var likedIds by mutableStateOf(likesStore.load())
         private set
     var shuffled by mutableStateOf(true)
         private set
@@ -42,6 +41,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             all = MediaRepository.loadVideos(getApplication())
             folders = buildFolders(all)
+            stats.awaitLoaded()
+            migrateOldLikes()
             loaded = true
             pendingVideoId?.let { openVideo(it) }
         }
@@ -50,7 +51,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     /** Ekrandaki kutucuklar: Tüm videolar, Beğendiklerin, sonra klasörler */
     fun albumTiles(): List<Album> {
         if (all.isEmpty()) return emptyList()
-        val liked = all.filter { it.id in likedIds }
+        val liked = all.filter { isLiked(it) }
         return buildList {
             add(Album(Album.ALL, "Tüm videolar", all.size, all.first()))
             if (liked.isNotEmpty()) add(Album(Album.LIKED, "Beğendiklerin", liked.size, liked.first()))
@@ -65,7 +66,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun open(album: Album) {
         source = when (album.id) {
             Album.ALL -> all
-            Album.LIKED -> all.filter { it.id in likedIds }
+            Album.LIKED -> all.filter { isLiked(it) }
             else -> all.filter { it.albumId == album.id }
         }
         items = if (shuffled) source.shuffled() else source
@@ -101,18 +102,30 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         return items.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
     }
 
-    fun toggleLike(id: Long) {
-        setLikes(if (id in likedIds) likedIds - id else likedIds + id)
+    fun isLiked(item: VideoItem): Boolean = stats.stat(item.key).liked
+
+    fun viewsOf(item: VideoItem): Int = stats.stat(item.key).views
+
+    fun toggleLike(item: VideoItem) {
+        stats.setLiked(item.key, !isLiked(item))
     }
 
     /** Çift dokunma: Instagram'daki gibi sadece beğenir, beğeniyi geri almaz */
-    fun like(id: Long) {
-        if (id !in likedIds) setLikes(likedIds + id)
+    fun like(item: VideoItem) {
+        if (!isLiked(item)) stats.setLiked(item.key, true)
     }
 
-    private fun setLikes(ids: Set<Long>) {
-        likedIds = ids
-        likesStore.save(ids)
+    fun addView(item: VideoItem) {
+        stats.addView(item.key)
+    }
+
+    /** 0.2–0.3'te beğenilenleri (galeri numarasıyla tutuluyordu) bir kez yeni kayda taşır */
+    private fun migrateOldLikes() {
+        val oldLikes = LikesStore(getApplication())
+        val ids = oldLikes.load()
+        if (ids.isEmpty()) return
+        all.filter { it.id in ids }.forEach { stats.setLiked(it.key, true) }
+        oldLikes.clear()
     }
 
     private fun buildFolders(videos: List<VideoItem>): List<Album> {

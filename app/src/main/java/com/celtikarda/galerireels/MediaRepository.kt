@@ -25,6 +25,8 @@ object MediaRepository {
         val pathColumn = if (Build.VERSION.SDK_INT >= 29) MediaStore.MediaColumns.RELATIVE_PATH else MediaStore.MediaColumns.DATA
         val projection = listOfNotNull(
             MediaStore.MediaColumns._ID,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.SIZE,
             MediaStore.MediaColumns.DATE_TAKEN,
             MediaStore.MediaColumns.DATE_ADDED,
             MediaStore.MediaColumns.DURATION,
@@ -44,6 +46,8 @@ object MediaRepository {
 
         context.contentResolver.query(collection, projection, selection, null, null)?.use { c ->
             val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+            val nameCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+            val sizeCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
             val takenCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_TAKEN)
             val addedCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
             val durationCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DURATION)
@@ -67,6 +71,7 @@ object MediaRepository {
                 val sideways = orientation == 90 || orientation == 270
                 result += VideoItem(
                     id = id,
+                    key = "${c.getString(nameCol) ?: id}|${c.getLong(sizeCol)}",
                     uri = ContentUris.withAppendedId(collection, id),
                     dateMillis = if (taken > 0) taken else c.getLong(addedCol) * 1000,
                     durationMs = c.getLong(durationCol),

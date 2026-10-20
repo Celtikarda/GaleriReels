@@ -25,6 +25,7 @@ import androidx.media3.exoplayer.util.EventLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,7 +40,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  * ekrandaki video için kullanılır ve ekran açılırken arka planda hazırlanır.
  */
 @OptIn(UnstableApi::class)
-class ReelsPlayback(context: Context, private val scope: CoroutineScope) {
+class ReelsPlayback(
+    context: Context,
+    private val scope: CoroutineScope,
+    /** Ekrandaki video bir kez izlendi sayıldı (bkz. [countViews]) */
+    private val onViewed: (VideoItem) -> Unit,
+) {
 
     private val appContext = context.applicationContext
     // önceki, ekrandaki, sonraki
@@ -72,8 +78,21 @@ class ReelsPlayback(context: Context, private val scope: CoroutineScope) {
     private var muted = false
     private var released = false
     private var arrangeJob: Job? = null
-
     private var vlcRequested = false
+
+    // İzlenme sayımı: hangi video, bu oynatmada sayıldı mı, son bakılan konum
+    private var viewItemId: Long? = null
+    private var viewCounted = false
+    private var lastPositionMs = 0L
+
+    init {
+        scope.launch {
+            while (true) {
+                delay(250)
+                countViews()
+            }
+        }
+    }
 
     /** Sayfa oturunca çağrılır: [current] oynar, [neighbors] (önce sıradaki) ilk karesinde bekler. */
     fun show(current: VideoItem?, neighbors: List<VideoItem>) {
@@ -117,6 +136,33 @@ class ReelsPlayback(context: Context, private val scope: CoroutineScope) {
         slots.forEach { it.player.release() }
         vlc?.release()
         vlc = null
+    }
+
+    /**
+     * Video bir oynatmada 5 saniye (5 saniyeden kısaysa %80'i) izlenince bir izlenme sayılır.
+     * Video bitip başa sarınca yeni oynatma başlar ve tekrar sayılır. Durdurulmuş videonun konumu
+     * ilerlemediği için sayılmaz.
+     */
+    private fun countViews() {
+        if (released) return
+        val item = current ?: return
+        if (item.id != viewItemId) {
+            viewItemId = item.id
+            viewCounted = false
+            lastPositionMs = 0L
+        }
+        val position = when {
+            vlcItemId == item.id -> vlc?.timeMs
+            else -> players[item.id]?.currentPosition
+        } ?: return
+        // Konum geriye gittiyse video başa sardı
+        if (position < lastPositionMs - 500) viewCounted = false
+        lastPositionMs = position
+        val threshold = if (item.durationMs in 1 until VIEW_AFTER_MS) item.durationMs * 8 / 10 else VIEW_AFTER_MS
+        if (!viewCounted && position >= threshold) {
+            viewCounted = true
+            onViewed(item)
+        }
     }
 
     private fun arrange() {
@@ -326,6 +372,9 @@ class ReelsPlayback(context: Context, private val scope: CoroutineScope) {
         }
     }
 }
+
+/** Bir videonun izlenmiş sayılması için oynaması gereken süre */
+private const val VIEW_AFTER_MS = 5_000L
 
 private fun isSoftwareDecoder(name: String): Boolean =
     name.startsWith("c2.android.") || name.startsWith("OMX.google.")

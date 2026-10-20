@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,16 +22,20 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,8 +46,15 @@ import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.VideoThumb
 
 @Composable
-fun AlbumsScreen(vm: GalleryViewModel, partialAccess: Boolean, onSelectMore: () -> Unit) {
+fun AlbumsScreen(
+    vm: GalleryViewModel,
+    partialAccess: Boolean,
+    onSelectMore: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val tiles = vm.albumTiles()
+    val context = LocalContext.current
+    val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -53,8 +65,18 @@ fun AlbumsScreen(vm: GalleryViewModel, partialAccess: Boolean, onSelectMore: () 
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(Modifier.statusBarsPadding().padding(start = 4.dp, top = 16.dp, bottom = 8.dp)) {
-                Text("Galeri Reels", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Galeri Reels",
+                        color = Color.White,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Ayarlar", tint = Color.White)
+                    }
+                }
                 Text(
                     "${formatCount(vm.videoCount)} video · ${formatCount(vm.folderCount)} klasör",
                     color = Color.White.copy(alpha = 0.6f),
@@ -70,6 +92,16 @@ fun AlbumsScreen(vm: GalleryViewModel, partialAccess: Boolean, onSelectMore: () 
                         modifier = Modifier.clickable(onClick = onSelectMore),
                     )
                 }
+                if (vm.stats.loaded && vm.stats.folder == null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Beğeni ve izlenmelerin yedeklenmiyor · Klasör seç",
+                        color = InstaBlue,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable(onClick = onOpenSettings),
+                    )
+                }
             }
         }
 
@@ -78,7 +110,13 @@ fun AlbumsScreen(vm: GalleryViewModel, partialAccess: Boolean, onSelectMore: () 
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Spacer(Modifier.navigationBarsPadding().height(16.dp))
+            Text(
+                "Galeri Reels $version",
+                color = Color.White.copy(alpha = 0.35f),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.navigationBarsPadding().padding(top = 12.dp, bottom = 16.dp),
+            )
         }
     }
 }

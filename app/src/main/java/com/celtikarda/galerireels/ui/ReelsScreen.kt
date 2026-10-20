@@ -99,7 +99,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val playback = remember { ReelsPlayback(context, scope) }
+    val playback = remember { ReelsPlayback(context, scope, onViewed = vm::addView) }
     DisposableEffect(playback) { onDispose { playback.release() } }
 
     var userPaused by remember { mutableStateOf(false) }
@@ -153,7 +153,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 firstFrameShown = active && item.id in playback.renderedIds,
                 error = playback.error?.takeIf { it.first == item.id }?.second,
                 paused = active && userPaused,
-                liked = item.id in vm.likedIds,
+                liked = vm.isLiked(item),
+                views = vm.viewsOf(item),
                 muted = muted,
                 albumName = vm.albumNameOf(item),
                 avatar = vm.coverOf(item.albumId) ?: item,
@@ -163,8 +164,13 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                         playback.setPaused(userPaused)
                     }
                 },
-                onDoubleTapLike = { vm.like(item.id) },
-                onToggleLike = { vm.toggleLike(item.id) },
+                onDoubleTapLike = { vm.like(item) },
+                onToggleLike = { vm.toggleLike(item) },
+                onViewsTap = {
+                    val views = vm.viewsOf(item)
+                    chipText = if (views == 0) "Bu videoyu henüz izlemedin" else "Bu videoyu ${formatCount(views)} kez izledin"
+                    chipTick++
+                },
                 onShare = { shareVideo(context, item) },
                 onToggleMute = { muted = !muted },
             )
@@ -219,12 +225,15 @@ private fun ReelPage(
     error: String?,
     paused: Boolean,
     liked: Boolean,
+    /** Bu videoyu kaç kez izledin */
+    views: Int,
     muted: Boolean,
     albumName: String,
     avatar: VideoItem,
     onTogglePause: () -> Unit,
     onDoubleTapLike: () -> Unit,
     onToggleLike: () -> Unit,
+    onViewsTap: () -> Unit,
     onShare: () -> Unit,
     onToggleMute: () -> Unit,
 ) {
@@ -260,8 +269,10 @@ private fun ReelPage(
 
         ActionRail(
             liked = liked,
+            views = views,
             muted = muted,
             onLike = onToggleLike,
+            onViews = onViewsTap,
             onShare = onShare,
             onMute = onToggleMute,
             modifier = Modifier
@@ -436,8 +447,10 @@ private fun Avatar(cover: VideoItem, modifier: Modifier) {
 @Composable
 private fun ActionRail(
     liked: Boolean,
+    views: Int,
     muted: Boolean,
     onLike: () -> Unit,
+    onViews: () -> Unit,
     onShare: () -> Unit,
     onMute: () -> Unit,
     modifier: Modifier,
@@ -458,12 +471,21 @@ private fun ActionRail(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
+        // Instagram'daki gibi kalbin altında beğeni sayısı (tek kullanıcı: 0 ya da 1)
         RailButton(
             icon = if (liked) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline,
             tint = if (liked) LikeRed else Color.White,
-            label = "Beğen",
+            label = if (liked) "1" else "0",
+            description = if (liked) "Beğeniyi geri al" else "Beğen",
             iconScale = likeScale.value,
             onClick = onLike,
+        )
+        RailButton(
+            icon = R.drawable.ic_eye,
+            tint = Color.White,
+            label = formatCount(views),
+            description = "İzlenme sayısı",
+            onClick = onViews,
         )
         RailButton(icon = R.drawable.ic_send, tint = Color.White, label = "Paylaş", onClick = onShare)
         RailButton(
@@ -476,7 +498,14 @@ private fun ActionRail(
 }
 
 @Composable
-private fun RailButton(icon: Int, tint: Color, label: String, onClick: () -> Unit, iconScale: Float = 1f) {
+private fun RailButton(
+    icon: Int,
+    tint: Color,
+    label: String,
+    onClick: () -> Unit,
+    description: String = label,
+    iconScale: Float = 1f,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -489,7 +518,7 @@ private fun RailButton(icon: Int, tint: Color, label: String, onClick: () -> Uni
     ) {
         Icon(
             painterResource(icon),
-            contentDescription = label,
+            contentDescription = description,
             tint = tint,
             modifier = Modifier
                 .size(30.dp)

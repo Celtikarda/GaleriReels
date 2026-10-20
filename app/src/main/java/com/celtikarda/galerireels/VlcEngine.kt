@@ -12,105 +12,173 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IVLCVout
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /**
  * VLC'nin oynatma motoru (FFmpeg + dav1d). Telefonun donanım çözücüsünün açamadığı ve
  * Android'in yazılım çözücüsünün yetişemediği videolar (ör. 1440x1600@60 H.264, AV1) için.
  * Çok çekirdekli yazılım çözme yaptığı için bu videoları takılmadan oynatabiliyor.
+ *
+ * libVLC'nin başlatma / durdurma / duraklatma çağrıları VLC'nin kendi iş parçacıklarını
+ * bekleyebiliyor (ör. stop() video açılana kadar). Bunlar ana iş parçacığında yapılınca uygulama
+ * donuyordu; hepsi sırayla "vlc-control" iş parçacığında yapılır. Görüntü yüzeyi bağlama
+ * (attach/detach) Android gereği ana iş parçacığında kalır.
  */
 class VlcEngine private constructor(private val appContext: Context, private val libVlc: LibVLC) {
 
     private val player = MediaPlayer(libVlc)
     private val vout: IVLCVout = player.vlcVout
-    private var file: ParcelFileDescriptor? = null
+    private val control = Executors.newSingleThreadExecutor { Thread(it, "vlc-control") }
+    private val main = Handler(Looper.getMainLooper())
+
+    // Ana iş parçacığında kullanılanlar
     private var hasMedia = false
     private var pendingStart = false
     private var muted = false
+    /** Her play() / stop() ile artar; önceki videodan gecikmiş gelen olaylar ve işler yok sayılır */
+    private var generation = 0
+    /** VLC'ye verilmiş videonun numarası; olaylar ancak bu [generation] ile aynıysa geçerli */
+    private var readyGeneration = 0
+    // Olaylarla gelen son konum; okumak için VLC'yi beklemek gerekmesin
+    private var positionCache = 0f
+    private var timeCache = 0L
+
+    // Sadece vlc-control iş parçacığında kullanılanlar
+    private var file: ParcelFileDescriptor? = null
+    private var controlGeneration = 0
 
     private var onFirstFrame: () -> Unit = {}
     private var onError: () -> Unit = {}
 
     // Debug sürümde 2 saniyede bir kare istatistiklerini logcat'e yazar (akıcılık testi için)
     private val debug = appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-    private val handler = Handler(Looper.getMainLooper())
     private val statsLogger = object : Runnable {
         override fun run() {
             if (!hasMedia) return
-            player.media?.let { media ->
-                media.stats?.let { s ->
-                    Log.i(TAG, "kare: çözülen=${s.decodedVideo} gösterilen=${s.displayedPictures} kaybolan=${s.lostPictures}")
+            onControl {
+                player.media?.let { media ->
+                    media.stats?.let { s ->
+                        Log.i(TAG, "kare: çözülen=${s.decodedVideo} gösterilen=${s.displayedPictures} kaybolan=${s.lostPictures}")
+                    }
+                    media.release()
                 }
-                media.release()
             }
-            handler.postDelayed(this, 2000)
+            main.postDelayed(this, 2000)
         }
     }
 
     init {
         player.setEventListener { event ->
+            if (readyGeneration != generation) return@setEventListener
             when (event.type) {
                 MediaPlayer.Event.Vout -> if (event.voutCount > 0) onFirstFrame()
-                MediaPlayer.Event.Playing -> player.volume = if (muted) 0 else 100
+                MediaPlayer.Event.Playing -> applyVolume()
                 MediaPlayer.Event.EncounteredError -> onError()
+                MediaPlayer.Event.TimeChanged -> timeCache = event.timeChanged
+                MediaPlayer.Event.PositionChanged -> positionCache = event.positionChanged
             }
         }
     }
 
     fun play(uri: Uri, onFirstFrame: () -> Unit, onError: () -> Unit) {
-        stop()
+        val gen = ++generation
+        readyGeneration = 0
         this.onFirstFrame = onFirstFrame
         this.onError = onError
-        // VLC content:// adreslerini açamaz; dosyayı biz açıp tanıtıcısını veriyoruz
-        val fd = runCatching { appContext.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
-        if (fd == null) {
-            onError()
-            return
-        }
-        file = fd
-        val media = Media(libVlc, fd.fileDescriptor).apply {
-            // Buraya sadece donanımın açamadığı videolar gelir; doğrudan FFmpeg ile çöz
-            setHWDecoderEnabled(false, false)
-            addOption(":input-repeat=65535") // başa sar
-        }
-        player.media = media
-        media.release()
         hasMedia = true
+        positionCache = 0f
+        timeCache = 0L
         // Görüntü yüzeyi bağlanmadan başlarsa VLC görüntü çıkışı açamaz; yüzey hazır olunca başla
-        if (vout.areViewsAttached()) start() else pendingStart = true
+        pendingStart = !vout.areViewsAttached()
+        val startNow = !pendingStart
+        val volume = if (muted) 0 else 100
+
+        onControl {
+            stopPlayer()
+            // VLC content:// adreslerini açamaz; dosyayı biz açıp tanıtıcısını veriyoruz
+            val fd = runCatching { appContext.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
+            if (fd == null) {
+                main.post { if (gen == generation) onError() }
+                return@onControl
+            }
+            file = fd
+            val media = Media(libVlc, fd.fileDescriptor).apply {
+                // Buraya sadece donanımın açamadığı videolar gelir; doğrudan FFmpeg / dav1d ile çöz
+                setHWDecoderEnabled(false, false)
+                addOption(":input-repeat=65535") // başa sar
+            }
+            player.media = media
+            media.release()
+            player.volume = volume
+            controlGeneration = gen
+            // Bundan sonra gelen olaylar bu videoya ait
+            main.post { if (gen == generation) readyGeneration = gen }
+            if (startNow) player.play()
+        }
+        if (debug) {
+            main.removeCallbacks(statsLogger)
+            main.postDelayed(statsLogger, 2000)
+        }
+    }
+
+    /** vlc-control iş parçacığında sırayla çalıştırır (motor kapatıldıysa hiçbir şey yapmaz) */
+    private fun onControl(block: () -> Unit) {
+        if (!control.isShutdown) control.execute(block)
     }
 
     private fun start() {
         pendingStart = false
-        player.play()
-        if (debug) handler.postDelayed(statsLogger, 2000)
+        val gen = generation
+        onControl { if (gen == controlGeneration) player.play() }
     }
 
     fun stop() {
-        handler.removeCallbacks(statsLogger)
-        pendingStart = false
-        if (hasMedia) player.stop()
+        generation++
+        readyGeneration = 0
+        main.removeCallbacks(statsLogger)
         hasMedia = false
+        pendingStart = false
+        positionCache = 0f
+        timeCache = 0L
+        onControl { stopPlayer() }
+    }
+
+    /** vlc-control iş parçacığında: önceki videoyu durdurup dosyasını kapatır */
+    private fun stopPlayer() {
+        if (controlGeneration != 0 || file != null) player.stop()
+        controlGeneration = 0
         file?.close()
         file = null
     }
 
-    fun pause() = player.pause()
+    fun pause() {
+        val gen = generation
+        onControl { if (gen == controlGeneration) player.pause() }
+    }
 
     fun resume() {
-        if (hasMedia && !pendingStart) player.play()
+        if (!hasMedia || pendingStart) return
+        val gen = generation
+        onControl { if (gen == controlGeneration) player.play() }
     }
 
     fun setMuted(muted: Boolean) {
         this.muted = muted
-        if (hasMedia) player.volume = if (muted) 0 else 100
+        if (hasMedia) applyVolume()
+    }
+
+    private fun applyVolume() {
+        val volume = if (muted) 0 else 100
+        val gen = generation
+        onControl { if (gen == controlGeneration) player.volume = volume }
     }
 
     /** 0..1 arası oynatma konumu */
-    val progress: Float get() = if (hasMedia) player.position else 0f
+    val progress: Float get() = if (hasMedia) positionCache else 0f
 
     /** Oynatma konumu (ms) */
-    val timeMs: Long get() = if (hasMedia) player.time else 0L
+    val timeMs: Long get() = if (hasMedia) timeCache else 0L
 
     /**
      * Yüzey oluşup boyutu belli olduğunda (SurfaceHolder.Callback.surfaceChanged) çağrılır.
@@ -138,8 +206,11 @@ class VlcEngine private constructor(private val appContext: Context, private val
     fun release() {
         stop()
         detach()
-        player.release()
-        libVlc.release()
+        onControl {
+            player.release()
+            libVlc.release()
+        }
+        control.shutdown()
     }
 
     companion object {
@@ -157,6 +228,11 @@ class VlcEngine private constructor(private val appContext: Context, private val
                     arrayListOf(
                         "--no-osd",
                         "--avcodec-threads=0", // tüm çekirdekleri kullan
+                        // Altyazı / ekran yazısı yok. Açık kalınca VLC ilk videoda telefondaki bütün
+                        // yazı tiplerini tarıyor (vivo'da 342 dosya, 216 MB): önbellek yokken yarım
+                        // dakikadan uzun sürüyor ve video o bitene kadar açılmıyordu.
+                        "--no-spu",
+                        "--text-renderer=none",
                     ),
                 )
                 Handler(Looper.getMainLooper()).post { onReady(VlcEngine(appContext, libVlc)) }

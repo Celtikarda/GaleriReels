@@ -38,6 +38,18 @@ kolaylaştırmak.
   arkadaşlarınla paylaşabileceğin bir kart olarak (Spotify Wrapped gibi).
 - [ ] **Açılış ekranı ve yeni uygulama simgesi**
 
+### Fikir havuzu
+Henüz bir sürüme konmamış fikirler; sırası gelince yukarıya taşınır.
+
+- **Başarımlar** · "100 video izledin", "1 GB yer açtın", "7 gün üst üste açtın", "Bütün
+  klasörleri gezdin" gibi rozetler. Uygulamayı tekrar açmak için güzel bir sebep olur; temizlik
+  modu ve 0.5'te başlayan günlük izleme kaydıyla birlikte çalışır.
+- **Arka planda oynatma** · Uygulamadan çıkınca ya da ekran kapanınca videonun sesi devam etsin.
+  Android bunun için bildirim çubuğunda bir oynatıcı göstermeyi zorunlu tutuyor (oynat /
+  durdur / sonraki).
+- **Ses yükseltme** · Sesi kısık videolar için %100'ün üstüne çıkabilen ses ayarı (en fazla
+  %200; daha fazlası hoparlörde cızırtı yapar).
+
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki
   platforma göre yeniden düzenlenmesi gerekiyor. Android sürümü olgunlaşınca karar verilecek.

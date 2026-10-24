@@ -165,6 +165,20 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         openAlbum = Album(Album.RECENT, "Son izlediklerin", recent.size, first)
     }
 
+    // --- Tarihte bugün (Anılar)
+
+    /** Geçmiş yıllarda bugün / bu hafta çekilmiş videolar */
+    fun memories(): List<VideoItem> = Memories.find(all)
+
+    /** "Tarihte bugün" videolarını dokunulan videodan başlatır */
+    fun openMemories(first: VideoItem) {
+        val list = memories()
+        if (list.isEmpty()) return
+        source = list
+        items = listOf(first) + list.filter { it.id != first.id }
+        openAlbum = Album(Album.MEMORIES, "Tarihte bugün", list.size, first)
+    }
+
     // --- Aylık özet
 
     /** Özet ekranında seçilebilecek aylar (en yeniden eskiye) */

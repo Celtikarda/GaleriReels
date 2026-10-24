@@ -1,6 +1,7 @@
 package com.celtikarda.galerireels.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,7 @@ import coil3.compose.AsyncImage
 import com.celtikarda.galerireels.Album
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
+import com.celtikarda.galerireels.Memories
 import com.celtikarda.galerireels.MonthlyRecap
 import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.VideoItem
@@ -69,6 +71,7 @@ fun AlbumsScreen(
     val collections = tiles.filter { it.id in setOf(Album.ALL, Album.FAVORITES, Album.LIKED) }
     val folders = tiles.filterNot { it in collections }
     val currentRecap = remember(vm.stats.historyRevision, vm.videoCount) { vm.monthlyRecap() }
+    val memories = remember(vm.videoCount) { vm.memories() }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
@@ -140,6 +143,40 @@ fun AlbumsScreen(
         if (currentRecap.hasActivity) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 RecapBannerCard(recap = currentRecap, onClick = onOpenRecap)
+            }
+        }
+
+        if (memories.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.Baseline,
+                        modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
+                    ) {
+                        Text(
+                            "Tarihte bugün",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            Memories.summaryText(memories),
+                            color = FavoriteYellow,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(memories.take(20), key = { it.id }) { video ->
+                            MemoryTile(
+                                video = video,
+                                yearsAgo = Memories.yearsAgo(video),
+                                onClick = { vm.openMemories(video) },
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -281,6 +318,39 @@ private fun CleanupCard(unwatchedCount: Int, unwatchedBytes: Long, cleanedToday:
         }
         Spacer(Modifier.width(8.dp))
         Text("Başla", color = InstaBlue, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Geçmiş yıllarda bu hafta çekilmiş anı videosu: hikâye çerçevesi ve kaç yıl önce olduğu */
+@Composable
+private fun MemoryTile(video: VideoItem, yearsAgo: Int, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .width(92.dp)
+            .aspectRatio(9f / 16f)
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.5.dp, Brush.sweepGradient(StoryRing), RoundedCornerShape(12.dp))
+            .background(Color(0xFF1C1C1E))
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = VideoThumb(video.uri, 320),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f)))
+        )
+        Text(
+            "$yearsAgo yıl önce",
+            color = FavoriteYellow,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.BottomStart).padding(7.dp),
+        )
     }
 }
 

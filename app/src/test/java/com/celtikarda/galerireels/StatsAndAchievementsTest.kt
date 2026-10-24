@@ -155,6 +155,23 @@ class StatsAndAchievementsTest {
         assertEquals("tam 5 yıl önce bugün", relativeDate(fiveYearsAgo, today))
     }
 
+    @Test
+    fun `tarihte bugun gecmis yillardaki ayni hafta videolarini bulur`() {
+        val today = LocalDate.of(2026, 10, 24)
+        fun millisOf(y: Int, m: Int, d: Int) =
+            LocalDate.of(y, m, d).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+        val exactOneYear = sampleVideo(1L, "a.mp4", 10_000L, "cam", "Camera").copy(dateMillis = millisOf(2025, 10, 24))
+        val twoDaysOffThreeYears = sampleVideo(2L, "b.mp4", 10_000L, "cam", "Camera").copy(dateMillis = millisOf(2023, 10, 22))
+        val sameYearIgnored = sampleVideo(3L, "c.mp4", 10_000L, "cam", "Camera").copy(dateMillis = millisOf(2026, 10, 23))
+        val farMonthIgnored = sampleVideo(4L, "d.mp4", 10_000L, "cam", "Camera").copy(dateMillis = millisOf(2024, 5, 10))
+
+        val found = Memories.find(listOf(twoDaysOffThreeYears, sameYearIgnored, exactOneYear, farMonthIgnored), today)
+        // Önce tam yıl dönümü olan (1L), sonra 2 gün fark olan (2L)
+        assertEquals(listOf(1L, 2L), found.map { it.id })
+        assertEquals("1 ve 3 yıl önce bu hafta · 2 video", Memories.summaryText(found, today))
+    }
+
     private val dummyUri: Uri by lazy {
         val field = sun.misc.Unsafe::class.java.getDeclaredField("theUnsafe").apply { isAccessible = true }
         (field.get(null) as sun.misc.Unsafe).allocateInstance(android.net.DummyUri::class.java) as Uri

@@ -10,6 +10,7 @@ Telefonun galerisindeki videoları ve fotoğrafları Instagram Reels gibi, kayd�
 - Aylık özet: bu ay en çok izlediğin videoları, izleme süreni ve en sevdiğin klasörü Spotify Wrapped tarzı kart olarak gör ve paylaş
 - Arka planda oynatma: ayarlar açıldığında ekran kapansa da ses devam eder ve bildirim çubuğundan oynat / durdur / sonraki kontrol edilir
 - Telefonun donanımının açamadığı büyük videolar (ör. 1440x1600@60) VLC motoruyla oynatılır
+- **Gece (koyu), Aydınlık (açık) ve Sistem teması:** Ana ekrandaki güneş/ay simgesiyle ya da Ayarlar'dan tek dokunuşla tema geçişi (Reels oynatıcı ekranı her zaman sinema siyahı kalır)
 - Ayarlar ve video hata ekranından sıfır internet izniyle (tarayıcı üzerinden cihaz/çözücü bilgilerini hazır doldurarak) sorun bildirme ve öneri gönderme
 
 Sadece Android (64-bit ARM, Android 8.0+). APK'yı [Releases](../../releases) sayfasından indirebilirsiniz.
@@ -66,11 +67,14 @@ kolaylaştırmak.
   - **Klasör gizleme / hariç tutma:** Ana ekranda herhangi bir klasöre basılı tutarak gizle; gizlenen
     klasörler "Tüm videolar", "Tarihte bugün" ve "Temizlik" önerilerine girmez, Ayarlar'dan istediğin
     zaman izlenebilir veya tekrar görünür yapılabilir.
-- [x] **1.1 Fotoğraf modu, kenardan 2x hız / ortada net görünüm ve sorun bildirimi**
+- [x] **1.1 Fotoğraf modu, Gece/Aydınlık tema, kenardan 2x hız / ortada net görünüm ve sorun bildirimi**
   - **Fotoğraf modu (`MediaMode`):** Uygulama ilk açıldığında **Sadece videolar**, **Sadece fotoğraflar**
     ya da **Tümü (Fotoğraf + Video)** seçimi sorulur; ana ekrandaki sekmeden veya Ayarlar'dan her an
     değiştirilebilir. Fotoğraflar da Reels gibi tam ekran dikey kaydırılır, çift dokunuşla beğenilir ve
     Temizlik modunda sola kaydırılarak silinebilir.
+  - **Gece / Aydınlık / Sistem teması (`ThemeMode`):** Ana ekrandaki güneş/ay simgesiyle ya da **Ayarlar › Görünüm**
+    bölümünden Gece (koyu), Aydınlık (açık) ve Sistem teması arasında geçiş yapılabilir; Reels oynatıcı
+    ekranı videoların ve fotoğrafların net görünmesi için her zaman sinema siyahı kalır.
   - **Benzer / seri çekim fotoğraf tespiti (`DuplicateFinder`):** 64-bit algısal görüntü özeti (dHash)
     ile yakın zamanda çekilmiş seri (burst) fotoğraflar veya WhatsApp kopyaları yakalanıp "Kopyaları incele"
     altında sunulur.

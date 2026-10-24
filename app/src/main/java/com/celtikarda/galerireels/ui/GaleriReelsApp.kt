@@ -1,5 +1,6 @@
 package com.celtikarda.galerireels.ui
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -12,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,10 +25,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,10 +46,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -50,6 +59,7 @@ import com.celtikarda.galerireels.DataFolder
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaAccess
 import com.celtikarda.galerireels.MediaMode
+import com.celtikarda.galerireels.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -126,95 +136,121 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     BackHandler(enabled = openAlbum == null && showAchievements) { showAchievements = false }
     BackHandler(enabled = openAlbum == null && showRecap) { showRecap = false }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        when {
-            access == MediaAccess.NONE -> PermissionScreen(
-                deniedBefore = askedOnce,
-                onRequest = requestAccess,
-                onOpenSettings = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-                    )
-                },
-            )
-            !vm.loaded -> LoadingScreen()
-            vm.stats.folder == null && !vm.stats.folderPromptDismissed -> FolderSetupScreen(
-                onPick = pickFolder,
-                onLater = vm.stats::dismissFolderPrompt,
-            )
-            !vm.stats.mediaModeAsked -> MediaModeSetupScreen(
-                videoCount = vm.allVideosCount,
-                photoCount = vm.allPhotosCount,
-                onSelect = vm::setMediaMode,
-            )
-            vm.totalVideoCount == 0 -> {
-                val mode = vm.stats.mediaMode
-                val hasOther = vm.totalAnyMediaCount > 0
-                MessageScreen(
-                    title = "${mode.title} bulunamadı",
-                    body = when {
-                        access == MediaAccess.PARTIAL -> "Sadece seçtiğin içerikleri görebiliyorum."
-                        hasOther -> "Galeride hiç ${mode.itemWord} yok ama diğer modda içerik var."
-                        else -> "Galeride hiç fotoğraf ya da video yok gibi görünüyor."
-                    },
-                    buttonText = when {
-                        access == MediaAccess.PARTIAL -> "Medya seç"
-                        hasOther -> "Tüm medyayı göster"
-                        else -> null
-                    },
-                    onButton = {
-                        if (access == MediaAccess.PARTIAL) requestAccess()
-                        else vm.setMediaMode(MediaMode.ALL)
-                    },
-                )
-            }
-            openAlbum != null -> key(openAlbum.id) {
-                ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
-            }
-            showRecap -> RecapScreen(vm = vm, onBack = { showRecap = false })
-            showAchievements -> AchievementsScreen(vm = vm, onBack = { showAchievements = false })
-            showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
-            else -> AlbumsScreen(
-                vm = vm,
-                partialAccess = access == MediaAccess.PARTIAL,
-                onSelectMore = requestAccess,
-                onOpenSettings = { showSettings = true },
-                onOpenAchievements = { showAchievements = true },
-                onOpenRecap = { showRecap = true },
-            )
-        }
-        // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar, özet) durum çubuğunun arkası
-        if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
+    val systemDark = isSystemInDarkTheme()
+    val isDark = when (vm.stats.themeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> systemDark
+    }
+    val palette = if (isDark) DarkAppColors else LightAppColors
+    val colorScheme = if (isDark) {
+        darkColorScheme(primary = InstaBlue, onPrimary = Color.White, surface = palette.card, onSurface = palette.textPrimary)
+    } else {
+        lightColorScheme(primary = InstaBlue, onPrimary = Color.White, surface = palette.card, onSurface = palette.textPrimary)
+    }
 
-        // Yeni başarım açılınca üstte birkaç saniye kutlama
-        val unlocked = vm.newlyUnlocked
-        var shownUnlocked by remember { mutableStateOf(unlocked) }
-        if (unlocked.isNotEmpty()) shownUnlocked = unlocked
-        LaunchedEffect(unlocked) {
-            if (unlocked.isNotEmpty()) {
-                delay(4000)
-                vm.consumeUnlocked()
+    val view = LocalView.current
+    val lightBars = !isDark && openAlbum == null
+    SideEffect {
+        val activity = view.context as? Activity ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(activity.window, view)
+        controller.isAppearanceLightStatusBars = lightBars
+        controller.isAppearanceLightNavigationBars = lightBars
+    }
+
+    MaterialTheme(colorScheme = colorScheme) {
+        CompositionLocalProvider(LocalAppColors provides palette) {
+            Box(Modifier.fillMaxSize().background(if (openAlbum != null) Color.Black else palette.background)) {
+                when {
+                    access == MediaAccess.NONE -> PermissionScreen(
+                        deniedBefore = askedOnce,
+                        onRequest = requestAccess,
+                        onOpenSettings = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                            )
+                        },
+                    )
+                    !vm.loaded -> LoadingScreen()
+                    vm.stats.folder == null && !vm.stats.folderPromptDismissed -> FolderSetupScreen(
+                        onPick = pickFolder,
+                        onLater = vm.stats::dismissFolderPrompt,
+                    )
+                    !vm.stats.mediaModeAsked -> MediaModeSetupScreen(
+                        videoCount = vm.allVideosCount,
+                        photoCount = vm.allPhotosCount,
+                        onSelect = vm::setMediaMode,
+                    )
+                    vm.totalVideoCount == 0 -> {
+                        val mode = vm.stats.mediaMode
+                        val hasOther = vm.totalAnyMediaCount > 0
+                        MessageScreen(
+                            title = "${mode.title} bulunamadı",
+                            body = when {
+                                access == MediaAccess.PARTIAL -> "Sadece seçtiğin içerikleri görebiliyorum."
+                                hasOther -> "Galeride hiç ${mode.itemWord} yok ama diğer modda içerik var."
+                                else -> "Galeride hiç fotoğraf ya da video yok gibi görünüyor."
+                            },
+                            buttonText = when {
+                                access == MediaAccess.PARTIAL -> "Medya seç"
+                                hasOther -> "Tüm medyayı göster"
+                                else -> null
+                            },
+                            onButton = {
+                                if (access == MediaAccess.PARTIAL) requestAccess()
+                                else vm.setMediaMode(MediaMode.ALL)
+                            },
+                        )
+                    }
+                    openAlbum != null -> key(openAlbum.id) {
+                        ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
+                    }
+                    showRecap -> RecapScreen(vm = vm, onBack = { showRecap = false })
+                    showAchievements -> AchievementsScreen(vm = vm, onBack = { showAchievements = false })
+                    showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
+                    else -> AlbumsScreen(
+                        vm = vm,
+                        partialAccess = access == MediaAccess.PARTIAL,
+                        onSelectMore = requestAccess,
+                        onOpenSettings = { showSettings = true },
+                        onOpenAchievements = { showAchievements = true },
+                        onOpenRecap = { showRecap = true },
+                    )
+                }
+                // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar, özet) durum çubuğunun arkası
+                if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
+
+                // Yeni başarım açılınca üstte birkaç saniye kutlama
+                val unlocked = vm.newlyUnlocked
+                var shownUnlocked by remember { mutableStateOf(unlocked) }
+                if (unlocked.isNotEmpty()) shownUnlocked = unlocked
+                LaunchedEffect(unlocked) {
+                    if (unlocked.isNotEmpty()) {
+                        delay(4000)
+                        vm.consumeUnlocked()
+                    }
+                }
+                AnimatedVisibility(
+                    visible = unlocked.isNotEmpty(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp),
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut(),
+                ) {
+                    AchievementBanner(
+                        unlocked = shownUnlocked,
+                        onClick = {
+                            vm.consumeUnlocked()
+                            vm.close()
+                            showSettings = false
+                            showRecap = false
+                            showAchievements = true
+                        },
+                    )
+                }
             }
-        }
-        AnimatedVisibility(
-            visible = unlocked.isNotEmpty(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(top = 8.dp),
-            enter = fadeIn() + slideInVertically(),
-            exit = fadeOut(),
-        ) {
-            AchievementBanner(
-                unlocked = shownUnlocked,
-                onClick = {
-                    vm.consumeUnlocked()
-                    vm.close()
-                    showSettings = false
-                    showRecap = false
-                    showAchievements = true
-                },
-            )
         }
     }
 }
@@ -229,11 +265,11 @@ private fun LoadingScreen() {
     ) {
         AppLogo(size = 96.dp)
         Spacer(Modifier.height(18.dp))
-        Text("Galeri Reels", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Galeri Reels", color = appColors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
-        Text("Videoların hazırlanıyor…", color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
+        Text("Videoların hazırlanıyor…", color = appColors.textSecondary, fontSize = 15.sp)
         Spacer(Modifier.height(24.dp))
-        CircularProgressIndicator(color = Color.White.copy(alpha = 0.7f), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+        CircularProgressIndicator(color = appColors.textSecondary, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -279,12 +315,12 @@ private fun MediaModeSetupScreen(videoCount: Int, photoCount: Int, onSelect: (Me
     ) {
         AppLogo(size = 72.dp)
         Spacer(Modifier.height(20.dp))
-        Text("Ne gezmek istersin?", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text("Ne gezmek istersin?", color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         Text(
             "Fotoğraflarını da tıpkı videolar gibi Reels olarak dikey kaydırabilir ve sola kaydırarak " +
                 "temizleyebilirsin. İstediğin zaman ana ekrandan veya Ayarlar'dan değiştirebilirsin.",
-            color = Color.White.copy(alpha = 0.75f),
+            color = appColors.textSecondary,
             fontSize = 15.sp,
             textAlign = TextAlign.Center,
         )
@@ -319,9 +355,9 @@ private fun MessageScreen(
     ) {
         AppLogo(size = 72.dp)
         Spacer(Modifier.height(20.dp))
-        Text(title, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(title, color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
-        Text(body, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, textAlign = TextAlign.Center)
+        Text(body, color = appColors.textSecondary, fontSize = 16.sp, textAlign = TextAlign.Center)
         if (buttonText != null) {
             Spacer(Modifier.height(28.dp))
             Button(onClick = onButton) { Text(buttonText) }

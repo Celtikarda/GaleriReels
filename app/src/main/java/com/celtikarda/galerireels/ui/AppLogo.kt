@@ -2,14 +2,13 @@ package com.celtikarda.galerireels.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -19,14 +18,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.celtikarda.galerireels.R
 
-/** Kaydırılan sayfalarda durum çubuğunun arkasına koyu şerit (içerik saatin altına girmesin) */
+/** Kaydırılan sayfalarda durum çubuğunun arkasına şerit (içerik saatin altına girmesin) */
 @Composable
 fun StatusBarScrim(modifier: Modifier = Modifier) {
     Box(
         modifier
             .fillMaxWidth()
             .windowInsetsTopHeight(WindowInsets.statusBars)
-            .background(Color.Black.copy(alpha = 0.92f))
+            .background(appColors.statusBarScrim)
     )
 }
 

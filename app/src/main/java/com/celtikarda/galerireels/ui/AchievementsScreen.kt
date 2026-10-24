@@ -70,12 +70,12 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
             Column(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = Color.White)
+                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = appColors.textPrimary)
                     }
-                    Text("Başarımlar", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("Başarımlar", color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     Text(
                         "${unlocked.size} / ${achievements.size}",
-                        color = GoldYellow,
+                        color = appColors.accentGold,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(end = 8.dp),
@@ -84,7 +84,7 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                 val streakNote = if (currentStreak > 0) " · 🔥 $currentStreak günlük seri" else ""
                 Text(
                     "İzledikçe, temizledikçe ve uygulamayı her gün açtıkça yenileri açılır$streakNote",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = appColors.textSecondary,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(start = 12.dp, top = 2.dp),
                 )
@@ -109,21 +109,21 @@ private fun AchievementCard(achievement: Achievement, input: AchievementInput, u
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(if (done) Color(0xFF2A2412) else Color(0xFF1C1C1E))
+            .background(if (done) appColors.achievementDoneBg else appColors.card)
             .padding(14.dp)
     ) {
         Text(achievement.emoji, fontSize = 34.sp, modifier = Modifier.alpha(if (done) 1f else 0.35f))
         Spacer(Modifier.height(8.dp))
         Text(
             achievement.title,
-            color = if (done) GoldYellow else Color.White,
+            color = if (done) appColors.accentGold else appColors.textPrimary,
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
         )
-        Text(achievement.description, color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp)
+        Text(achievement.description, color = appColors.textSecondary, fontSize = 13.sp)
         Spacer(Modifier.height(10.dp))
         if (unlockedAt != null) {
-            Text("Açıldı · ${formatDate(unlockedAt)}", color = GoldYellow.copy(alpha = 0.85f), fontSize = 12.sp)
+            Text("Açıldı · ${formatDate(unlockedAt)}", color = appColors.accentGold, fontSize = 12.sp)
         } else {
             ProgressLine(progress.toFloat() / achievement.target)
             val text = achievement.format?.let { f ->
@@ -132,7 +132,7 @@ private fun AchievementCard(achievement: Achievement, input: AchievementInput, u
             } ?: "${formatCount(progress.toInt())} / ${formatCount(achievement.target.toInt())}"
             if (text.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text(text, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                Text(text, color = appColors.textMuted, fontSize = 12.sp)
             }
         }
     }
@@ -145,14 +145,14 @@ private fun ProgressLine(fraction: Float) {
             .fillMaxWidth()
             .height(5.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(appColors.divider)
     ) {
         Box(
             Modifier
                 .fillMaxWidth(fraction.coerceIn(0f, 1f))
                 .height(5.dp)
                 .clip(RoundedCornerShape(50))
-                .background(GoldYellow)
+                .background(appColors.accentGold)
         )
     }
 }
@@ -165,13 +165,13 @@ fun AchievementBanner(unlocked: List<Achievement>, onClick: () -> Unit, modifier
         modifier
             .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xFF2A2412))
+            .background(appColors.achievementDoneBg)
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(unlocked.take(4).joinToString(" ") { it.emoji }, fontSize = 20.sp)
         Spacer(Modifier.width(10.dp))
-        Text(title, color = GoldYellow, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = appColors.accentGold, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }

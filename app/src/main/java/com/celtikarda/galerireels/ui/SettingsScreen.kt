@@ -57,6 +57,7 @@ import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.MediaMode
 import com.celtikarda.galerireels.MediaRepository
 import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.ThemeMode
 import com.celtikarda.galerireels.TrashedVideo
 import com.celtikarda.galerireels.VideoItem
 
@@ -114,9 +115,33 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)) {
             IconButton(onClick = onBack) {
-                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = Color.White)
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = appColors.textPrimary)
             }
-            Text("Ayarlar", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Ayarlar", color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        }
+
+        SectionTitle("Görünüm", if (appColors.isDark) R.drawable.ic_dark_mode else R.drawable.ic_light_mode)
+        Card {
+            val currentTheme = stats.themeMode
+            Text(
+                "Ana ekran, ayarlar, başarımlar ve aylık özet sayfalarında gece (koyu), aydınlık (açık) ya da " +
+                    "telefonunun sistem temasını kullanabilirsin. Reels oynatıcı ekranı videoların net görünmesi " +
+                    "için her zaman sinema siyahı kalır.",
+                color = appColors.textSecondary,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            InfoLine("Seçili tema", currentTheme.title)
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { entry ->
+                    if (entry == currentTheme) {
+                        Button(onClick = { vm.setThemeMode(entry) }) { Text(entry.title) }
+                    } else {
+                        OutlinedButton(onClick = { vm.setThemeMode(entry) }) { Text(entry.title) }
+                    }
+                }
+            }
         }
 
         SectionTitle("Medya modu", R.drawable.ic_play)
@@ -125,7 +150,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             Text(
                 "Uygulamada sadece videoları, sadece fotoğrafları ya da ikisini birden Reels gibi " +
                     "dikey kaydırarak gezebilir ve sola kaydırarak temizleyebilirsin.",
-                color = Color.White.copy(alpha = 0.75f),
+                color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
@@ -157,10 +182,10 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Kayıt klasörü", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                    Text("Kayıt klasörü", color = appColors.textSecondary, fontSize = 13.sp)
                     Text(
                         folder?.displayPath ?: "Seçilmedi",
-                        color = Color.White,
+                        color = appColors.textPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -199,7 +224,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             Text(
                 "Uygulamayı silip yeniden kurarsan aynı klasörü (Documents › GaleriReels) seçmen " +
                     "yeterli; beğenilerin ve izlenmelerin geri gelir.",
-                color = Color.White.copy(alpha = 0.55f),
+                color = appColors.textMuted,
                 fontSize = 13.sp,
             )
         }
@@ -212,13 +237,13 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Spacer(Modifier.height(10.dp))
                 val trash = stats.trashed.toList()
                 if (trash.isEmpty()) {
-                    Text("Çöp kutusunda uygulamanın sildiği içerik yok.", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                    Text("Çöp kutusunda uygulamanın sildiği içerik yok.", color = appColors.textSecondary, fontSize = 14.sp)
                 } else {
                     Text(
                         "Çöp kutusunda ${formatCount(trash.size)} öğe (${formatSize(trash.sumOf { it.bytes })}). " +
                             "Telefon bunları silindikten 30 gün sonra kendiliğinden siler; o zamana kadar geri getirebilirsin. " +
                             "Yerin hemen açılması için kalıcı olarak silebilirsin.",
-                        color = Color.White,
+                        color = appColors.textPrimary,
                         fontSize = 14.sp,
                     )
                     Spacer(Modifier.height(12.dp))
@@ -241,7 +266,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Text(
                     "Favoriler telefonunun galerisindeki favorilerle aynı listedir; burada eklediğin " +
                         "galeride de favori olur.",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = appColors.textSecondary,
                     fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(10.dp))
@@ -251,7 +276,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     Text(
                         "Videoları çöp kutusuna taşırken (ve bazı telefonlarda favori eklerken) telefon " +
                             "her seferinde onay sorar. \"Medya yönetimi\" izni verirsen sormaz.",
-                        color = Color.White,
+                        color = appColors.textPrimary,
                         fontSize = 14.sp,
                     )
                     MediaActions.manageMediaSettings(context)?.let { intent ->
@@ -268,12 +293,12 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             Text(
                 "Ana ekranda bir klasöre basılı tutarak gizleyebilirsin. Gizlenen klasörler " +
                     "Tüm videolar, Tarihte bugün ve Temizlik önerilerine girmez.",
-                color = Color.White.copy(alpha = 0.75f),
+                color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
             if (hidden.isEmpty()) {
-                Text("Gizlenmiş klasör yok.", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                Text("Gizlenmiş klasör yok.", color = appColors.textSecondary, fontSize = 14.sp)
             } else {
                 hidden.forEach { album ->
                     Row(
@@ -287,8 +312,8 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                                 .weight(1f)
                                 .clickable { vm.open(album) }
                         ) {
-                            Text(album.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text("${formatCount(album.count)} video · İzlemek için dokun", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                            Text(album.name, color = appColors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text("${formatCount(album.count)} video · İzlemek için dokun", color = appColors.textSecondary, fontSize = 12.sp)
                         }
                         Spacer(Modifier.width(8.dp))
                         OutlinedButton(onClick = { vm.unhideAlbum(album.id) }) {
@@ -311,7 +336,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             Text(
                 "Arka planda oynatma açıkken uygulamadan çıksan ya da ekranı kapatsan bile videonun " +
                     "sesi devam eder ve bildirim çubuğunda oynatıcı görünür.",
-                color = Color.White.copy(alpha = 0.75f),
+                color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
@@ -334,7 +359,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     }
                     .padding(vertical = 3.dp)
             ) {
-                Text("Kaynak kodu", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text("Kaynak kodu", color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
                 Text("github.com/Celtikarda/GaleriReels", color = InstaBlue, fontSize = 14.sp)
             }
             Row(
@@ -342,7 +367,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     .clickable { openIssueReport(context) }
                     .padding(vertical = 3.dp)
             ) {
-                Text("Geri bildirim", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text("Geri bildirim", color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
                 Text("Sorun bildir / Öneri gönder", color = InstaBlue, fontSize = 14.sp)
             }
             Spacer(Modifier.height(10.dp))
@@ -405,9 +430,9 @@ private fun SectionTitle(text: String, icon: Int) {
         Modifier.padding(start = 4.dp, top = 18.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(painterResource(icon), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+        Icon(painterResource(icon), contentDescription = null, tint = appColors.textSecondary, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
-        Text(text, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -417,7 +442,7 @@ private fun Card(content: @Composable ColumnScope.() -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1C1C1E))
+            .background(appColors.card)
             .padding(16.dp),
         content = content,
     )
@@ -426,7 +451,7 @@ private fun Card(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun InfoLine(label: String, value: String) {
     Row(Modifier.padding(vertical = 3.dp)) {
-        Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.width(96.dp))
-        Text(value, color = Color.White, fontSize = 14.sp)
+        Text(label, color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+        Text(value, color = appColors.textPrimary, fontSize = 14.sp)
     }
 }

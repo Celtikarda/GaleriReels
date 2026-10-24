@@ -95,28 +95,38 @@ fun AlbumsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
+            val isDark = appColors.isDark
             Column(Modifier.statusBarsPadding().padding(start = 4.dp, top = 16.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "Galeri Reels",
-                        color = Color.White,
-                        fontSize = 28.sp,
+                        color = appColors.textPrimary,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = onOpenRecap) {
+                    IconButton(onClick = { vm.toggleDarkLight(isDark) }, modifier = Modifier.size(42.dp)) {
+                        Icon(
+                            painterResource(if (isDark) R.drawable.ic_light_mode else R.drawable.ic_dark_mode),
+                            contentDescription = if (isDark) "Aydınlık moda geç" else "Gece moduna geç",
+                            tint = appColors.textPrimary,
+                        )
+                    }
+                    IconButton(onClick = onOpenRecap, modifier = Modifier.size(42.dp)) {
                         Icon(painterResource(R.drawable.ic_recap), contentDescription = "Aylık özet", tint = InstaBlue)
                     }
-                    IconButton(onClick = onOpenAchievements) {
-                        Icon(painterResource(R.drawable.ic_trophy), contentDescription = "Başarımlar", tint = FavoriteYellow)
+                    IconButton(onClick = onOpenAchievements, modifier = Modifier.size(42.dp)) {
+                        Icon(painterResource(R.drawable.ic_trophy), contentDescription = "Başarımlar", tint = appColors.accentGold)
                     }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Ayarlar", tint = Color.White)
+                    IconButton(onClick = onOpenSettings, modifier = Modifier.size(42.dp)) {
+                        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Ayarlar", tint = appColors.textPrimary)
                     }
                 }
                 Text(
                     "${formatCount(vm.videoCount)} ${mode.itemWord} · ${formatCount(vm.folderCount)} klasör",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = appColors.textSecondary,
                     fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(10.dp))
@@ -176,14 +186,14 @@ fun AlbumsScreen(
                     ) {
                         Text(
                             "Tarihte bugün",
-                            color = Color.White,
+                            color = appColors.textPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
                             Memories.summaryText(memories),
-                            color = FavoriteYellow,
+                            color = appColors.accentGold,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -207,7 +217,7 @@ fun AlbumsScreen(
                 Column {
                     Text(
                         "Son izlediklerin",
-                        color = Color.White,
+                        color = appColors.textPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
@@ -232,7 +242,7 @@ fun AlbumsScreen(
             ) {
                 Text(
                     "Klasörler",
-                    color = Color.White,
+                    color = appColors.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -248,7 +258,7 @@ fun AlbumsScreen(
                 } else {
                     Text(
                         "Gizlemek için basılı tut",
-                        color = Color.White.copy(alpha = 0.4f),
+                        color = appColors.textMuted,
                         fontSize = 12.sp,
                     )
                 }
@@ -270,7 +280,7 @@ fun AlbumsScreen(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
                 "Galeri Reels $version",
-                color = Color.White.copy(alpha = 0.35f),
+                color = appColors.textMuted,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.navigationBarsPadding().padding(top = 12.dp, bottom = 16.dp),
@@ -281,9 +291,9 @@ fun AlbumsScreen(
     pendingHide?.let { folder ->
         AlertDialog(
             onDismissRequest = { pendingHide = null },
-            containerColor = Color(0xFF1C1C1E),
-            titleContentColor = Color.White,
-            textContentColor = Color.White.copy(alpha = 0.8f),
+            containerColor = appColors.card,
+            titleContentColor = appColors.textPrimary,
+            textContentColor = appColors.textSecondary,
             title = { Text("«${folder.name}» gizlensin mi?", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
@@ -294,7 +304,7 @@ fun AlbumsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingHide = null }) {
-                    Text("İptal", color = Color.White.copy(alpha = 0.7f))
+                    Text("İptal", color = appColors.textSecondary)
                 }
             },
             confirmButton = {
@@ -318,7 +328,7 @@ private fun MediaModeSelector(current: MediaMode, onSelect: (MediaMode) -> Unit)
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1C1C1E))
+            .background(appColors.card)
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -335,7 +345,7 @@ private fun MediaModeSelector(current: MediaMode, onSelect: (MediaMode) -> Unit)
             ) {
                 Text(
                     entry.title,
-                    color = if (selected) Color.White else Color.White.copy(alpha = 0.7f),
+                    color = if (selected) Color.White else appColors.textSecondary,
                     fontSize = 13.sp,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 )
@@ -405,7 +415,7 @@ private fun CleanupCard(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1C1C1E))
+            .background(appColors.card)
     ) {
         Row(
             Modifier
@@ -425,14 +435,14 @@ private fun CleanupCard(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Temizlik", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text("Temizlik", color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (unwatchedCount > 0) {
                         "Hiç $actionWord ${formatCount(unwatchedCount)} ${mode.itemWord} ${formatSize(unwatchedBytes)} yer kaplıyor"
                     } else {
                         "Artık istemediğin içerikleri sil, yer aç"
                     },
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = appColors.textSecondary,
                     fontSize = 13.sp,
                 )
                 if (cleanedToday > 0) {
@@ -451,14 +461,14 @@ private fun CleanupCard(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color.White.copy(alpha = 0.05f))
+                    .background(appColors.divider)
                     .clickable(onClick = onStartDuplicates)
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "Benzer / kopya ${formatCount(duplicateCount)} ${mode.itemWord} (${formatSize(duplicateBytes)}) bulundu",
-                    color = FavoriteYellow,
+                    color = appColors.accentGold,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
@@ -550,7 +560,7 @@ private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> U
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1C1C1E))
+                .background(appColors.card)
         ) {
             AsyncImage(
                 model = VideoThumb(album.cover.uri, 360),
@@ -566,13 +576,13 @@ private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> U
         Spacer(Modifier.height(6.dp))
         Text(
             album.name,
-            color = Color.White,
+            color = appColors.textPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text("${formatCount(album.count)} $itemWord", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+        Text("${formatCount(album.count)} $itemWord", color = appColors.textSecondary, fontSize = 12.sp)
     }
 }
 

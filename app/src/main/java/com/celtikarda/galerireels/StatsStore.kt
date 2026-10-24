@@ -213,6 +213,11 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     /** İlk açılışta hangi tür içerik gösterileceği soruldu mu */
     var mediaModeAsked by mutableStateOf(prefs.getBoolean(KEY_MEDIA_MODE_ASKED, false))
         private set
+    /** Uygulama arayüzünün renk teması: Gece, Aydınlık ya da Sistem */
+    var themeMode by mutableStateOf(
+        ThemeMode.entries.firstOrNull { it.name == prefs.getString(KEY_THEME_MODE, null) } ?: ThemeMode.DARK,
+    )
+        private set
     /** Klasöre en son başarıyla yazılan an */
     var lastFolderSave by mutableStateOf(prefs.getLong(KEY_LAST_SAVE, 0L))
         private set
@@ -349,6 +354,11 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    fun updateThemeMode(mode: ThemeMode) {
+        themeMode = mode
+        prefs.edit { putString(KEY_THEME_MODE, mode.name) }
+    }
+
     /** Uygulama arka plana geçerken bekleyen kaydı hemen yapar. */
     fun flush() {
         if (saveJob?.isActive != true) return
@@ -451,6 +461,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_BG_PLAY = "background_play"
         const val KEY_MEDIA_MODE = "media_mode"
         const val KEY_MEDIA_MODE_ASKED = "media_mode_asked"
+        const val KEY_THEME_MODE = "theme_mode"
 
         private val dayFormat = DateTimeFormatter.ISO_LOCAL_DATE
 

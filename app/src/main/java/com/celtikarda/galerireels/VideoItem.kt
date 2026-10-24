@@ -39,6 +39,13 @@ enum class MediaMode(val title: String, val itemWord: String, val pluralWord: St
     ALL("Tümü", "içerik", "içerikler"),
 }
 
+/** Uygulama arayüzünün renk teması (Reels oynatıcı ekranı her zaman sinema siyahı kalır) */
+enum class ThemeMode(val title: String) {
+    DARK("Gece"),
+    LIGHT("Aydınlık"),
+    SYSTEM("Sistem"),
+}
+
 data class Album(
     val id: String,
     val name: String,

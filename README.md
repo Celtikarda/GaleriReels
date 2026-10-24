@@ -3,7 +3,7 @@
 Telefonun galerisindeki videoları ve fotoğrafları Instagram Reels gibi, kaydırarak gezmeye ve temizlemeye yarayan Android uygulaması.
 
 - Galerideki klasörleri gösterir; sadece **Videolar**, sadece **Fotoğraflar** ya da **Tümü** modunda tam ekran, alt alta kaydırarak oynatır/gösterir
-- Çift dokunarak beğenme, sağ/sol kenarlara basılı tutarak 2x hızlı oynatma, ortaya basılı tutarak net görünüm (arayüzü gizleme), paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
+- Çift dokunarak beğenme, sağ/sol kenarlara basılı tutarak 2x hızlı oynatma, ortaya basılı tutarak net görünüm (arayüzü gizleme), yatay tam ekran (Landscape) izleme, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
 - Her içeriğin beğenisi ve kaç kez izlendiği/bakıldığı kaydedilir; kayıt seçilen bir klasörde de
   (Documents › GaleriReels) tutulur, uygulama silinip yeniden kurulsa da geri gelir
 - Favoriler (telefonun galerisiyle ortak), Tarihte bugün anıları ve Temizlik modu: istemediğin video ve fotoğrafları sola kaydırıp sil, algısal görüntü özeti (dHash) ile kopya/benzer videoları ve seri çekim fotoğrafları yakala, ne kadar yer açtığını gör
@@ -84,6 +84,17 @@ kolaylaştırmak.
   - **Sorun bildir / Öneri gönder:** Ayarlar ekranına ve açılmayan videoların hata kutusuna eklendi;
     internet izni istemeden cihaz modeli, Android sürümü ve video çözücü bilgilerini hazır doldurarak
     GitHub Issue sayfasını açar.
+
+- [x] **1.2 Yatay tam ekran izleme ve 2x hızlı oynatma akıcılığı**
+  - **Yatay tam ekran (Landscape) modu:** Sağdaki işlem sütunundan, üst çubuktan ya da üç nokta
+    menüsünden tek dokunuşla ekranı yataya çevirip sistem çubuklarını gizleyerek tam ekran izleme;
+    geri tuşuyla veya **Küçült** butonuyla oynatma kesilmeden dikey Reels akışına dönülür.
+  - **Yüksek kaliteli videolarda pürüzsüz 2x hızlı oynatma:** H.264/HEVC/AV1 referans-dışı karelerin
+    (B-kare / ara katman) çözücüye girmeden elenmesi, `BUFFER_FLAG_DECODE_ONLY` desteği, değişken
+    kare hızlı (VFR) telefon videolarında donanım çözücü saat hızı (`operating-rate`) yükseltmesi,
+    sadece ekrandaki oynatıcıya hız uygulanması ve VLC `avcodec-fast` / `skip-loop-filter`
+    optimizasyonlarıyla 60 fps ve yüksek çözünürlüklü videolarda 2x takılmaları giderildi.
+  - Sıfırdan kurulumda klasör seçilmeden önce başarım bildirimi çıkması düzeltildi.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

@@ -1,6 +1,7 @@
 package com.celtikarda.galerireels
 
 import android.app.Application
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -87,6 +88,28 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     /** Ana ekrandaki güneş/ay simgesiyle Gece ↔ Aydınlık arasında hızlı geçiş yapar */
     fun toggleDarkLight(currentlyDark: Boolean) {
         stats.updateThemeMode(if (currentlyDark) ThemeMode.LIGHT else ThemeMode.DARK)
+    }
+
+    /** Klasör seçme ekranı geçildi mi (kullanıcı eski kayıt klasörünü seçmeden başarım kontrolü yapılmaz) */
+    val setupCompleted: Boolean
+        get() = stats.loaded && (stats.folder != null || stats.folderPromptDismissed)
+
+    /** Klasör seçildiğinde eski verileri yükler ve önceden kazanılmış başarımları bildirim çıkarmadan eşitler */
+    suspend fun useFolder(treeUri: Uri): Result<Int> {
+        val result = stats.useFolder(treeUri)
+        if (result.isSuccess) {
+            folders = buildFolders(all)
+            checkAchievements(silent = true)
+            stats.flush()
+            if (loaded) scanDuplicates()
+        }
+        return result
+    }
+
+    /** Kullanıcı klasör seçmeyi "Şimdi değil" diyerek geçtiğinde mevcut galeri durumu sessizce eşitlenir */
+    fun dismissFolderPrompt() {
+        stats.dismissFolderPrompt()
+        checkAchievements(silent = true)
     }
 
     /** Aynı token ile tekrar çağrılırsa (ör. ekran döndüğünde) yeniden yüklemez. */
@@ -339,14 +362,21 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** Koşulu sağlanıp henüz açılmamış başarımları açar */
-    fun checkAchievements() {
-        if (!loaded) return
+    /**
+     * Koşulu sağlanıp henüz açılmamış başarımları açar.
+     * Kullanıcı ilk açılıştaki klasör seçme ekranını geçmeden çalışmaz; böylece uygulama sıfırdan
+     * kurulduğunda eski kayıt klasörü seçilmeden önce başarım bildirimi çıkmaz.
+     * [silent] true ise (ör. klasör geri yüklendiğinde) başarım kaydedilir ama üstte kutlama gösterilmez.
+     */
+    fun checkAchievements(silent: Boolean = false) {
+        if (!loaded || !setupCompleted) return
         val input = achievementInput()
         val fresh = achievements.filter { it.id !in stats.unlocked && it.isUnlocked(input) }
         if (fresh.isEmpty()) return
         stats.recordUnlocked(fresh.map { it.id })
-        newlyUnlocked = newlyUnlocked + fresh
+        if (!silent) {
+            newlyUnlocked = newlyUnlocked + fresh
+        }
     }
 
     fun consumeUnlocked() {

@@ -88,7 +88,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree == null) return@rememberLauncherForActivityResult
         scope.launch {
-            vm.stats.useFolder(tree)
+            vm.useFolder(tree)
                 .onSuccess { restored ->
                     val text = if (restored > 0) "Eski verilerin geri geldi ($restored video)" else "Veriler artık bu klasöre kaydediliyor"
                     Toast.makeText(context, text, Toast.LENGTH_LONG).show()
@@ -174,7 +174,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                     !vm.loaded -> LoadingScreen()
                     vm.stats.folder == null && !vm.stats.folderPromptDismissed -> FolderSetupScreen(
                         onPick = pickFolder,
-                        onLater = vm.stats::dismissFolderPrompt,
+                        onLater = vm::dismissFolderPrompt,
                     )
                     !vm.stats.mediaModeAsked -> MediaModeSetupScreen(
                         videoCount = vm.allVideosCount,

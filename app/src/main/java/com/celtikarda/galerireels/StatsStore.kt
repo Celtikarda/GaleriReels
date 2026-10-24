@@ -55,6 +55,10 @@ internal class SavedData(
     val achievements: Map<String, Long>,
     /** Ana ekrandan, Tüm videolar'dan ve önerilerden gizlenen klasör kimlikleri */
     val hiddenAlbums: Set<String> = emptySet(),
+    /** Kullanıcının seçtiği medya modu (yedekten geri yüklenince tekrar sormasın) */
+    val mediaMode: MediaMode? = null,
+    /** Kullanıcının seçtiği görünüm teması */
+    val themeMode: ThemeMode? = null,
 )
 
 /**
@@ -352,11 +356,13 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             putString(KEY_MEDIA_MODE, mode.name)
             putBoolean(KEY_MEDIA_MODE_ASKED, true)
         }
+        scheduleSave()
     }
 
     fun updateThemeMode(mode: ThemeMode) {
         themeMode = mode
         prefs.edit { putString(KEY_THEME_MODE, mode.name) }
+        scheduleSave()
     }
 
     /** Uygulama arka plana geçerken bekleyen kaydı hemen yapar. */
@@ -388,6 +394,18 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         // Aynı başarım iki kayıtta da açılmışsa ilk açıldığı an geçerli
         saved.achievements.forEach { (id, at) -> unlocked[id] = minOf(unlocked[id] ?: at, at) }
         saved.hiddenAlbums.forEach { id -> if (id !in hiddenAlbums) hiddenAlbums += id }
+        if (!mediaModeAsked && saved.mediaMode != null) {
+            mediaMode = saved.mediaMode
+            mediaModeAsked = true
+            prefs.edit {
+                putString(KEY_MEDIA_MODE, saved.mediaMode.name)
+                putBoolean(KEY_MEDIA_MODE_ASKED, true)
+            }
+        }
+        if (prefs.getString(KEY_THEME_MODE, null) == null && saved.themeMode != null) {
+            themeMode = saved.themeMode
+            prefs.edit { putString(KEY_THEME_MODE, saved.themeMode.name) }
+        }
         historyRevision++
     }
 
@@ -396,6 +414,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             SavedData(
                 stats.toMap(), days.mapValues { it.value.toMap() }, activeDays.toSet(), cleaned.toMap(), trashed.toList(),
                 unlocked.toMap(), hiddenAlbums.toSet(),
+                mediaMode = if (mediaModeAsked) mediaMode else null,
+                themeMode = themeMode,
             ),
         )
         val target = folder
@@ -524,6 +544,10 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 .put("cleaned", JSONObject(data.cleaned.toSortedMap() as Map<*, *>))
                 .put("achievements", JSONObject(data.achievements.toSortedMap() as Map<*, *>))
                 .put("hiddenAlbums", JSONArray(data.hiddenAlbums.sorted()))
+                .apply {
+                    data.mediaMode?.let { put("mediaMode", it.name) }
+                    data.themeMode?.let { put("themeMode", it.name) }
+                }
                 .put(
                     "trash",
                     JSONArray(
@@ -579,7 +603,9 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             val achievements = achievementsJson?.keys()?.asSequence()?.associateWith { achievementsJson.optLong(it) }.orEmpty()
             val hiddenJson = root.optJSONArray("hiddenAlbums")
             val hiddenAlbums = (0 until (hiddenJson?.length() ?: 0)).map { hiddenJson!!.getString(it) }.toSet()
-            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash, achievements, hiddenAlbums)
+            val mediaMode = root.optString("mediaMode", "").let { name -> MediaMode.entries.firstOrNull { it.name == name } }
+            val themeMode = root.optString("themeMode", "").let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
+            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash, achievements, hiddenAlbums, mediaMode, themeMode)
         }
 
         /** İki kaydı birleştirir: en çok izlenme, en son değişen beğeni */

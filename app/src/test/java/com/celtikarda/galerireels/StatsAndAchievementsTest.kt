@@ -64,6 +64,8 @@ class StatsAndAchievementsTest {
             ),
             achievements = mapOf("first_view" to 1700000050L),
             hiddenAlbums = setOf("whatsapp_bucket", "screen_recorder_bucket"),
+            mediaMode = MediaMode.ALL,
+            themeMode = ThemeMode.LIGHT,
         )
 
         val json = StatsStore.toJson(original)
@@ -76,6 +78,8 @@ class StatsAndAchievementsTest {
         assertEquals(original.trash, parsed.trash)
         assertEquals(original.achievements, parsed.achievements)
         assertEquals(original.hiddenAlbums, parsed.hiddenAlbums)
+        assertEquals(MediaMode.ALL, parsed.mediaMode)
+        assertEquals(ThemeMode.LIGHT, parsed.themeMode)
     }
 
     @Test

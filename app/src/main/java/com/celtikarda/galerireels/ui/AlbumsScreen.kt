@@ -131,11 +131,15 @@ fun AlbumsScreen(
         if (MediaActions.trashSupported) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 val unwatched = vm.unwatched()
+                val duplicates = vm.duplicateCopies
                 CleanupCard(
                     unwatchedCount = unwatched.size,
                     unwatchedBytes = unwatched.sumOf { it.sizeBytes },
                     cleanedToday = vm.stats.cleanedToday,
+                    duplicateCount = duplicates.size,
+                    duplicateBytes = duplicates.sumOf { it.sizeBytes },
                     onStart = vm::openCleanup,
+                    onStartDuplicates = vm::openDuplicateCleanup,
                 )
             }
         }
@@ -274,50 +278,82 @@ private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
     }
 }
 
-/** Temizlik modunun girişi: hiç izlenmeyenlerin kapladığı yer, bugün temizlenen */
+/** Temizlik modunun girişi: hiç izlenmeyenlerin kapladığı yer, bugün temizlenen ve kopya videolar */
 @Composable
-private fun CleanupCard(unwatchedCount: Int, unwatchedBytes: Long, cleanedToday: Long, onStart: () -> Unit) {
-    Row(
+private fun CleanupCard(
+    unwatchedCount: Int,
+    unwatchedBytes: Long,
+    cleanedToday: Long,
+    duplicateCount: Int,
+    duplicateBytes: Long,
+    onStart: () -> Unit,
+    onStartDuplicates: () -> Unit,
+) {
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF1C1C1E))
-            .clickable(onClick = onStart)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
+        Row(
             Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(CleanupGreen.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .clickable(onClick = onStart)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(painterResource(R.drawable.ic_delete_sweep), contentDescription = null, tint = CleanupGreen, modifier = Modifier.size(26.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("Temizlik", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Text(
-                if (unwatchedCount > 0) {
-                    "Hiç izlemediğin ${formatCount(unwatchedCount)} video ${formatSize(unwatchedBytes)} yer kaplıyor"
-                } else {
-                    "Artık istemediğin videoları sil, yer aç"
-                },
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 13.sp,
-            )
-            if (cleanedToday > 0) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(CleanupGreen.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(R.drawable.ic_delete_sweep), contentDescription = null, tint = CleanupGreen, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Temizlik", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Bugün ${formatSize(cleanedToday)} temizledin",
-                    color = CleanupGreen,
+                    if (unwatchedCount > 0) {
+                        "Hiç izlemediğin ${formatCount(unwatchedCount)} video ${formatSize(unwatchedBytes)} yer kaplıyor"
+                    } else {
+                        "Artık istemediğin videoları sil, yer aç"
+                    },
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 13.sp,
+                )
+                if (cleanedToday > 0) {
+                    Text(
+                        "Bugün ${formatSize(cleanedToday)} temizledin",
+                        color = CleanupGreen,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Text("Başla", color = InstaBlue, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+        if (duplicateCount > 0) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .clickable(onClick = onStartDuplicates)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Benzer / kopya ${formatCount(duplicateCount)} video (${formatSize(duplicateBytes)}) bulundu",
+                    color = FavoriteYellow,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
                 )
+                Text("Kopyaları incele", color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
-        Spacer(Modifier.width(8.dp))
-        Text("Başla", color = InstaBlue, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

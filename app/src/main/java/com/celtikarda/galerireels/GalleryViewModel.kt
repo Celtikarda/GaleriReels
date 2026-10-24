@@ -54,6 +54,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             loaded = true
             checkAchievements()
             pendingVideoId?.let { openVideo(it) }
+            scanDuplicates()
         }
     }
 
@@ -79,6 +80,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             all = MediaRepository.loadVideos(getApplication())
             folders = buildFolders(all)
             favoriteIds = all.filter { it.favorite }.mapTo(HashSet()) { it.id }
+            scanDuplicates()
         }
     }
 
@@ -87,6 +89,30 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     /** Temizlikte "silinecek" diye işaretlenenler (henüz silinmedi) */
     var cleanupMarked by mutableStateOf<List<VideoItem>>(emptyList())
         private set
+
+    /** Algısal görüntü özeti (dHash) ile tespit edilen fazlalık kopya videolar */
+    var duplicateCopies by mutableStateOf<List<VideoItem>>(emptyList())
+        private set
+
+    private fun scanDuplicates() {
+        val snapshot = all
+        val keepKeys = snapshot.filter { isLiked(it) || isFavorite(it) }.mapTo(HashSet()) { it.key }
+        viewModelScope.launch {
+            val found = DuplicateFinder.findExtraCopies(getApplication(), snapshot, keepKeys)
+            val currentIds = all.mapTo(HashSet()) { it.id }
+            duplicateCopies = found.filter { it.id in currentIds && !isLiked(it) && !isFavorite(it) }
+        }
+    }
+
+    /** Sadece tespit edilen kopya/benzer videolarla temizlik modunu başlatır */
+    fun openDuplicateCleanup() {
+        val copies = duplicateCopies.filter { !isLiked(it) && !isFavorite(it) }
+        if (copies.isEmpty()) return
+        source = copies
+        items = copies
+        cleanupMarked = emptyList()
+        openAlbum = Album(Album.CLEANUP, "Kopya videolar", copies.size, copies.first())
+    }
 
     /** Silinmeye aday olanlar: beğenilen ve favori olanlar temizlikte hiç gösterilmez */
     private fun cleanupCandidates(): List<VideoItem> = all.filter { !isLiked(it) && !isFavorite(it) }
@@ -128,6 +154,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         stats.recordTrashed(videos)
         val ids = videos.mapTo(HashSet()) { it.id }
         all = all.filter { it.id !in ids }
+        duplicateCopies = duplicateCopies.filter { it.id !in ids }
         folders = buildFolders(all)
         cleanupMarked = emptyList()
         checkAchievements()

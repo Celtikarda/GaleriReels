@@ -172,6 +172,39 @@ class StatsAndAchievementsTest {
         assertEquals("1 ve 3 yıl önce bu hafta · 2 video", Memories.summaryText(found, today))
     }
 
+    @Test
+    fun `dHash algisal ozet benzer kareleri eslestirir ve kopyalari ayirir`() {
+        // Soldan sağa aydınlanan 9x8 kare
+        val frameA = IntArray(72) { idx -> (idx % 9) * 25 }
+        // Hafif sıkıştırma gürültüsü eklenmiş benzer kare
+        val frameB = IntArray(72) { idx -> (idx % 9) * 25 + if (idx % 7 == 0) 2 else -1 }
+        // Tam tersi (soldan sağa kararan) farklı kare
+        val frameDifferent = IntArray(72) { idx -> (8 - (idx % 9)) * 25 }
+
+        val hashA = DuplicateFinder.computeDHashFromLuminance(frameA)
+        val hashB = DuplicateFinder.computeDHashFromLuminance(frameB)
+        val hashDiff = DuplicateFinder.computeDHashFromLuminance(frameDifferent)
+
+        assertTrue(DuplicateFinder.hammingDistance(hashA, hashB) <= DuplicateFinder.MAX_HAMMING_DISTANCE)
+        assertTrue(DuplicateFinder.hammingDistance(hashA, hashDiff) > DuplicateFinder.MAX_HAMMING_DISTANCE)
+
+        val original = sampleVideo(10L, "orijinal.mp4", 15_000L, "cam", "Camera").copy(sizeBytes = 8_000_000L)
+        val whatsappCopy = sampleVideo(11L, "VID-WA001.mp4", 15_100L, "wa", "WhatsApp").copy(sizeBytes = 2_500_000L)
+        val unrelated = sampleVideo(12L, "baska.mp4", 15_200L, "cam", "Camera").copy(sizeBytes = 5_000_000L)
+
+        val extras = DuplicateFinder.selectExtraCopies(
+            candidates = listOf(original, whatsappCopy, unrelated),
+            hashes = mapOf(
+                original.key to hashA,
+                whatsappCopy.key to hashB,
+                unrelated.key to hashDiff,
+            ),
+            keepKeys = emptySet(),
+        )
+        // Yüksek boyutlu/orijinal olan korunur, düşük boyutlu WhatsApp kopyası fazlalık olarak döner
+        assertEquals(listOf(11L), extras.map { it.id })
+    }
+
     private val dummyUri: Uri by lazy {
         val field = sun.misc.Unsafe::class.java.getDeclaredField("theUnsafe").apply { isAccessible = true }
         (field.get(null) as sun.misc.Unsafe).allocateInstance(android.net.DummyUri::class.java) as Uri

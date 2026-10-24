@@ -1,8 +1,10 @@
 package com.celtikarda.galerireels.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,18 +28,25 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,11 +74,14 @@ fun AlbumsScreen(
 ) {
     val tiles = vm.albumTiles()
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
+    var pendingHide by remember { mutableStateOf<Album?>(null) }
 
     // Tüm videolar / Favoriler / Beğendiklerin üstte, klasörler ayrı başlık altında
     val collections = tiles.filter { it.id in setOf(Album.ALL, Album.FAVORITES, Album.LIKED) }
     val folders = tiles.filterNot { it in collections }
+    val hiddenCount = vm.hiddenFolders.size
     val currentRecap = remember(vm.stats.historyRevision, vm.videoCount) { vm.monthlyRecap() }
     val memories = remember(vm.videoCount) { vm.memories() }
 
@@ -209,17 +221,44 @@ fun AlbumsScreen(
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Text(
-                "Klasörler",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
+            Row(
+                verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.padding(start = 2.dp, top = 6.dp),
-            )
+            ) {
+                Text(
+                    "Klasörler",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (hiddenCount > 0) {
+                    Text(
+                        "${formatCount(hiddenCount)} gizli · Göster",
+                        color = InstaBlue,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable(onClick = onOpenSettings),
+                    )
+                } else {
+                    Text(
+                        "Gizlemek için basılı tut",
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 12.sp,
+                    )
+                }
+            }
         }
 
         items(folders, key = { it.id }) { album ->
-            AlbumTile(album, onClick = { vm.open(album) })
+            AlbumTile(
+                album = album,
+                onClick = { vm.open(album) },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    pendingHide = album
+                },
+            )
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -231,6 +270,38 @@ fun AlbumsScreen(
                 modifier = Modifier.navigationBarsPadding().padding(top = 12.dp, bottom = 16.dp),
             )
         }
+    }
+
+    pendingHide?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { pendingHide = null },
+            containerColor = Color(0xFF1C1C1E),
+            titleContentColor = Color.White,
+            textContentColor = Color.White.copy(alpha = 0.8f),
+            title = { Text("«${folder.name}» gizlensin mi?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Bu klasördeki ${formatCount(folder.count)} video ana ekranda, Tüm videolar'da, " +
+                        "Tarihte bugün'de ve Temizlik önerilerinde gösterilmez.\n\n" +
+                        "İstediğin zaman Ayarlar › Gizlenen klasörler kısmından geri açabilirsin."
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingHide = null }) {
+                    Text("İptal", color = Color.White.copy(alpha = 0.7f))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.hideAlbum(folder.id)
+                        pendingHide = null
+                    }
+                ) {
+                    Text("Gizle", color = InstaBlue, fontWeight = FontWeight.Bold)
+                }
+            },
+        )
     }
 }
 
@@ -424,13 +495,14 @@ private fun RecentTile(video: VideoItem, views: Int, onClick: () -> Unit) {
 }
 
 /** Telefonun galerisindeki gibi: kare kapak, altında klasör adı ve video sayısı */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AlbumTile(album: Album, onClick: () -> Unit) {
+private fun AlbumTile(album: Album, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
         Box(
             Modifier

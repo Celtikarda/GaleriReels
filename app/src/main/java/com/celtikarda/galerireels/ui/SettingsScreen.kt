@@ -227,6 +227,49 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             }
         }
 
+        SectionTitle("Gizlenen klasörler", R.drawable.ic_folder)
+        Card {
+            val hidden = vm.hiddenFolders
+            Text(
+                "Ana ekranda bir klasöre basılı tutarak gizleyebilirsin. Gizlenen klasörler " +
+                    "Tüm videolar, Tarihte bugün ve Temizlik önerilerine girmez.",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            if (hidden.isEmpty()) {
+                Text("Gizlenmiş klasör yok.", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+            } else {
+                hidden.forEach { album ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .clickable { vm.open(album) }
+                        ) {
+                            Text(album.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text("${formatCount(album.count)} video · İzlemek için dokun", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(onClick = { vm.unhideAlbum(album.id) }) {
+                            Text("Göster")
+                        }
+                    }
+                }
+                if (hidden.size > 1) {
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { vm.unhideAllAlbums() }) {
+                        Text("Tümünü göster (${hidden.size})")
+                    }
+                }
+            }
+        }
+
         SectionTitle("Oynatma", R.drawable.ic_play)
         Card {
             val bgPlay = stats.backgroundPlay

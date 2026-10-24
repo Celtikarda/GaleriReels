@@ -60,6 +60,7 @@ class StatsAndAchievementsTest {
             cleaned = mapOf("2026-10-21" to 52_428_800L),
             trash = listOf(TrashedVideo(11L, "old.mp4|500", "old.mp4", 500L, 1700000100L)),
             achievements = mapOf("first_view" to 1700000050L),
+            hiddenAlbums = setOf("whatsapp_bucket", "screen_recorder_bucket"),
         )
 
         val json = StatsStore.toJson(original)
@@ -71,6 +72,7 @@ class StatsAndAchievementsTest {
         assertEquals(original.cleaned, parsed.cleaned)
         assertEquals(original.trash, parsed.trash)
         assertEquals(original.achievements, parsed.achievements)
+        assertEquals(original.hiddenAlbums, parsed.hiddenAlbums)
     }
 
     @Test

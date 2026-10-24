@@ -62,12 +62,9 @@ kolaylaştırmak.
     hızda oynar, bırakınca 1x'e döner (ExoPlayer + VLC).
   - **Arka planda oynatma (`BackgroundPlayService`):** Ayarlar'dan açıldığında uygulamadan çıkınca
     ya da ekran kapanınca ses devam eder; bildirim çubuğundan oynat / durdur / sonraki kontrol edilir.
-
-### Fikir havuzu
-Henüz bir sürüme konmamış fikirler; sırası gelince yukarıya taşınır.
-
-- **Klasör gizleme / hariç tutma** · Seçilen klasörlerin "Tüm videolar", "Tarihte bugün" ve
-  "Temizlik" listelerinden gizlenmesi.
+  - **Klasör gizleme / hariç tutma:** Ana ekranda herhangi bir klasöre basılı tutarak gizle; gizlenen
+    klasörler "Tüm videolar", "Tarihte bugün" ve "Temizlik" önerilerine girmez, Ayarlar'dan istediğin
+    zaman izlenebilir veya tekrar görünür yapılabilir.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

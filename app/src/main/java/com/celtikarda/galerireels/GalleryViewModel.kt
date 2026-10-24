@@ -20,6 +20,27 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private var lastToken: Any? = null
     private var pendingVideoId: Long? = null
 
+    /** Gizlenen klasörler dışındaki görünür videolar */
+    private val visibleVideos: List<VideoItem>
+        get() {
+            val hidden = stats.hiddenAlbums.toSet()
+            return if (hidden.isEmpty()) all else all.filter { it.albumId !in hidden }
+        }
+
+    /** Gizlenen klasörler dışındaki görünür klasörler */
+    private val visibleFolders: List<Album>
+        get() {
+            val hidden = stats.hiddenAlbums.toSet()
+            return if (hidden.isEmpty()) folders else folders.filter { it.id !in hidden }
+        }
+
+    /** Ayarlar ekranında listelenecek gizlenmiş klasörler */
+    val hiddenFolders: List<Album>
+        get() {
+            val hidden = stats.hiddenAlbums.toSet()
+            return if (hidden.isEmpty()) emptyList() else folders.filter { it.id in hidden }
+        }
+
     /** Açık klasörün videoları, açıldığı andaki haliyle (beğeni kaldırınca liste kaymasın) */
     private var source: List<VideoItem> = emptyList()
 
@@ -38,8 +59,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     var favoriteIds by mutableStateOf<Set<Long>>(emptySet())
         private set
 
-    val videoCount: Int get() = all.size
-    val folderCount: Int get() = folders.size
+    /** Galerideki toplam video sayısı (gizlenenler dahil; izin ekranı kontrolü için) */
+    val totalVideoCount: Int get() = all.size
+    val videoCount: Int get() = visibleVideos.size
+    val folderCount: Int get() = visibleFolders.size
 
     /** Aynı token ile tekrar çağrılırsa (ör. ekran döndüğünde) yeniden yüklemez. */
     fun load(token: Any) {
@@ -60,15 +83,34 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Ekrandaki kutucuklar: Tüm videolar, Favoriler, Beğendiklerin, sonra klasörler */
     fun albumTiles(): List<Album> {
-        if (all.isEmpty()) return emptyList()
-        val liked = all.filter { isLiked(it) }
-        val favorites = all.filter { isFavorite(it) }
+        val visible = visibleVideos
+        if (visible.isEmpty()) return emptyList()
+        val liked = visible.filter { isLiked(it) }
+        val favorites = visible.filter { isFavorite(it) }
         return buildList {
-            add(Album(Album.ALL, "Tüm videolar", all.size, all.first()))
+            add(Album(Album.ALL, "Tüm videolar", visible.size, visible.first()))
             if (favorites.isNotEmpty()) add(Album(Album.FAVORITES, "Favoriler", favorites.size, favorites.first()))
             if (liked.isNotEmpty()) add(Album(Album.LIKED, "Beğendiklerin", liked.size, liked.first()))
-            addAll(folders)
+            addAll(visibleFolders)
         }
+    }
+
+    /** Klasörü ana ekrandan, Tüm videolar'dan, Tarihte bugün'den ve Temizlik'ten gizler */
+    fun hideAlbum(albumId: String) {
+        stats.hideAlbum(albumId)
+        scanDuplicates()
+    }
+
+    /** Gizlenen klasörü tekrar görünür yapar */
+    fun unhideAlbum(albumId: String) {
+        stats.unhideAlbum(albumId)
+        scanDuplicates()
+    }
+
+    /** Tüm gizlenen klasörleri tekrar görünür yapar */
+    fun unhideAllAlbums() {
+        stats.unhideAllAlbums()
+        scanDuplicates()
     }
 
     fun isFavorite(item: VideoItem): Boolean = item.id in favoriteIds
@@ -95,11 +137,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     private fun scanDuplicates() {
-        val snapshot = all
+        val snapshot = visibleVideos
         val keepKeys = snapshot.filter { isLiked(it) || isFavorite(it) }.mapTo(HashSet()) { it.key }
         viewModelScope.launch {
             val found = DuplicateFinder.findExtraCopies(getApplication(), snapshot, keepKeys)
-            val currentIds = all.mapTo(HashSet()) { it.id }
+            val currentIds = visibleVideos.mapTo(HashSet()) { it.id }
             duplicateCopies = found.filter { it.id in currentIds && !isLiked(it) && !isFavorite(it) }
         }
     }
@@ -114,8 +156,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         openAlbum = Album(Album.CLEANUP, "Kopya videolar", copies.size, copies.first())
     }
 
-    /** Silinmeye aday olanlar: beğenilen ve favori olanlar temizlikte hiç gösterilmez */
-    private fun cleanupCandidates(): List<VideoItem> = all.filter { !isLiked(it) && !isFavorite(it) }
+    /** Silinmeye aday olanlar: beğenilen, favori ve gizlenen klasörlerdeki videolar temizlikte gösterilmez */
+    private fun cleanupCandidates(): List<VideoItem> = visibleVideos.filter { !isLiked(it) && !isFavorite(it) }
 
     /** Hiç izlenmemiş (beğenilmemiş, favori olmayan) videolar */
     fun unwatched(): List<VideoItem> = cleanupCandidates().filter { viewsOf(it) == 0 }
@@ -177,9 +219,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Son izlenenler
 
-    /** En son izlenen videolar, yeniden eskiye */
+    /** En son izlenen videolar, yeniden eskiye (gizli klasörler hariç) */
     fun recentVideos(limit: Int): List<VideoItem> {
-        val byKey = all.associateBy { it.key }
+        val byKey = visibleVideos.associateBy { it.key }
         return stats.recentKeys(limit).mapNotNull { byKey[it] }
     }
 
@@ -194,8 +236,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Tarihte bugün (Anılar)
 
-    /** Geçmiş yıllarda bugün / bu hafta çekilmiş videolar */
-    fun memories(): List<VideoItem> = Memories.find(all)
+    /** Geçmiş yıllarda bugün / bu hafta çekilmiş videolar (gizli klasörler hariç) */
+    fun memories(): List<VideoItem> = Memories.find(visibleVideos)
 
     /** "Tarihte bugün" videolarını dokunulan videodan başlatır */
     fun openMemories(first: VideoItem) {
@@ -278,10 +320,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun albumNameOf(item: VideoItem): String = folders.firstOrNull { it.id == item.albumId }?.name ?: item.albumName ?: "Video"
 
     fun open(album: Album) {
+        val visible = visibleVideos
         source = when (album.id) {
-            Album.ALL -> all
-            Album.LIKED -> all.filter { isLiked(it) }
-            Album.FAVORITES -> all.filter { isFavorite(it) }
+            Album.ALL -> visible
+            Album.LIKED -> visible.filter { isLiked(it) }
+            Album.FAVORITES -> visible.filter { isFavorite(it) }
             else -> all.filter { it.albumId == album.id }
         }
         items = if (shuffled) source.shuffled() else source

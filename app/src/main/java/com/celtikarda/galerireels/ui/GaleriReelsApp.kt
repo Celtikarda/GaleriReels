@@ -141,7 +141,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                 onPick = pickFolder,
                 onLater = vm.stats::dismissFolderPrompt,
             )
-            vm.videoCount == 0 -> MessageScreen(
+            vm.totalVideoCount == 0 -> MessageScreen(
                 title = "Video bulunamadı",
                 body = if (access == MediaAccess.PARTIAL) "Sadece seçtiğin videoları görebiliyorum." else "Galeride hiç video yok gibi görünüyor.",
                 buttonText = if (access == MediaAccess.PARTIAL) "Video seç" else null,

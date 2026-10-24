@@ -53,6 +53,8 @@ internal class SavedData(
     val trash: List<TrashedVideo>,
     /** başarım → açıldığı an */
     val achievements: Map<String, Long>,
+    /** Ana ekrandan, Tüm videolar'dan ve önerilerden gizlenen klasör kimlikleri */
+    val hiddenAlbums: Set<String> = emptySet(),
 )
 
 /**
@@ -86,6 +88,32 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
 
     /** Açılmış başarımlar → açıldığı an */
     val unlocked = mutableStateMapOf<String, Long>()
+
+    /** Gizlenen klasör kimlikleri (Tüm videolar, Tarihte bugün ve Temizlik'ten hariç tutulur) */
+    val hiddenAlbums = mutableStateListOf<String>()
+
+    fun hideAlbum(albumId: String) {
+        if (albumId !in hiddenAlbums) {
+            hiddenAlbums += albumId
+            historyRevision++
+            scheduleSave()
+        }
+    }
+
+    fun unhideAlbum(albumId: String) {
+        if (hiddenAlbums.remove(albumId)) {
+            historyRevision++
+            scheduleSave()
+        }
+    }
+
+    fun unhideAllAlbums() {
+        if (hiddenAlbums.isNotEmpty()) {
+            hiddenAlbums.clear()
+            historyRevision++
+            scheduleSave()
+        }
+    }
 
     /** En son izlenen videoların anahtarları, yeniden eskiye */
     fun recentKeys(limit: Int): List<String> =
@@ -332,6 +360,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         saved.trash.forEach { t -> if (trashed.none { it.id == t.id }) trashed += t }
         // Aynı başarım iki kayıtta da açılmışsa ilk açıldığı an geçerli
         saved.achievements.forEach { (id, at) -> unlocked[id] = minOf(unlocked[id] ?: at, at) }
+        saved.hiddenAlbums.forEach { id -> if (id !in hiddenAlbums) hiddenAlbums += id }
         historyRevision++
     }
 
@@ -339,7 +368,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         val json = toJson(
             SavedData(
                 stats.toMap(), days.mapValues { it.value.toMap() }, activeDays.toSet(), cleaned.toMap(), trashed.toList(),
-                unlocked.toMap(),
+                unlocked.toMap(), hiddenAlbums.toSet(),
             ),
         )
         val target = folder
@@ -464,6 +493,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 .put("activeDays", JSONArray(data.activeDays.sorted()))
                 .put("cleaned", JSONObject(data.cleaned.toSortedMap() as Map<*, *>))
                 .put("achievements", JSONObject(data.achievements.toSortedMap() as Map<*, *>))
+                .put("hiddenAlbums", JSONArray(data.hiddenAlbums.sorted()))
                 .put(
                     "trash",
                     JSONArray(
@@ -504,7 +534,9 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             }
             val achievementsJson = root.optJSONObject("achievements")
             val achievements = achievementsJson?.keys()?.asSequence()?.associateWith { achievementsJson.optLong(it) }.orEmpty()
-            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash, achievements)
+            val hiddenJson = root.optJSONArray("hiddenAlbums")
+            val hiddenAlbums = (0 until (hiddenJson?.length() ?: 0)).map { hiddenJson!!.getString(it) }.toSet()
+            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash, achievements, hiddenAlbums)
         }
 
         /** İki kaydı birleştirir: en çok izlenme, en son değişen beğeni */

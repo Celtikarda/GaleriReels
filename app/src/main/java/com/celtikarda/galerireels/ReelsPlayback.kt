@@ -20,9 +20,16 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.util.EventLogger
+import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
+import androidx.media3.exoplayer.video.VideoRendererEventListener
+import androidx.media3.extractor.DefaultExtractorsFactory
+import android.os.Handler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -137,7 +144,9 @@ class ReelsPlayback(
     fun setSpeed(speed: Float) {
         if (this.speed == speed) return
         this.speed = speed
-        slots.forEach { it.player.setPlaybackSpeed(speed) }
+        // Sadece ekrandaki oynatıcı 2x hız ister; komşular da isterse donanım çözücünün
+        // toplam kare/saniye bütçesi bölünür ve yüksek kaliteli videolar 2x'te takılır
+        slots.forEach { it.updateSpeed() }
         vlc?.setSpeed(speed)
     }
 
@@ -339,6 +348,7 @@ class ReelsPlayback(
             // Önceki videonun sayfasına çizmesin; yeni videonun sayfası kendi yüzeyini bağlar
             player.clearVideoSurface()
             player.playWhenReady = false
+            updateSpeed()
             player.setMediaItem(MediaItem.Builder().setUri(item.uri).setMediaId(item.id.toString()).build())
             player.prepare()
             updateBoost()
@@ -348,6 +358,7 @@ class ReelsPlayback(
             if (itemId == null) return
             itemId = null
             active = false
+            updateSpeed()
             updateBoost()
             player.stop()
             player.clearMediaItems()
@@ -357,16 +368,25 @@ class ReelsPlayback(
         fun activate(play: Boolean) {
             active = true
             player.playWhenReady = play
+            updateSpeed()
             updateBoost()
         }
 
         fun deactivate() {
             if (!active) return
             active = false
+            updateSpeed()
             updateBoost()
             player.playWhenReady = false
             // Geri dönülünce baştan başlasın; beklerken de ilk karesi görünsün
             player.seekTo(0)
+        }
+
+        fun updateSpeed() {
+            val target = if (active) speed else 1f
+            if (player.playbackParameters.speed != target) {
+                player.setPlaybackSpeed(target)
+            }
         }
 
         fun updateBoost() {
@@ -436,10 +456,11 @@ class ReelsPlayback(
             checkOverload(eventTime)
         }
 
-        // Yazılım çözücü 4 saniyeden kısa sürede 50 kare atladıysa video takılıyor demektir
+        // Yazılım çözücü normal hızda 4 saniyeden kısa sürede 50 kare atladıysa video takılıyor demektir
+        // (2x hızda 60 Hz ekranda fazla karelerin atlanması normaldir, o sırada motor değiştirilmez)
         override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
             val name = decoderName ?: return
-            if (droppedFrames >= 50 && elapsedMs < 4000 && isSoftwareDecoder(name)) switchToVlc(eventTime)
+            if (speed <= 1f && droppedFrames >= 50 && elapsedMs < 4000 && isSoftwareDecoder(name)) switchToVlc(eventTime)
         }
 
         // Yazılım çözücü videoyu kapasitesinin üstünde bulduysa en baştan VLC'ye geç
@@ -490,9 +511,66 @@ private fun isOverloadedSoftwareDecoder(name: String, format: Format): Boolean {
 
 @OptIn(UnstableApi::class)
 private fun createPlayer(context: Context): ExoPlayer {
-    // Bir çözücü açılamazsa (ör. donanım NO_MEMORY verirse) sıradakini denesin
-    val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+    // H.264 ve HEVC (H.265) MP4'lerde hangi karelerin referans olmadığını (B-kare / ara katman)
+    // başlığından ayrıştırır; böylece 2x hızda yetişmeyen kareler çözücüye girmeden atlanır
+    val extractors = DefaultExtractorsFactory()
+        .experimentalSetCodecsToParseWithinGopSampleDependencies(
+            C.VIDEO_CODEC_FLAG_H264 or C.VIDEO_CODEC_FLAG_H265,
+        )
+    val mediaSourceFactory = DefaultMediaSourceFactory(context, extractors)
+
+    // Bir çözücü açılamazsa (ör. donanım NO_MEMORY verirse) sıradakini denesin;
+    // 2x hızlı oynatmada yüksek kare hızlı (60 fps → 120 fps) videolarda takılmayı önlemek için:
+    // - Geciken referans-dışı kareleri çözücüye sokmadan düşür (500 ms geride kalıp keyframe sıçraması yapmasın)
+    // - Android 14+'ta sadece referans için çözülen kareleri ekrana çizmeden geç (DECODE_ONLY)
+    // - Sabit 10 ms döngüsü yerine kare zamanına göre dinamik uyanma kullan (120 fps = 8,3 ms)
+    val renderers = object : DefaultRenderersFactory(context) {
+        override fun buildVideoRenderers(
+            context: Context,
+            extensionRendererMode: Int,
+            mediaCodecSelector: MediaCodecSelector,
+            enableDecoderFallback: Boolean,
+            eventHandler: Handler,
+            eventListener: VideoRendererEventListener,
+            allowedVideoJoiningTimeMs: Long,
+            out: ArrayList<Renderer>,
+        ) {
+            val videoRenderer = object : MediaCodecVideoRenderer(
+                Builder(context)
+                    .setCodecAdapterFactory(codecAdapterFactory)
+                    .setMediaCodecSelector(mediaCodecSelector)
+                    .setAllowedJoiningTimeMs(allowedVideoJoiningTimeMs)
+                    .setEnableDecoderFallback(enableDecoderFallback)
+                    .setEventHandler(eventHandler)
+                    .setEventListener(eventListener)
+                    .setMaxDroppedFramesToNotify(MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY)
+                    .experimentalSetParseAv1SampleDependencies(true)
+                    .experimentalSetLateThresholdToDropDecoderInputUs(
+                        DEFAULT_LATE_THRESHOLD_TO_DROP_DECODER_INPUT_US,
+                    )
+                    .experimentalSetEnableMediaCodecBufferDecodeOnlyFlag(true)
+                    .setEnableDurationToProgressUs(true),
+            ) {
+                override fun getCodecOperatingRateV23(
+                    playbackSpeed: Float,
+                    format: Format,
+                    streamFormats: Array<Format>,
+                ): Float {
+                    val rate = super.getCodecOperatingRateV23(playbackSpeed, format, streamFormats)
+                    // Değişken kare hızlı (VFR) telefon videolarında başlıkta kare hızı yazmıyorsa
+                    // super -1 döner ve donanım çözücü düşük saat hızında (30 fps) kalır; 60 fps varsay
+                    val target = if (rate > 0f) rate else 60f * playbackSpeed
+                    if (playbackSpeed <= 1f) return target
+                    val maxSupported = codecInfo?.getMaxSupportedFrameRate(format.width, format.height) ?: -1f
+                    return maxOf(target, maxSupported, 120f)
+                }
+            }
+            out.add(videoRenderer)
+        }
+    }.setEnableDecoderFallback(true)
+
     return ExoPlayer.Builder(context, renderers)
+        .setMediaSourceFactory(mediaSourceFactory)
         .setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)

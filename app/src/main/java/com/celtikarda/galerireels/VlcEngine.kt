@@ -268,6 +268,13 @@ class VlcEngine private constructor(private val appContext: Context, private val
                     arrayListOf(
                         "--no-osd",
                         "--avcodec-threads=0", // tüm çekirdekleri kullan
+                        // Yüksek çözünürlüklü videolarda ve 2x hızlı oynatmada yazılımsal çözmeyi
+                        // hızlandırır: referans olmayan karelerde ağır deblocking filtresini atlar ve
+                        // geride kalan kareleri çözücüye sokmadan düşürür
+                        "--avcodec-fast",
+                        "--avcodec-skip-loop-filter=1",
+                        "--drop-late-frames",
+                        "--skip-frames",
                         // Altyazı / ekran yazısı yok. Açık kalınca VLC ilk videoda telefondaki bütün
                         // yazı tiplerini tarıyor (vivo'da 342 dosya, 216 MB): önbellek yokken yarım
                         // dakikadan uzun sürüyor ve video o bitene kadar açılmıyordu.

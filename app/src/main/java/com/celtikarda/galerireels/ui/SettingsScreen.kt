@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +54,7 @@ import com.celtikarda.galerireels.DataFolder
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.celtikarda.galerireels.DecoderCheck
+import com.celtikarda.galerireels.EdgeHoldAction
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.MediaMode
@@ -348,6 +351,33 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Button(onClick = { stats.updateBackgroundPlay(true) }) { Text("Aç") }
             }
         }
+        Spacer(Modifier.height(10.dp))
+        Card {
+            val leftAction = stats.leftHoldAction
+            val rightAction = stats.rightHoldAction
+            Text("Kenarlara basılı tutma", color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Videoları izlerken ekranın sol veya sağ kenarına (%25) basılı tuttuğunda yapılacak işlemi " +
+                    "seçebilirsin. Ekranın ortasına basılı tutmak her zaman arayüzü gizler (Net görünüm).",
+                color = appColors.textSecondary,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text("Sol kenara basılı tutunca", color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            EdgeActionSelector(
+                selected = leftAction,
+                onSelect = { stats.updateLeftHoldAction(it) },
+            )
+            Spacer(Modifier.height(12.dp))
+            Text("Sağ kenara basılı tutunca", color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            EdgeActionSelector(
+                selected = rightAction,
+                onSelect = { stats.updateRightHoldAction(it) },
+            )
+        }
 
         SectionTitle("Uygulama", R.drawable.ic_info)
         Card {
@@ -421,6 +451,23 @@ fun openIssueReport(context: Context, item: VideoItem? = null, errorText: String
     val url = "https://github.com/Celtikarda/GaleriReels/issues/new?title=${Uri.encode(title)}&body=${Uri.encode(body)}"
     runCatching {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EdgeActionSelector(selected: EdgeHoldAction, onSelect: (EdgeHoldAction) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        EdgeHoldAction.entries.forEach { entry ->
+            if (entry == selected) {
+                Button(onClick = { onSelect(entry) }) { Text(entry.title) }
+            } else {
+                OutlinedButton(onClick = { onSelect(entry) }) { Text(entry.title) }
+            }
+        }
     }
 }
 

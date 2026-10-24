@@ -105,6 +105,7 @@ import coil3.compose.AsyncImage
 import com.celtikarda.galerireels.Album
 import com.celtikarda.galerireels.BackgroundPlayService
 import com.celtikarda.galerireels.DecoderCheck
+import com.celtikarda.galerireels.EdgeHoldAction
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.R
@@ -336,6 +337,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 paused = active && userPaused,
                 clearView = active && clearView,
                 fullscreen = fullscreen,
+                leftHoldAction = vm.stats.leftHoldAction,
+                rightHoldAction = vm.stats.rightHoldAction,
                 liked = vm.isLiked(item),
                 favorite = vm.isFavorite(item),
                 views = vm.viewsOf(item),
@@ -535,6 +538,8 @@ private fun ReelPage(
     paused: Boolean,
     clearView: Boolean,
     fullscreen: Boolean,
+    leftHoldAction: EdgeHoldAction,
+    rightHoldAction: EdgeHoldAction,
     liked: Boolean,
     /** Telefonun galerisinde favori mi */
     favorite: Boolean,
@@ -568,6 +573,8 @@ private fun ReelPage(
     val tap by rememberUpdatedState(onTogglePause)
     val speedHold by rememberUpdatedState(onSpeedHold)
     val clearHold by rememberUpdatedState(onClearHold)
+    val leftAction by rememberUpdatedState(leftHoldAction)
+    val rightAction by rememberUpdatedState(rightHoldAction)
     val doubleTap by rememberUpdatedState(onDoubleTapLike)
     val delete by rememberUpdatedState(onDelete)
     val uiAlpha by animateFloatAsState(
@@ -606,7 +613,7 @@ private fun ReelPage(
             VideoSurface(item, player, vlc, aspectRatio, firstFrameShown)
 
             // Tek dokunma: durdur/oynat · Çift dokunma: beğen
-            // Sağ/sol kenara (%25) basılı tutma: 2x hızlı oynat · Ortaya basılı tutma: net görünüm (butonları gizle)
+            // Sağ/sol kenara (%25) basılı tutma: Ayarlar'da seçilen işlem · Ortaya basılı tutma: net görünüm (butonları gizle)
             Box(
                 Modifier
                     .fillMaxSize()
@@ -614,12 +621,22 @@ private fun ReelPage(
                         detectTapGestures(
                             onTap = { tap() },
                             onLongPress = { offset ->
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val isEdge = !item.isPhoto && (offset.x < size.width * 0.25f || offset.x > size.width * 0.75f)
-                                if (isEdge) {
-                                    speedHold(true)
-                                } else {
-                                    clearHold(true)
+                                val action = when {
+                                    item.isPhoto -> EdgeHoldAction.CLEAR_VIEW
+                                    offset.x < size.width * 0.25f -> leftAction
+                                    offset.x > size.width * 0.75f -> rightAction
+                                    else -> EdgeHoldAction.CLEAR_VIEW
+                                }
+                                when (action) {
+                                    EdgeHoldAction.FAST_FORWARD -> {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        speedHold(true)
+                                    }
+                                    EdgeHoldAction.CLEAR_VIEW -> {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        clearHold(true)
+                                    }
+                                    EdgeHoldAction.NONE -> Unit
                                 }
                             },
                             onPress = {

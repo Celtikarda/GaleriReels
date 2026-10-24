@@ -46,6 +46,13 @@ enum class ThemeMode(val title: String) {
     SYSTEM("Sistem"),
 }
 
+/** Reels ekranında sol veya sağ kenara (%25) basılı tutulunca yapılacak işlem */
+enum class EdgeHoldAction(val title: String) {
+    FAST_FORWARD("2x İleri"),
+    CLEAR_VIEW("Net görünüm"),
+    NONE("Kapalı"),
+}
+
 data class Album(
     val id: String,
     val name: String,

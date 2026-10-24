@@ -59,6 +59,10 @@ internal class SavedData(
     val mediaMode: MediaMode? = null,
     /** Kullanıcının seçtiği görünüm teması */
     val themeMode: ThemeMode? = null,
+    /** Sol kenara basılı tutma işlemi */
+    val leftHoldAction: EdgeHoldAction? = null,
+    /** Sağ kenara basılı tutma işlemi */
+    val rightHoldAction: EdgeHoldAction? = null,
 )
 
 /**
@@ -222,6 +226,16 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         ThemeMode.entries.firstOrNull { it.name == prefs.getString(KEY_THEME_MODE, null) } ?: ThemeMode.DARK,
     )
         private set
+    /** Reels ekranında sol kenara (%25) basılı tutulunca yapılacak işlem */
+    var leftHoldAction by mutableStateOf(
+        EdgeHoldAction.entries.firstOrNull { it.name == prefs.getString(KEY_LEFT_HOLD, null) } ?: EdgeHoldAction.FAST_FORWARD,
+    )
+        private set
+    /** Reels ekranında sağ kenara (%25) basılı tutulunca yapılacak işlem */
+    var rightHoldAction by mutableStateOf(
+        EdgeHoldAction.entries.firstOrNull { it.name == prefs.getString(KEY_RIGHT_HOLD, null) } ?: EdgeHoldAction.FAST_FORWARD,
+    )
+        private set
     /** Klasöre en son başarıyla yazılan an */
     var lastFolderSave by mutableStateOf(prefs.getLong(KEY_LAST_SAVE, 0L))
         private set
@@ -365,6 +379,18 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         scheduleSave()
     }
 
+    fun updateLeftHoldAction(action: EdgeHoldAction) {
+        leftHoldAction = action
+        prefs.edit { putString(KEY_LEFT_HOLD, action.name) }
+        scheduleSave()
+    }
+
+    fun updateRightHoldAction(action: EdgeHoldAction) {
+        rightHoldAction = action
+        prefs.edit { putString(KEY_RIGHT_HOLD, action.name) }
+        scheduleSave()
+    }
+
     /** Uygulama arka plana geçerken bekleyen kaydı hemen yapar. */
     fun flush() {
         if (saveJob?.isActive != true) return
@@ -406,6 +432,14 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             themeMode = saved.themeMode
             prefs.edit { putString(KEY_THEME_MODE, saved.themeMode.name) }
         }
+        if (prefs.getString(KEY_LEFT_HOLD, null) == null && saved.leftHoldAction != null) {
+            leftHoldAction = saved.leftHoldAction
+            prefs.edit { putString(KEY_LEFT_HOLD, saved.leftHoldAction.name) }
+        }
+        if (prefs.getString(KEY_RIGHT_HOLD, null) == null && saved.rightHoldAction != null) {
+            rightHoldAction = saved.rightHoldAction
+            prefs.edit { putString(KEY_RIGHT_HOLD, saved.rightHoldAction.name) }
+        }
         historyRevision++
     }
 
@@ -416,6 +450,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 unlocked.toMap(), hiddenAlbums.toSet(),
                 mediaMode = if (mediaModeAsked) mediaMode else null,
                 themeMode = themeMode,
+                leftHoldAction = leftHoldAction,
+                rightHoldAction = rightHoldAction,
             ),
         )
         val target = folder
@@ -482,6 +518,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_MEDIA_MODE = "media_mode"
         const val KEY_MEDIA_MODE_ASKED = "media_mode_asked"
         const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_LEFT_HOLD = "left_hold_action"
+        const val KEY_RIGHT_HOLD = "right_hold_action"
 
         private val dayFormat = DateTimeFormatter.ISO_LOCAL_DATE
 
@@ -547,6 +585,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 .apply {
                     data.mediaMode?.let { put("mediaMode", it.name) }
                     data.themeMode?.let { put("themeMode", it.name) }
+                    data.leftHoldAction?.let { put("leftHoldAction", it.name) }
+                    data.rightHoldAction?.let { put("rightHoldAction", it.name) }
                 }
                 .put(
                     "trash",
@@ -605,7 +645,12 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             val hiddenAlbums = (0 until (hiddenJson?.length() ?: 0)).map { hiddenJson!!.getString(it) }.toSet()
             val mediaMode = root.optString("mediaMode", "").let { name -> MediaMode.entries.firstOrNull { it.name == name } }
             val themeMode = root.optString("themeMode", "").let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
-            return SavedData(videoStats, dayCounts, activeDays, cleaned, trash, achievements, hiddenAlbums, mediaMode, themeMode)
+            val leftHoldAction = root.optString("leftHoldAction", "").let { name -> EdgeHoldAction.entries.firstOrNull { it.name == name } }
+            val rightHoldAction = root.optString("rightHoldAction", "").let { name -> EdgeHoldAction.entries.firstOrNull { it.name == name } }
+            return SavedData(
+                videoStats, dayCounts, activeDays, cleaned, trash, achievements, hiddenAlbums,
+                mediaMode, themeMode, leftHoldAction, rightHoldAction,
+            )
         }
 
         /** İki kaydı birleştirir: en çok izlenme, en son değişen beğeni */

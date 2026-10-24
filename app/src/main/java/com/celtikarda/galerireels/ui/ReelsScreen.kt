@@ -5,11 +5,15 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -121,9 +125,37 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    val activity = context as? Activity
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(fullscreen) {
+        val act = activity ?: return@LaunchedEffect
+        act.requestedOrientation = if (fullscreen) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        val window = act.window ?: return@LaunchedEffect
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        if (fullscreen) {
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
     val playback = remember { ReelsPlayback(context, scope, onViewed = vm::addView) }
     DisposableEffect(playback) {
         onDispose {
+            activity?.let { act ->
+                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                act.window?.let { win ->
+                    WindowCompat.getInsetsController(win, win.decorView)
+                        .show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
             BackgroundPlayService.stop(context)
             playback.release()
         }
@@ -187,9 +219,16 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         leaveAfterTrash = thenLeave
         trashLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
     }
-    // İşaretli video varken çıkmadan önce sor
-    val leave = { if (cleanup && vm.cleanupMarked.isNotEmpty()) askBeforeLeaving = true else onBack() }
+    // Tam ekrandayken geri tuşu önce dikey görünüme döndürür; işaretli video varken çıkmadan önce sorar
+    val leave = {
+        when {
+            fullscreen -> fullscreen = false
+            cleanup && vm.cleanupMarked.isNotEmpty() -> askBeforeLeaving = true
+            else -> onBack()
+        }
+    }
     BackHandler(enabled = cleanup && vm.cleanupMarked.isNotEmpty()) { askBeforeLeaving = true }
+    BackHandler(enabled = fullscreen) { fullscreen = false }
     LaunchedEffect(cleanup) {
         if (cleanup) {
             chipText = "Silmek istediğin videoyu sola kaydır"
@@ -296,6 +335,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 error = playback.error?.takeIf { it.first == item.id }?.second,
                 paused = active && userPaused,
                 clearView = active && clearView,
+                fullscreen = fullscreen,
                 liked = vm.isLiked(item),
                 favorite = vm.isFavorite(item),
                 views = vm.viewsOf(item),
@@ -352,6 +392,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     }
                 },
                 onInfo = { infoItem = item },
+                onToggleFullscreen = { fullscreen = !fullscreen },
                 onSeek = { fraction -> playback.seekTo(item, fraction) },
                 onDelete = if (cleanup) {
                     {
@@ -383,6 +424,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 title = album.name,
                 shuffled = vm.shuffled,
                 showShuffle = !cleanup,
+                fullscreen = fullscreen,
                 onBack = leave,
                 onToggleShuffle = {
                     val index = vm.toggleShuffle(current?.id)
@@ -390,6 +432,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     chipTick++
                     scope.launch { pagerState.scrollToPage(index) }
                 },
+                onToggleFullscreen = { fullscreen = !fullscreen },
             )
         }
 
@@ -491,6 +534,7 @@ private fun ReelPage(
     error: String?,
     paused: Boolean,
     clearView: Boolean,
+    fullscreen: Boolean,
     liked: Boolean,
     /** Telefonun galerisinde favori mi */
     favorite: Boolean,
@@ -513,6 +557,7 @@ private fun ReelPage(
     onToggleBackgroundPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onInfo: () -> Unit,
+    onToggleFullscreen: () -> Unit,
     onSeek: (Float) -> Unit,
     /** Temizlik modunda: videoyu silinecekler listesine ekler (sola kaydırma ya da çöp kutusu) */
     onDelete: (() -> Unit)?,
@@ -612,6 +657,7 @@ private fun ReelPage(
                     albumName = albumName,
                     avatar = avatar,
                     favorite = favorite,
+                    fullscreen = fullscreen,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .graphicsLayer { alpha = uiAlpha },
@@ -622,13 +668,14 @@ private fun ReelPage(
                     Modifier
                         .align(Alignment.BottomEnd)
                         .width(96.dp)
-                        .fillMaxHeight(0.65f)
+                        .fillMaxHeight(if (fullscreen) 0.85f else 0.65f)
                         .graphicsLayer { alpha = uiAlpha }
                         .background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f))))
                 )
 
                 ActionRail(
                     isPhoto = item.isPhoto,
+                    fullscreen = fullscreen,
                     liked = liked,
                     favorite = favorite,
                     views = views,
@@ -642,12 +689,13 @@ private fun ReelPage(
                     onBoost = onToggleBoost,
                     onBackgroundPlay = onToggleBackgroundPlay,
                     onFavorite = onToggleFavorite,
+                    onFullscreen = onToggleFullscreen,
                     onInfo = onInfo,
                     onDelete = onDelete,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .navigationBarsPadding()
-                        .padding(end = 8.dp, bottom = 24.dp)
+                        .padding(end = 8.dp, bottom = if (fullscreen) 14.dp else 24.dp)
                         .graphicsLayer { alpha = uiAlpha },
                 )
 
@@ -797,13 +845,25 @@ private fun VlcSurface(vlc: VlcEngine, onAspectRatio: (Float) -> Unit) {
 }
 
 @Composable
-private fun BottomInfo(item: VideoItem, albumName: String, avatar: VideoItem, favorite: Boolean, modifier: Modifier) {
+private fun BottomInfo(
+    item: VideoItem,
+    albumName: String,
+    avatar: VideoItem,
+    favorite: Boolean,
+    fullscreen: Boolean = false,
+    modifier: Modifier,
+) {
     Column(
         modifier
             .fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))))
             .navigationBarsPadding()
-            .padding(start = 14.dp, end = 76.dp, top = 80.dp, bottom = 22.dp)
+            .padding(
+                start = 14.dp,
+                end = 76.dp,
+                top = if (fullscreen) 24.dp else 80.dp,
+                bottom = if (fullscreen) 14.dp else 22.dp,
+            )
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(avatar, Modifier.size(36.dp))
@@ -886,6 +946,7 @@ private fun Avatar(cover: VideoItem, modifier: Modifier) {
 @Composable
 private fun ActionRail(
     isPhoto: Boolean = false,
+    fullscreen: Boolean = false,
     liked: Boolean,
     favorite: Boolean,
     views: Int,
@@ -899,6 +960,7 @@ private fun ActionRail(
     onBoost: () -> Unit,
     onBackgroundPlay: () -> Unit,
     onFavorite: () -> Unit,
+    onFullscreen: () -> Unit,
     onInfo: () -> Unit,
     onDelete: (() -> Unit)?,
     modifier: Modifier,
@@ -919,10 +981,10 @@ private fun ActionRail(
     Column(
         modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+        verticalArrangement = Arrangement.spacedBy(if (fullscreen) 8.dp else 18.dp),
     ) {
         if (onDelete != null) {
-            RailButton(icon = R.drawable.ic_delete, tint = Color.White, label = "Sil", onClick = onDelete)
+            RailButton(icon = R.drawable.ic_delete, tint = Color.White, label = "Sil", compact = fullscreen, onClick = onDelete)
         }
         // Instagram'daki gibi kalbin altında beğeni sayısı (tek kullanıcı: 0 ya da 1)
         RailButton(
@@ -931,6 +993,7 @@ private fun ActionRail(
             label = if (liked) "1" else "0",
             description = if (liked) "Beğeniyi geri al" else "Beğen",
             iconScale = likeScale.value,
+            compact = fullscreen,
             onClick = onLike,
         )
         RailButton(
@@ -938,9 +1001,10 @@ private fun ActionRail(
             tint = Color.White,
             label = formatCount(views),
             description = "İzlenme sayısı",
+            compact = fullscreen,
             onClick = onViews,
         )
-        RailButton(icon = R.drawable.ic_send, tint = Color.White, label = "Paylaş", onClick = onShare)
+        RailButton(icon = R.drawable.ic_send, tint = Color.White, label = "Paylaş", compact = fullscreen, onClick = onShare)
         if (!isPhoto) {
             RailButton(
                 icon = if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_on,
@@ -950,13 +1014,36 @@ private fun ActionRail(
                     boosted -> "%200"
                     else -> "Ses"
                 },
+                compact = fullscreen,
                 onClick = onMute,
             )
         }
-        // Üç nokta: favoriler, ses yükseltme ve video/fotoğraf bilgisi
+        RailButton(
+            icon = if (fullscreen) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen,
+            tint = Color.White,
+            label = if (fullscreen) "Küçült" else "Tam ekran",
+            description = if (fullscreen) "Tam ekrandan çık" else "Tam ekran",
+            compact = fullscreen,
+            onClick = onFullscreen,
+        )
+        // Üç nokta: favoriler, ses yükseltme, tam ekran ve video/fotoğraf bilgisi
         Box {
-            RailButton(icon = R.drawable.ic_more_vert, tint = Color.White, label = "", description = "Diğer", onClick = { menuOpen = true })
+            RailButton(icon = R.drawable.ic_more_vert, tint = Color.White, label = "", description = "Diğer", compact = fullscreen, onClick = { menuOpen = true })
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (fullscreen) "Tam ekrandan çık" else "Tam ekran (Yatay)") },
+                    leadingIcon = {
+                        Icon(
+                            painterResource(if (fullscreen) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen),
+                            contentDescription = null,
+                            tint = appColors.textPrimary,
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onFullscreen()
+                    },
+                )
                 if (MediaActions.favoritesSupported) {
                     DropdownMenuItem(
                         text = { Text(if (favorite) "Favorilerden çıkar" else "Favorilere ekle") },
@@ -1060,6 +1147,7 @@ private fun RailButton(
     onClick: () -> Unit,
     description: String = label,
     iconScale: Float = 1f,
+    compact: Boolean = false,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1076,14 +1164,23 @@ private fun RailButton(
             contentDescription = description,
             tint = tint,
             modifier = Modifier
-                .size(30.dp)
+                .size(if (compact) 23.dp else 30.dp)
                 .graphicsLayer {
                     scaleX = iconScale
                     scaleY = iconScale
                 },
         )
-        Spacer(Modifier.height(4.dp))
-        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, style = textShadow)
+        if (label.isNotEmpty()) {
+            Spacer(Modifier.height(if (compact) 2.dp else 4.dp))
+            Text(
+                label,
+                color = Color.White,
+                fontSize = if (compact) 11.sp else 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                style = textShadow,
+            )
+        }
     }
 }
 
@@ -1148,7 +1245,15 @@ private fun ErrorBox(message: String, onReport: () -> Unit, modifier: Modifier) 
 }
 
 @Composable
-private fun TopBar(title: String, shuffled: Boolean, showShuffle: Boolean, onBack: () -> Unit, onToggleShuffle: () -> Unit) {
+private fun TopBar(
+    title: String,
+    shuffled: Boolean,
+    showShuffle: Boolean,
+    fullscreen: Boolean,
+    onBack: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -1178,6 +1283,13 @@ private fun TopBar(title: String, shuffled: Boolean, showShuffle: Boolean, onBac
                     tint = if (shuffled) Color.White else Color.White.copy(alpha = 0.4f),
                 )
             }
+        }
+        IconButton(onClick = onToggleFullscreen) {
+            Icon(
+                painterResource(if (fullscreen) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen),
+                contentDescription = if (fullscreen) "Tam ekrandan çık" else "Tam ekran",
+                tint = Color.White,
+            )
         }
     }
 }

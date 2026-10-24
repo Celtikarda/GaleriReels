@@ -46,7 +46,7 @@ Commit e-postası: hesap e-postayı gizli tutuyor, repoda `user.email` GitHub'ı
 | Dosya | Ne yapar |
 |---|---|
 | `MediaRepository` | Galeriden (MediaStore) video ve fotoğrafları okur: boyut, dönüklük, favori, klasör |
-| `VideoItem` | Bir video veya fotoğraf (`isPhoto`) ve `MediaMode`; `key` = dosya adı + boyut |
+| `VideoItem` | Bir video veya fotoğraf (`isPhoto`), `MediaMode` ve `ThemeMode`; `key` = dosya adı + boyut |
 | `GalleryViewModel` | Klasörler, açık liste, beğeni/favori/temizlik/aylık özet işlemleri |
 | `StatsStore` | Beğeni, izlenme, günlük geçmiş, temizlik kaydı; JSON olarak iki yere yazar |
 | `MonthlyRecap` | Aylık özet verisi ve 1080×1920 paylaşılabilir özet kartı (`RecapCardShare`) |

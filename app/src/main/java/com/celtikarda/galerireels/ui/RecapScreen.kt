@@ -102,18 +102,18 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
             modifier = Modifier.padding(top = 8.dp, bottom = 6.dp),
         ) {
             IconButton(onClick = onBack) {
-                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = Color.White)
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = appColors.textPrimary)
             }
             Text(
                 "Aylık özet",
-                color = Color.White,
+                color = appColors.textPrimary,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
             if (recap.hasActivity) {
                 IconButton(onClick = shareCard, enabled = !sharing) {
-                    Icon(painterResource(R.drawable.ic_send), contentDescription = "Özeti paylaş", tint = FavoriteYellow)
+                    Icon(painterResource(R.drawable.ic_send), contentDescription = "Özeti paylaş", tint = appColors.accentGold)
                 }
             }
         }
@@ -128,13 +128,13 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(if (selected) FavoriteYellow else Color(0xFF1C1C1E))
+                            .background(if (selected) FavoriteYellow else appColors.card)
                             .clickable { selectedMonth = month }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
                         Text(
                             formatMonth(month),
-                            color = if (selected) Color.Black else Color.White.copy(alpha = 0.8f),
+                            color = if (selected) Color.Black else appColors.textSecondary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                         )

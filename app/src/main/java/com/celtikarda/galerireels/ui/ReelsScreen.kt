@@ -964,7 +964,7 @@ private fun ActionRail(
                             Icon(
                                 painterResource(if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline),
                                 contentDescription = null,
-                                tint = if (favorite) FavoriteYellow else Color.White,
+                                tint = if (favorite) FavoriteYellow else appColors.textPrimary,
                             )
                         },
                         onClick = {
@@ -980,7 +980,7 @@ private fun ActionRail(
                             Icon(
                                 painterResource(R.drawable.ic_volume_on),
                                 contentDescription = null,
-                                tint = if (boosted) FavoriteYellow else Color.White,
+                                tint = if (boosted) FavoriteYellow else appColors.textPrimary,
                             )
                         },
                         onClick = {
@@ -994,7 +994,7 @@ private fun ActionRail(
                             Icon(
                                 painterResource(R.drawable.ic_play),
                                 contentDescription = null,
-                                tint = if (backgroundPlay) CleanupGreen else Color.White,
+                                tint = if (backgroundPlay) CleanupGreen else appColors.textPrimary,
                             )
                         },
                         onClick = {
@@ -1005,7 +1005,7 @@ private fun ActionRail(
                 }
                 DropdownMenuItem(
                     text = { Text(if (isPhoto) "Fotoğraf bilgisi" else "Video bilgisi") },
-                    leadingIcon = { Icon(painterResource(R.drawable.ic_info), contentDescription = null, tint = Color.White) },
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_info), contentDescription = null, tint = appColors.textPrimary) },
                     onClick = {
                         menuOpen = false
                         onInfo()
@@ -1047,8 +1047,8 @@ private fun VideoInfoDialog(item: VideoItem, views: Int, liked: Boolean, favorit
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row {
-        Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.width(92.dp))
-        Text(value, color = Color.White, fontSize = 14.sp)
+        Text(label, color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(92.dp))
+        Text(value, color = appColors.textPrimary, fontSize = 14.sp)
     }
 }
 

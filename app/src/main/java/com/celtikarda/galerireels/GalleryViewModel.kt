@@ -80,6 +80,15 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (loaded) scanDuplicates()
     }
 
+    fun setThemeMode(mode: ThemeMode) {
+        stats.updateThemeMode(mode)
+    }
+
+    /** Ana ekrandaki güneş/ay simgesiyle Gece ↔ Aydınlık arasında hızlı geçiş yapar */
+    fun toggleDarkLight(currentlyDark: Boolean) {
+        stats.updateThemeMode(if (currentlyDark) ThemeMode.LIGHT else ThemeMode.DARK)
+    }
+
     /** Aynı token ile tekrar çağrılırsa (ör. ekran döndüğünde) yeniden yüklemez. */
     fun load(token: Any) {
         if (token == lastToken) return

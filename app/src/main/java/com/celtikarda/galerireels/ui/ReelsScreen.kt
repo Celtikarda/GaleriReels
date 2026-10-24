@@ -133,6 +133,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var muted by rememberSaveable { mutableStateOf(false) }
     var boosted by rememberSaveable { mutableStateOf(false) }
     var fastForward by remember { mutableStateOf(false) }
+    var clearView by remember { mutableStateOf(false) }
 
     // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
     var chipText by remember { mutableStateOf("") }
@@ -208,6 +209,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     LaunchedEffect(current?.id) {
         userPaused = false
         fastForward = false
+        clearView = false
     }
     LaunchedEffect(muted) { playback.setMuted(muted) }
     LaunchedEffect(boosted) { playback.setBoosted(boosted) }
@@ -293,6 +295,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 firstFrameShown = active && item.id in playback.renderedIds,
                 error = playback.error?.takeIf { it.first == item.id }?.second,
                 paused = active && userPaused,
+                clearView = active && clearView,
                 liked = vm.isLiked(item),
                 favorite = vm.isFavorite(item),
                 views = vm.viewsOf(item),
@@ -314,6 +317,11 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                             playback.setPaused(false)
                         }
                         fastForward = holding
+                    }
+                },
+                onClearHold = { holding ->
+                    if (active) {
+                        clearView = holding
                     }
                 },
                 onDoubleTapLike = { vm.like(item) },
@@ -362,20 +370,26 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             )
         }
 
-        TopBar(
-            title = album.name,
-            shuffled = vm.shuffled,
-            showShuffle = !cleanup,
-            onBack = leave,
-            onToggleShuffle = {
-                val index = vm.toggleShuffle(current?.id)
-                chipText = if (vm.shuffled) "Karışık sıra" else "Yeniden eskiye"
-                chipTick++
-                scope.launch { pagerState.scrollToPage(index) }
-            },
-        )
+        AnimatedVisibility(
+            visible = !clearView,
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            TopBar(
+                title = album.name,
+                shuffled = vm.shuffled,
+                showShuffle = !cleanup,
+                onBack = leave,
+                onToggleShuffle = {
+                    val index = vm.toggleShuffle(current?.id)
+                    chipText = if (vm.shuffled) "Karışık sıra" else "Yeniden eskiye"
+                    chipTick++
+                    scope.launch { pagerState.scrollToPage(index) }
+                },
+            )
+        }
 
-        if (cleanup && vm.cleanupMarked.isNotEmpty()) {
+        if (cleanup && vm.cleanupMarked.isNotEmpty() && !clearView) {
             CleanupBar(
                 count = vm.cleanupMarked.size,
                 bytes = vm.cleanupMarked.sumOf { it.sizeBytes },
@@ -472,6 +486,7 @@ private fun ReelPage(
     firstFrameShown: Boolean,
     error: String?,
     paused: Boolean,
+    clearView: Boolean,
     liked: Boolean,
     /** Telefonun galerisinde favori mi */
     favorite: Boolean,
@@ -484,6 +499,7 @@ private fun ReelPage(
     avatar: VideoItem,
     onTogglePause: () -> Unit,
     onSpeedHold: (Boolean) -> Unit,
+    onClearHold: (Boolean) -> Unit,
     onDoubleTapLike: () -> Unit,
     onToggleLike: () -> Unit,
     onViewsTap: () -> Unit,
@@ -502,8 +518,14 @@ private fun ReelPage(
     var burstAt by remember { mutableStateOf(Offset.Zero) }
     val tap by rememberUpdatedState(onTogglePause)
     val speedHold by rememberUpdatedState(onSpeedHold)
+    val clearHold by rememberUpdatedState(onClearHold)
     val doubleTap by rememberUpdatedState(onDoubleTapLike)
     val delete by rememberUpdatedState(onDelete)
+    val uiAlpha by animateFloatAsState(
+        targetValue = if (clearView) 0f else 1f,
+        animationSpec = tween(180),
+        label = "uiAlpha",
+    )
 
     // Temizlik: video sola kaydırılır, yeterince gidince silinecekler listesine düşer
     val swipeX = remember { Animatable(0f) }
@@ -534,22 +556,29 @@ private fun ReelPage(
         Box(Modifier.fillMaxSize().offset { IntOffset(swipeX.value.roundToInt(), 0) }) {
             VideoSurface(item, player, vlc, aspectRatio, firstFrameShown)
 
-            // Tek dokunma: durdur/oynat · Çift dokunma: beğen · Basılı tutma: 2x hızlı oynat
+            // Tek dokunma: durdur/oynat · Çift dokunma: beğen
+            // Sağ/sol kenara (%25) basılı tutma: 2x hızlı oynat · Ortaya basılı tutma: net görünüm (butonları gizle)
             Box(
                 Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { tap() },
-                            onLongPress = {
+                            onLongPress = { offset ->
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                speedHold(true)
+                                val isEdge = offset.x < size.width * 0.25f || offset.x > size.width * 0.75f
+                                if (isEdge) {
+                                    speedHold(true)
+                                } else {
+                                    clearHold(true)
+                                }
                             },
                             onPress = {
                                 try {
                                     awaitRelease()
                                 } finally {
                                     speedHold(false)
+                                    clearHold(false)
                                 }
                             },
                             onDoubleTap = { offset ->
@@ -562,56 +591,71 @@ private fun ReelPage(
                     }
             )
 
-            if (paused) PlayIcon(Modifier.align(Alignment.Center))
+            if (paused && !clearView) PlayIcon(Modifier.align(Alignment.Center))
             if (error != null) ErrorBox(error, Modifier.align(Alignment.Center))
             if (burstId > 0) key(burstId) { HeartBurst(burstAt) }
 
-            BottomInfo(item, albumName, avatar, favorite, Modifier.align(Alignment.BottomStart))
-
-            // Sağdaki butonların arkasında hafif karartma: parlak videolarda simge ve sayılar okunsun
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .width(96.dp)
-                    .fillMaxHeight(0.65f)
-                    .background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f))))
-            )
-
-            ActionRail(
-                liked = liked,
-                favorite = favorite,
-                views = views,
-                muted = muted,
-                boosted = boosted,
-                backgroundPlay = backgroundPlay,
-                onLike = onToggleLike,
-                onViews = onViewsTap,
-                onShare = onShare,
-                onMute = onToggleMute,
-                onBoost = onToggleBoost,
-                onBackgroundPlay = onToggleBackgroundPlay,
-                onFavorite = onToggleFavorite,
-                onInfo = onInfo,
-                onDelete = onDelete,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 8.dp, bottom = 24.dp),
-            )
-
-            if (active) {
-                VideoProgress(
-                    progress = {
-                        when {
-                            vlc != null -> vlc.progress
-                            player != null -> player.duration.let { d -> if (d > 0) player.currentPosition.toFloat() / d else 0f }
-                            else -> 0f
-                        }
-                    },
-                    durationMs = item.durationMs,
-                    onSeek = onSeek,
-                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+            if (uiAlpha > 0f) {
+                BottomInfo(
+                    item = item,
+                    albumName = albumName,
+                    avatar = avatar,
+                    favorite = favorite,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .graphicsLayer { alpha = uiAlpha },
                 )
+
+                // Sağdaki butonların arkasında hafif karartma: parlak videolarda simge ve sayılar okunsun
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .width(96.dp)
+                        .fillMaxHeight(0.65f)
+                        .graphicsLayer { alpha = uiAlpha }
+                        .background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f))))
+                )
+
+                ActionRail(
+                    liked = liked,
+                    favorite = favorite,
+                    views = views,
+                    muted = muted,
+                    boosted = boosted,
+                    backgroundPlay = backgroundPlay,
+                    onLike = onToggleLike,
+                    onViews = onViewsTap,
+                    onShare = onShare,
+                    onMute = onToggleMute,
+                    onBoost = onToggleBoost,
+                    onBackgroundPlay = onToggleBackgroundPlay,
+                    onFavorite = onToggleFavorite,
+                    onInfo = onInfo,
+                    onDelete = onDelete,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 8.dp, bottom = 24.dp)
+                        .graphicsLayer { alpha = uiAlpha },
+                )
+
+                if (active) {
+                    VideoProgress(
+                        progress = {
+                            when {
+                                vlc != null -> vlc.progress
+                                player != null -> player.duration.let { d -> if (d > 0) player.currentPosition.toFloat() / d else 0f }
+                                else -> 0f
+                            }
+                        },
+                        durationMs = item.durationMs,
+                        onSeek = onSeek,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .graphicsLayer { alpha = uiAlpha },
+                    )
+                }
             }
         }
     }

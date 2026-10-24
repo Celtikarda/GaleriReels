@@ -122,6 +122,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var userPaused by remember { mutableStateOf(false) }
     var muted by rememberSaveable { mutableStateOf(false) }
     var boosted by rememberSaveable { mutableStateOf(false) }
+    var fastForward by remember { mutableStateOf(false) }
 
     // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
     var chipText by remember { mutableStateOf("") }
@@ -182,9 +183,13 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     LaunchedEffect(current?.id, previous?.id, next?.id) {
         playback.show(current, listOfNotNull(next, previous))
     }
-    LaunchedEffect(current?.id) { userPaused = false }
+    LaunchedEffect(current?.id) {
+        userPaused = false
+        fastForward = false
+    }
     LaunchedEffect(muted) { playback.setMuted(muted) }
     LaunchedEffect(boosted) { playback.setBoosted(boosted) }
+    LaunchedEffect(fastForward) { playback.setSpeed(if (fastForward) 2f else 1f) }
 
     LaunchedEffect(chipTick) {
         if (chipTick == 0) return@LaunchedEffect
@@ -228,6 +233,15 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     if (active) {
                         userPaused = !userPaused
                         playback.setPaused(userPaused)
+                    }
+                },
+                onSpeedHold = { holding ->
+                    if (active) {
+                        if (holding && userPaused) {
+                            userPaused = false
+                            playback.setPaused(false)
+                        }
+                        fastForward = holding
                     }
                 },
                 onDoubleTapLike = { vm.like(item) },
@@ -313,7 +327,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
 
         AnimatedVisibility(
-            visible = chipVisible,
+            visible = fastForward || chipVisible,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -322,13 +336,13 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             exit = fadeOut(),
         ) {
             Text(
-                chipText,
-                color = Color.White,
+                if (fastForward) "2x Hız ⏩" else chipText,
+                color = if (fastForward) FavoriteYellow else Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(Color.Black.copy(alpha = 0.6f))
+                    .background(Color.Black.copy(alpha = 0.65f))
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
@@ -395,6 +409,7 @@ private fun ReelPage(
     albumName: String,
     avatar: VideoItem,
     onTogglePause: () -> Unit,
+    onSpeedHold: (Boolean) -> Unit,
     onDoubleTapLike: () -> Unit,
     onToggleLike: () -> Unit,
     onViewsTap: () -> Unit,
@@ -411,6 +426,7 @@ private fun ReelPage(
     var burstId by remember { mutableIntStateOf(0) }
     var burstAt by remember { mutableStateOf(Offset.Zero) }
     val tap by rememberUpdatedState(onTogglePause)
+    val speedHold by rememberUpdatedState(onSpeedHold)
     val doubleTap by rememberUpdatedState(onDoubleTapLike)
     val delete by rememberUpdatedState(onDelete)
 
@@ -443,13 +459,24 @@ private fun ReelPage(
         Box(Modifier.fillMaxSize().offset { IntOffset(swipeX.value.roundToInt(), 0) }) {
             VideoSurface(item, player, vlc, aspectRatio, firstFrameShown)
 
-            // Tek dokunma: durdur/oynat · Çift dokunma: beğen (kalp animasyonu)
+            // Tek dokunma: durdur/oynat · Çift dokunma: beğen · Basılı tutma: 2x hızlı oynat
             Box(
                 Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { tap() },
+                            onLongPress = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                speedHold(true)
+                            },
+                            onPress = {
+                                try {
+                                    awaitRelease()
+                                } finally {
+                                    speedHold(false)
+                                }
+                            },
                             onDoubleTap = { offset ->
                                 burstAt = offset
                                 burstId++

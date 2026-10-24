@@ -37,6 +37,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var pendingStart = false
     private var muted = false
     private var boosted = false
+    private var speed = 1f
     /** Her play() / stop() ile artar; önceki videodan gecikmiş gelen olaylar ve işler yok sayılır */
     private var generation = 0
     /** VLC'ye verilmiş videonun numarası; olaylar ancak bu [generation] ile aynıysa geçerli */
@@ -129,6 +130,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
             player.media = media
             media.release()
             player.volume = volume
+            player.rate = speed
             controlGeneration = gen
             // Bundan sonra gelen olaylar bu videoya ait
             main.post { if (gen == generation) readyGeneration = gen }
@@ -197,6 +199,13 @@ class VlcEngine private constructor(private val appContext: Context, private val
     fun setBoosted(boosted: Boolean) {
         this.boosted = boosted
         if (hasMedia) applyVolume()
+    }
+
+    fun setSpeed(speed: Float) {
+        this.speed = speed
+        if (!hasMedia) return
+        val gen = generation
+        onControl { if (gen == controlGeneration) player.rate = speed }
     }
 
     private fun applyVolume() {

@@ -79,6 +79,8 @@ class ReelsPlayback(
     private var muted = false
     /** Kısık sesli videolar için %200 ses yükseltme */
     private var boosted = false
+    /** Uzun basılı tutunca 2x oynatma hızı */
+    private var speed = 1f
     private var released = false
     private var arrangeJob: Job? = null
     private var vlcRequested = false
@@ -104,6 +106,7 @@ class ReelsPlayback(
         if (current?.id != this.current?.id) {
             paused = false
             error = null
+            setSpeed(1f)
             current?.let { OpenTimer.start(it.id) }
         }
         this.current = current
@@ -129,6 +132,13 @@ class ReelsPlayback(
         this.boosted = boosted
         slots.forEach { it.updateBoost() }
         vlc?.setBoosted(boosted)
+    }
+
+    fun setSpeed(speed: Float) {
+        if (this.speed == speed) return
+        this.speed = speed
+        slots.forEach { it.player.setPlaybackSpeed(speed) }
+        vlc?.setSpeed(speed)
     }
 
     fun onHostPause() {
@@ -190,8 +200,8 @@ class ReelsPlayback(
             // Video başa sardı: yeni oynatma (çubuktan ortalara geri sarmak yeni izlenme sayılmaz)
             viewCounted = false
             watchedMs = position
-        } else if (delta in 1..1500) {
-            // Normal oynama; daha büyük sıçrama çubuktan ileri sarmadır, izlenmiş sayılmaz
+        } else if (delta in 1..2200) {
+            // Normal ya da 2x oynama; daha büyük sıçrama çubuktan ileri sarmadır, izlenmiş sayılmaz
             watchedMs += delta
         }
         lastPositionMs = position
@@ -236,6 +246,7 @@ class ReelsPlayback(
             } else {
                 engine.setMuted(muted)
                 engine.setBoosted(boosted)
+                engine.setSpeed(speed)
                 vlc = engine
                 arrange()
             }

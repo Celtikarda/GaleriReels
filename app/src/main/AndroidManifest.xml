@@ -13,6 +13,10 @@
     <!-- Android 12+: kullanıcı Ayarlar'dan "Medya yönetimi" izni verirse favori ekleme / silme
          her seferinde onay sormaz (özel izin, kendiliğinden verilmez) -->
     <uses-permission android:name="android.permission.MANAGE_MEDIA" />
+    <!-- Arka planda oynatma (ekran kapalıyken ya da uygulamadan çıkınca sesin devam etmesi) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".GaleriApp"
@@ -40,6 +44,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <service
+            android:name=".BackgroundPlayService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>

@@ -3,11 +3,12 @@
 Telefonun galerisindeki videoları Instagram Reels gibi, kaydırarak izlemeye yarayan Android uygulaması.
 
 - Galerideki klasörleri gösterir, bir klasör seçince videoları tam ekran, alt alta kaydırarak oynatır
-- Çift dokunarak beğenme, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
+- Çift dokunarak beğenme, basılı tutarak 2x hızlı oynatma, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
 - Her videonun beğenisi ve kaç kez izlendiği kaydedilir; kayıt seçilen bir klasörde de
   (Documents › GaleriReels) tutulur, uygulama silinip yeniden kurulsa da geri gelir
-- Favoriler (telefonun galerisiyle ortak) ve Temizlik modu: istemediğin videoları sola kaydırıp sil, ne kadar yer açtığını gör
+- Favoriler (telefonun galerisiyle ortak), Tarihte bugün anıları ve Temizlik modu: istemediğin videoları sola kaydırıp sil, algısal görüntü özeti (dHash) ile kopya/benzer videoları yakala, ne kadar yer açtığını gör
 - Aylık özet: bu ay en çok izlediğin videoları, izleme süreni ve en sevdiğin klasörü Spotify Wrapped tarzı kart olarak gör ve paylaş
+- Arka planda oynatma: ayarlar açıldığında ekran kapansa da ses devam eder ve bildirim çubuğundan oynat / durdur / sonraki kontrol edilir
 - Telefonun donanımının açamadığı büyük videolar (ör. 1440x1600@60) VLC motoruyla oynatılır
 
 Sadece Android (64-bit ARM, Android 8.0+). APK'yı [Releases](../../releases) sayfasından indirebilirsiniz.
@@ -51,13 +52,22 @@ kolaylaştırmak.
   - **Ses yükseltme (%200):** Üç nokta menüsünden sesi kısık videolar için %200'e kadar ses
     güçlendirme (ExoPlayer `LoudnessEnhancer` ve VLC ses çarpanı ile).
   - Başarımlar ve ayarlarda güncel günlük seri (`currentStreak`) gösterimi.
+- [x] **1.0 Kopya video avcısı, Tarihte bugün, 2x hız ve arka planda oynatma**
+  - **Benzer / kopya video tespiti (`DuplicateFinder`):** Videoların ortasından alınan karelerden
+    64-bit algısal görüntü özeti (dHash) hesaplanır ve Hamming mesafesiyle WhatsApp'tan tekrar gelen
+    ya da sıkıştırılmış kopyalar yakalanır. Temizlik kartından tek dokunuşla incelenir.
+  - **Tarihte bugün (`Memories`):** Geçmiş yıllarda bugünlerde (±3 gün) çekilmiş videolar varsa ana
+    ekranda özel "Tarihte bugün" anı kartı açılır.
+  - **Basılı tutarak 2x hızlı oynatma:** Reels ekranında parmağını basılı tuttuğun sürece video 2x
+    hızda oynar, bırakınca 1x'e döner (ExoPlayer + VLC).
+  - **Arka planda oynatma (`BackgroundPlayService`):** Ayarlar'dan açıldığında uygulamadan çıkınca
+    ya da ekran kapanınca ses devam eder; bildirim çubuğundan oynat / durdur / sonraki kontrol edilir.
 
 ### Fikir havuzu
 Henüz bir sürüme konmamış fikirler; sırası gelince yukarıya taşınır.
 
-- **Arka planda oynatma** · Uygulamadan çıkınca ya da ekran kapanınca videonun sesi devam etsin.
-  Android bunun için bildirim çubuğunda bir oynatıcı göstermeyi zorunlu tutuyor (oynat /
-  durdur / sonraki).
+- **Klasör gizleme / hariç tutma** · Seçilen klasörlerin "Tüm videolar", "Tarihte bugün" ve
+  "Temizlik" listelerinden gizlenmesi.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

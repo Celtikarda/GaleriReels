@@ -1,11 +1,15 @@
 package com.celtikarda.galerireels.ui
 
+import android.Manifest
 import android.app.Activity
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -95,6 +99,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.media3.exoplayer.ExoPlayer
 import coil3.compose.AsyncImage
 import com.celtikarda.galerireels.Album
+import com.celtikarda.galerireels.BackgroundPlayService
 import com.celtikarda.galerireels.DecoderCheck
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
@@ -117,7 +122,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val context = LocalContext.current
 
     val playback = remember { ReelsPlayback(context, scope, onViewed = vm::addView) }
-    DisposableEffect(playback) { onDispose { playback.release() } }
+    DisposableEffect(playback) {
+        onDispose {
+            BackgroundPlayService.stop(context)
+            playback.release()
+        }
+    }
 
     var userPaused by remember { mutableStateOf(false) }
     var muted by rememberSaveable { mutableStateOf(false) }
@@ -141,6 +151,18 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
     }
     var infoItem by remember { mutableStateOf<VideoItem?>(null) }
+    val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val toggleBackgroundPlay: () -> Unit = {
+        val nextState = !vm.stats.backgroundPlay
+        vm.stats.updateBackgroundPlay(nextState)
+        if (nextState && Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        chipText = if (nextState) "Arka planda oynatma açıldı" else "Arka planda oynatma kapatıldı"
+        chipTick++
+    }
 
     // Temizlik: işaretlenenler tek onayla Android'in çöp kutusuna taşınır
     val cleanup = album.id == Album.CLEANUP
@@ -198,8 +220,57 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         chipVisible = false
     }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { playback.onHostPause() }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { playback.onHostResume() }
+    var inBackground by remember { mutableStateOf(false) }
+
+    fun updateBackgroundNotification() {
+        val item = items.getOrNull(pagerState.settledPage) ?: return
+        BackgroundPlayService.startOrUpdate(
+            context = context,
+            title = item.name.substringBeforeLast('.'),
+            subtitle = vm.albumNameOf(item),
+            paused = userPaused,
+            onTogglePause = {
+                userPaused = !userPaused
+                playback.setPaused(userPaused)
+                updateBackgroundNotification()
+            },
+            onNext = {
+                if (items.size > 1) {
+                    scope.launch {
+                        val nextIndex = (pagerState.settledPage + 1) % items.size
+                        pagerState.scrollToPage(nextIndex)
+                        userPaused = false
+                        playback.setPaused(false)
+                        updateBackgroundNotification()
+                    }
+                }
+            },
+            onStop = {
+                userPaused = true
+                playback.setPaused(true)
+            },
+        )
+    }
+
+    LaunchedEffect(current?.id, inBackground) {
+        if (inBackground && vm.stats.backgroundPlay && current != null) {
+            updateBackgroundNotification()
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        inBackground = true
+        if (vm.stats.backgroundPlay && current != null && !userPaused) {
+            updateBackgroundNotification()
+        } else {
+            playback.onHostPause()
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        inBackground = false
+        BackgroundPlayService.stop(context)
+        playback.onHostResume()
+    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         VerticalPager(
@@ -227,6 +298,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 views = vm.viewsOf(item),
                 muted = muted,
                 boosted = boosted,
+                backgroundPlay = vm.stats.backgroundPlay,
                 albumName = vm.albumNameOf(item),
                 avatar = vm.coverOf(item.albumId) ?: item,
                 onTogglePause = {
@@ -259,6 +331,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     chipText = if (boosted) "Ses %200'e yükseltildi" else "Ses normale döndü (%100)"
                     chipTick++
                 },
+                onToggleBackgroundPlay = toggleBackgroundPlay,
                 onToggleFavorite = {
                     val favorite = !vm.isFavorite(item)
                     MediaActions.favoriteRequest(context, listOf(item), favorite)?.let { request ->
@@ -406,6 +479,7 @@ private fun ReelPage(
     views: Int,
     muted: Boolean,
     boosted: Boolean,
+    backgroundPlay: Boolean,
     albumName: String,
     avatar: VideoItem,
     onTogglePause: () -> Unit,
@@ -416,6 +490,7 @@ private fun ReelPage(
     onShare: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleBoost: () -> Unit,
+    onToggleBackgroundPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onInfo: () -> Unit,
     onSeek: (Float) -> Unit,
@@ -508,11 +583,13 @@ private fun ReelPage(
                 views = views,
                 muted = muted,
                 boosted = boosted,
+                backgroundPlay = backgroundPlay,
                 onLike = onToggleLike,
                 onViews = onViewsTap,
                 onShare = onShare,
                 onMute = onToggleMute,
                 onBoost = onToggleBoost,
+                onBackgroundPlay = onToggleBackgroundPlay,
                 onFavorite = onToggleFavorite,
                 onInfo = onInfo,
                 onDelete = onDelete,
@@ -741,11 +818,13 @@ private fun ActionRail(
     views: Int,
     muted: Boolean,
     boosted: Boolean,
+    backgroundPlay: Boolean,
     onLike: () -> Unit,
     onViews: () -> Unit,
     onShare: () -> Unit,
     onMute: () -> Unit,
     onBoost: () -> Unit,
+    onBackgroundPlay: () -> Unit,
     onFavorite: () -> Unit,
     onInfo: () -> Unit,
     onDelete: (() -> Unit)?,
@@ -831,6 +910,20 @@ private fun ActionRail(
                     onClick = {
                         menuOpen = false
                         onBoost()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (backgroundPlay) "Arka planda oynat: Açık" else "Arka planda oynat: Kapalı") },
+                    leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.ic_play),
+                            contentDescription = null,
+                            tint = if (backgroundPlay) CleanupGreen else Color.White,
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onBackgroundPlay()
                     },
                 )
                 DropdownMenuItem(

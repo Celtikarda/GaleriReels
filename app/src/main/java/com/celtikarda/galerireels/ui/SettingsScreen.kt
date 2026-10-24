@@ -227,6 +227,25 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             }
         }
 
+        SectionTitle("Oynatma", R.drawable.ic_play)
+        Card {
+            val bgPlay = stats.backgroundPlay
+            Text(
+                "Arka planda oynatma açıkken uygulamadan çıksan ya da ekranı kapatsan bile videonun " +
+                    "sesi devam eder ve bildirim çubuğunda oynatıcı görünür.",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            InfoLine("Durum", if (bgPlay) "Açık" else "Kapalı")
+            Spacer(Modifier.height(10.dp))
+            if (bgPlay) {
+                OutlinedButton(onClick = { stats.updateBackgroundPlay(false) }) { Text("Kapat") }
+            } else {
+                Button(onClick = { stats.updateBackgroundPlay(true) }) { Text("Aç") }
+            }
+        }
+
         SectionTitle("Uygulama", R.drawable.ic_info)
         Card {
             InfoLine("Sürüm", version ?: "")

@@ -174,6 +174,9 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     /** Kullanıcı klasör seçmeyi "Şimdi değil" diye geçti; ayarlardan seçebilir */
     var folderPromptDismissed by mutableStateOf(prefs.getBoolean(KEY_DISMISSED, false))
         private set
+    /** Uygulamadan çıkınca ya da ekran kapanınca videonun sesi arka planda devam etsin mi */
+    var backgroundPlay by mutableStateOf(prefs.getBoolean(KEY_BG_PLAY, false))
+        private set
     /** Klasöre en son başarıyla yazılan an */
     var lastFolderSave by mutableStateOf(prefs.getLong(KEY_LAST_SAVE, 0L))
         private set
@@ -296,6 +299,11 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         prefs.edit { putBoolean(KEY_DISMISSED, true) }
     }
 
+    fun updateBackgroundPlay(enabled: Boolean) {
+        backgroundPlay = enabled
+        prefs.edit { putBoolean(KEY_BG_PLAY, enabled) }
+    }
+
     /** Uygulama arka plana geçerken bekleyen kaydı hemen yapar. */
     fun flush() {
         if (saveJob?.isActive != true) return
@@ -394,6 +402,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_DIR = "dir_id"
         const val KEY_DISMISSED = "prompt_dismissed"
         const val KEY_LAST_SAVE = "last_folder_save"
+        const val KEY_BG_PLAY = "background_play"
 
         private val dayFormat = DateTimeFormatter.ISO_LOCAL_DATE
 

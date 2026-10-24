@@ -50,6 +50,9 @@ Commit e-postası: hesap e-postayı gizli tutuyor, repoda `user.email` GitHub'ı
 | `GalleryViewModel` | Klasörler, açık liste, beğeni/favori/temizlik/aylık özet işlemleri |
 | `StatsStore` | Beğeni, izlenme, günlük geçmiş, temizlik kaydı; JSON olarak iki yere yazar |
 | `MonthlyRecap` | Aylık özet verisi ve 1080×1920 paylaşılabilir özet kartı (`RecapCardShare`) |
+| `Memories` | Geçmiş yıllarda bugünlerde (±3 gün) çekilen videoları bulur ("Tarihte bugün") |
+| `DuplicateFinder` | 64-bit algısal görüntü özeti (dHash) ve Hamming mesafesiyle benzer/kopya video tespiti |
+| `BackgroundPlayService` | Arka planda oynatma ön plan servisi ve bildirim çubuğu kontrolleri (oynat/durdur/sonraki) |
 | `Achievements` | 16 başarım rozeti ve açılma koşulları |
 | `DataFolder` | Kullanıcının seçtiği klasör (SAF): `Documents/GaleriReels` |
 | `ReelsPlayback` | Oynatma: 3 ExoPlayer (önceki/ekrandaki/sonraki hazır bekler) + 1 VLC; %200 ses yükseltme; izlenme sayımı |

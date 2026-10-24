@@ -154,7 +154,7 @@ fun AlbumsScreen(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
                     Row(
-                        verticalAlignment = Alignment.Baseline,
+                        verticalAlignment = Alignment.Bottom,
                         modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
                     ) {
                         Text(

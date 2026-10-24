@@ -43,5 +43,6 @@ data class Album(
         const val FAVORITES = "__favorites__"
         const val CLEANUP = "__cleanup__"
         const val RECENT = "__recent__"
+        const val MONTHLY = "__monthly__"
     }
 }

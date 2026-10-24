@@ -71,6 +71,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
 
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showAchievements by rememberSaveable { mutableStateOf(false) }
+    var showRecap by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // Android'in klasör seçme penceresi; seçilen klasöre beğeni ve izlenmeler yazılır
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
@@ -122,6 +123,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     BackHandler(enabled = openAlbum != null) { vm.close() }
     BackHandler(enabled = openAlbum == null && showSettings) { showSettings = false }
     BackHandler(enabled = openAlbum == null && showAchievements) { showAchievements = false }
+    BackHandler(enabled = openAlbum == null && showRecap) { showRecap = false }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
@@ -148,6 +150,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
             openAlbum != null -> key(openAlbum.id) {
                 ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
             }
+            showRecap -> RecapScreen(vm = vm, onBack = { showRecap = false })
             showAchievements -> AchievementsScreen(vm = vm, onBack = { showAchievements = false })
             showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
             else -> AlbumsScreen(
@@ -156,9 +159,10 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                 onSelectMore = requestAccess,
                 onOpenSettings = { showSettings = true },
                 onOpenAchievements = { showAchievements = true },
+                onOpenRecap = { showRecap = true },
             )
         }
-        // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar) durum çubuğunun arkası
+        // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar, özet) durum çubuğunun arkası
         if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
 
         // Yeni başarım açılınca üstte birkaç saniye kutlama
@@ -186,6 +190,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                     vm.consumeUnlocked()
                     vm.close()
                     showSettings = false
+                    showRecap = false
                     showAchievements = true
                 },
             )

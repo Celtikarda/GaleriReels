@@ -2,6 +2,7 @@ package com.celtikarda.galerireels
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.media.audiofx.LoudnessEnhancer
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,6 +77,8 @@ class ReelsPlayback(
     /** Uygulama arka plana geçti */
     private var hostPaused = false
     private var muted = false
+    /** Kısık sesli videolar için %200 ses yükseltme */
+    private var boosted = false
     private var released = false
     private var arrangeJob: Job? = null
     private var vlcRequested = false
@@ -115,8 +118,17 @@ class ReelsPlayback(
 
     fun setMuted(muted: Boolean) {
         this.muted = muted
-        slots.forEach { it.player.volume = if (muted) 0f else 1f }
+        slots.forEach {
+            it.player.volume = if (muted) 0f else 1f
+            it.updateBoost()
+        }
         vlc?.setMuted(muted)
+    }
+
+    fun setBoosted(boosted: Boolean) {
+        this.boosted = boosted
+        slots.forEach { it.updateBoost() }
+        vlc?.setBoosted(boosted)
     }
 
     fun onHostPause() {
@@ -147,7 +159,10 @@ class ReelsPlayback(
     fun release() {
         released = true
         arrangeJob?.cancel()
-        slots.forEach { it.player.release() }
+        slots.forEach {
+            it.releaseEnhancer()
+            it.player.release()
+        }
         vlc?.release()
         vlc = null
     }
@@ -220,6 +235,7 @@ class ReelsPlayback(
                 engine.release()
             } else {
                 engine.setMuted(muted)
+                engine.setBoosted(boosted)
                 vlc = engine
                 arrange()
             }
@@ -287,6 +303,8 @@ class ReelsPlayback(
         private var active = false
         private var decoderName: String? = null
         private var videoFormat: Format? = null
+        private var enhancer: LoudnessEnhancer? = null
+        private var enhancerSessionId = C.AUDIO_SESSION_ID_UNSET
 
         init {
             player.addAnalyticsListener(this)
@@ -302,12 +320,14 @@ class ReelsPlayback(
             player.playWhenReady = false
             player.setMediaItem(MediaItem.Builder().setUri(item.uri).setMediaId(item.id.toString()).build())
             player.prepare()
+            updateBoost()
         }
 
         fun clear() {
             if (itemId == null) return
             itemId = null
             active = false
+            updateBoost()
             player.stop()
             player.clearMediaItems()
             player.clearVideoSurface()
@@ -316,14 +336,45 @@ class ReelsPlayback(
         fun activate(play: Boolean) {
             active = true
             player.playWhenReady = play
+            updateBoost()
         }
 
         fun deactivate() {
             if (!active) return
             active = false
+            updateBoost()
             player.playWhenReady = false
             // Geri dönülünce baştan başlasın; beklerken de ilk karesi görünsün
             player.seekTo(0)
+        }
+
+        fun updateBoost() {
+            val session = player.audioSessionId
+            val shouldBoost = active && boosted && !muted && session != C.AUDIO_SESSION_ID_UNSET
+            if (!shouldBoost) {
+                runCatching { enhancer?.enabled = false }
+                return
+            }
+            runCatching {
+                if (enhancer == null || enhancerSessionId != session) {
+                    enhancer?.release()
+                    enhancer = LoudnessEnhancer(session)
+                    enhancerSessionId = session
+                }
+                // +600 mB (~6 dB) sesi yaklaşık %200 seviyesine çıkarır
+                enhancer?.setTargetGain(600)
+                enhancer?.enabled = true
+            }
+        }
+
+        fun releaseEnhancer() {
+            runCatching { enhancer?.release() }
+            enhancer = null
+            enhancerSessionId = C.AUDIO_SESSION_ID_UNSET
+        }
+
+        override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
+            updateBoost()
         }
 
         override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {

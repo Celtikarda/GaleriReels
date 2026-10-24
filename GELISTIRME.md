@@ -47,15 +47,18 @@ Commit e-postası: hesap e-postayı gizli tutuyor, repoda `user.email` GitHub'ı
 |---|---|
 | `MediaRepository` | Galeriden (MediaStore) videoları okur: boyut, dönüklük, favori, klasör |
 | `VideoItem` | Bir video; `key` = dosya adı + boyut (beğeni/izlenme kaydının kimliği) |
-| `GalleryViewModel` | Klasörler, açık liste, beğeni/favori/temizlik işlemleri |
+| `GalleryViewModel` | Klasörler, açık liste, beğeni/favori/temizlik/aylık özet işlemleri |
 | `StatsStore` | Beğeni, izlenme, günlük geçmiş, temizlik kaydı; JSON olarak iki yere yazar |
+| `MonthlyRecap` | Aylık özet verisi ve 1080×1920 paylaşılabilir özet kartı (`RecapCardShare`) |
+| `Achievements` | 16 başarım rozeti ve açılma koşulları |
 | `DataFolder` | Kullanıcının seçtiği klasör (SAF): `Documents/GaleriReels` |
-| `ReelsPlayback` | Oynatma: 3 ExoPlayer (önceki/ekrandaki/sonraki hazır bekler) + 1 VLC; izlenme sayımı |
+| `ReelsPlayback` | Oynatma: 3 ExoPlayer (önceki/ekrandaki/sonraki hazır bekler) + 1 VLC; %200 ses yükseltme; izlenme sayımı |
 | `DecoderCheck` | Video ExoPlayer ile mi VLC ile mi oynatılacak (dosya başlığı + telefonun çözücü sınırları) |
 | `VlcEngine` | libVLC sarmalayıcı; bütün başlat/durdur çağrıları ayrı iş parçacığında |
 | `MediaActions` | Favori / çöp kutusu / kalıcı silme istekleri (Android 11+, onay penceresi) |
 | `VideoThumb` | Küçük resim; sistemin resmi simsiyahsa videonun içinden kare alır |
 | `ui/ReelsScreen` | Reels ekranı (temizlik modu da burada: `Album.CLEANUP`) |
+| `ui/RecapScreen`, `ui/AchievementsScreen` | Aylık özet ve başarımlar ekranları |
 | `ui/AlbumsScreen`, `ui/SettingsScreen`, `ui/GaleriReelsApp` | Ana ekran, ayarlar, ekran akışı |
 
 ## Veriler

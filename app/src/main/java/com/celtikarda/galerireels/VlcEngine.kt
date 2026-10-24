@@ -36,6 +36,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var hasMedia = false
     private var pendingStart = false
     private var muted = false
+    private var boosted = false
     /** Her play() / stop() ile artar; önceki videodan gecikmiş gelen olaylar ve işler yok sayılır */
     private var generation = 0
     /** VLC'ye verilmiş videonun numarası; olaylar ancak bu [generation] ile aynıysa geçerli */
@@ -76,9 +77,26 @@ class VlcEngine private constructor(private val appContext: Context, private val
                 MediaPlayer.Event.Playing -> applyVolume()
                 MediaPlayer.Event.EncounteredError -> onError()
                 MediaPlayer.Event.TimeChanged -> timeCache = event.timeChanged
-                MediaPlayer.Event.PositionChanged -> positionCache = event.positionChanged
+                MediaPlayer.Event.PositionChanged -> {
+                    val next = event.positionChanged
+                    // :input-repeat ile başa sarınca TimeChanged gecikebiliyor; izlenme sayımı için sıfırla
+                    if (next < 0.05f && positionCache > 0.85f && timeCache > 1500L) {
+                        timeCache = 0L
+                    }
+                    positionCache = next
+                }
+                MediaPlayer.Event.EndReached -> {
+                    positionCache = 0f
+                    timeCache = 0L
+                }
             }
         }
+    }
+
+    private fun targetVolume(): Int = when {
+        muted -> 0
+        boosted -> 200
+        else -> 100
     }
 
     fun play(uri: Uri, onFirstFrame: () -> Unit, onError: () -> Unit) {
@@ -92,7 +110,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
         // Görüntü yüzeyi bağlanmadan başlarsa VLC görüntü çıkışı açamaz; yüzey hazır olunca başla
         pendingStart = !vout.areViewsAttached()
         val startNow = !pendingStart
-        val volume = if (muted) 0 else 100
+        val volume = targetVolume()
 
         onControl {
             stopPlayer()
@@ -176,8 +194,13 @@ class VlcEngine private constructor(private val appContext: Context, private val
         if (hasMedia) applyVolume()
     }
 
+    fun setBoosted(boosted: Boolean) {
+        this.boosted = boosted
+        if (hasMedia) applyVolume()
+    }
+
     private fun applyVolume() {
-        val volume = if (muted) 0 else 100
+        val volume = targetVolume()
         val gen = generation
         onControl { if (gen == controlGeneration) player.volume = volume }
     }

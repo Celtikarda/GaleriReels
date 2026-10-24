@@ -26,6 +26,33 @@ import java.util.concurrent.ConcurrentHashMap
 data class VideoThumb(val uri: Uri, val maxSize: Int)
 
 /**
+ * Videonun siyah olmayan küçük resmini Bitmap olarak döner (Coil ve aylık özet kartı ortak kullanır).
+ */
+suspend fun loadThumbBitmap(context: Context, uri: Uri, maxSize: Int): Bitmap? {
+    val system = if (Build.VERSION.SDK_INT >= 29) {
+        runCatching { context.contentResolver.loadThumbnail(uri, Size(maxSize, maxSize), null) }.getOrNull()
+    } else {
+        null
+    }
+    val raw = system?.takeUnless { isNearlyBlack(it) }
+        ?: FrameCache.get(context, uri)?.let { scaleDownBitmap(it, maxSize) }
+        ?: system
+        ?: return null
+    return if (Build.VERSION.SDK_INT >= 26 && raw.config == Bitmap.Config.HARDWARE) {
+        raw.copy(Bitmap.Config.ARGB_8888, false)
+    } else {
+        raw
+    }
+}
+
+private fun scaleDownBitmap(bitmap: Bitmap, maxSize: Int): Bitmap {
+    val longest = maxOf(bitmap.width, bitmap.height)
+    if (longest <= maxSize) return bitmap
+    val ratio = maxSize.toFloat() / longest
+    return Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt(), true)
+}
+
+/**
  * Önce sistemin hazır küçük resmini dener (hızlı, galeri uygulamasıyla ortak önbellek).
  * Sistem resmi yoksa ya da simsiyahsa (kararmayla açılan videolar) videonun içinden bir kare
  * bulur; bu pahalı olduğu için bir kez hesaplanıp diskte saklanır.
@@ -34,26 +61,9 @@ class VideoThumbFetcher(private val data: VideoThumb, private val options: Optio
 
     override suspend fun fetch(): FetchResult {
         val context = options.context
-        val system = systemThumbnail(context)
-        val bitmap = system?.takeUnless { isNearlyBlack(it) }
-            ?: FrameCache.get(context, data.uri)?.let { scaleDown(it) }
-            ?: system
+        val bitmap = loadThumbBitmap(context, data.uri, data.maxSize)
             ?: throw IOException("Küçük resim alınamadı: ${data.uri}")
         return ImageFetchResult(image = bitmap.asImage(), isSampled = true, dataSource = DataSource.DISK)
-    }
-
-    private fun systemThumbnail(context: Context): Bitmap? {
-        if (Build.VERSION.SDK_INT < 29) return null
-        return runCatching {
-            context.contentResolver.loadThumbnail(data.uri, Size(data.maxSize, data.maxSize), null)
-        }.getOrNull()
-    }
-
-    private fun scaleDown(bitmap: Bitmap): Bitmap {
-        val longest = maxOf(bitmap.width, bitmap.height)
-        if (longest <= data.maxSize) return bitmap
-        val ratio = data.maxSize.toFloat() / longest
-        return Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt(), true)
     }
 
     class Factory : Fetcher.Factory<VideoThumb> {

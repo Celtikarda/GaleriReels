@@ -6,7 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.celtikarda.galerireels.ui.formatMonth
 import kotlinx.coroutines.launch
+import java.time.YearMonth
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -161,6 +163,37 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         source = recent
         items = listOf(first) + recent.filter { it.id != first.id }
         openAlbum = Album(Album.RECENT, "Son izlediklerin", recent.size, first)
+    }
+
+    // --- Aylık özet
+
+    /** Özet ekranında seçilebilecek aylar (en yeniden eskiye) */
+    fun availableMonths(): List<YearMonth> = stats.availableMonths()
+
+    /** Verilen ayın izleme ve temizlik özeti */
+    fun monthlyRecap(month: YearMonth = YearMonth.now()): MonthlyRecap = buildMonthlyRecap(
+        month = month,
+        allVideos = all,
+        folders = folders,
+        viewsByKey = stats.monthViews(month),
+        activeDays = stats.monthActiveDays(month),
+        cleanedBytes = stats.monthCleanedBytes(month),
+        newLikes = stats.monthLikedCount(month),
+        lastViewedAtOf = { stats.stat(it).lastViewedAt },
+        albumNameOf = ::albumNameOf,
+    )
+
+    /** Aylık özetteki videoları dokunulan videodan başlayarak Reels ekranında açar */
+    fun openMonthly(month: YearMonth, first: VideoItem) {
+        val viewsByKey = stats.monthViews(month)
+        val byKey = all.associateBy { it.key }
+        val ordered = viewsByKey.entries
+            .sortedByDescending { it.value }
+            .mapNotNull { byKey[it.key] }
+        if (ordered.isEmpty()) return
+        source = ordered
+        items = listOf(first) + ordered.filter { it.id != first.id }
+        openAlbum = Album(Album.MONTHLY, formatMonth(month), ordered.size, first)
     }
 
     // --- Başarımlar

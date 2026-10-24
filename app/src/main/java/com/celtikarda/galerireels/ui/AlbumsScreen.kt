@@ -47,6 +47,7 @@ import coil3.compose.AsyncImage
 import com.celtikarda.galerireels.Album
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
+import com.celtikarda.galerireels.MonthlyRecap
 import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
@@ -58,6 +59,7 @@ fun AlbumsScreen(
     onSelectMore: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAchievements: () -> Unit,
+    onOpenRecap: () -> Unit,
 ) {
     val tiles = vm.albumTiles()
     val context = LocalContext.current
@@ -66,6 +68,7 @@ fun AlbumsScreen(
     // Tüm videolar / Favoriler / Beğendiklerin üstte, klasörler ayrı başlık altında
     val collections = tiles.filter { it.id in setOf(Album.ALL, Album.FAVORITES, Album.LIKED) }
     val folders = tiles.filterNot { it in collections }
+    val currentRecap = remember(vm.stats.historyRevision, vm.videoCount) { vm.monthlyRecap() }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
@@ -84,6 +87,9 @@ fun AlbumsScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f),
                     )
+                    IconButton(onClick = onOpenRecap) {
+                        Icon(painterResource(R.drawable.ic_recap), contentDescription = "Aylık özet", tint = InstaBlue)
+                    }
                     IconButton(onClick = onOpenAchievements) {
                         Icon(painterResource(R.drawable.ic_trophy), contentDescription = "Başarımlar", tint = FavoriteYellow)
                     }
@@ -128,6 +134,12 @@ fun AlbumsScreen(
                     cleanedToday = vm.stats.cleanedToday,
                     onStart = vm::openCleanup,
                 )
+            }
+        }
+
+        if (currentRecap.hasActivity) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                RecapBannerCard(recap = currentRecap, onClick = onOpenRecap)
             }
         }
 
@@ -178,6 +190,50 @@ fun AlbumsScreen(
                 modifier = Modifier.navigationBarsPadding().padding(top = 12.dp, bottom = 16.dp),
             )
         }
+    }
+}
+
+/** Aylık özet kartının ana ekrandaki kısa girişi */
+@Composable
+private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF2B1055), Color(0xFF5E1742))))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(painterResource(R.drawable.ic_recap), contentDescription = null, tint = FavoriteYellow, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("${formatMonth(recap.month)} özeti", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            val details = buildList {
+                if (recap.totalViews > 0) add("${formatCount(recap.totalViews)} izlenme")
+                recap.topAlbum?.let { add("En çok: ${it.name}") }
+                if (recap.cleanedBytes > 0 && recap.topAlbum == null) add("${formatSize(recap.cleanedBytes)} temizlendi")
+            }.joinToString(" · ")
+            if (details.isNotEmpty()) {
+                Text(
+                    details,
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Text("Özeti gör", color = FavoriteYellow, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 

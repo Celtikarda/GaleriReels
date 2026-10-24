@@ -3,10 +3,11 @@
 Telefonun galerisindeki videoları Instagram Reels gibi, kaydırarak izlemeye yarayan Android uygulaması.
 
 - Galerideki klasörleri gösterir, bir klasör seçince videoları tam ekran, alt alta kaydırarak oynatır
-- Çift dokunarak beğenme, paylaşma, sesi kapatma, karışık / yeniden eskiye sıralama
+- Çift dokunarak beğenme, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
 - Her videonun beğenisi ve kaç kez izlendiği kaydedilir; kayıt seçilen bir klasörde de
   (Documents › GaleriReels) tutulur, uygulama silinip yeniden kurulsa da geri gelir
 - Favoriler (telefonun galerisiyle ortak) ve Temizlik modu: istemediğin videoları sola kaydırıp sil, ne kadar yer açtığını gör
+- Aylık özet: bu ay en çok izlediğin videoları, izleme süreni ve en sevdiğin klasörü Spotify Wrapped tarzı kart olarak gör ve paylaş
 - Telefonun donanımının açamadığı büyük videolar (ör. 1440x1600@60) VLC motoruyla oynatılır
 
 Sadece Android (64-bit ARM, Android 8.0+). APK'yı [Releases](../../releases) sayfasından indirebilirsiniz.
@@ -42,10 +43,14 @@ kolaylaştırmak.
   - **Son izlediklerin:** Ana ekranda en son izlediğin videolar.
   - **Sarma:** Alttaki çizgiyi parmakla sürükleyerek videoyu ileri / geri sar.
   - Beğenince ve silinecekler listesine atınca hafif titreşim; ayarlarda bölüm simgeleri.
-
-### Sıradakiler
-- [ ] **0.9 Aylık özet** · "Bu ay en çok izlediğin videolar", toplam izlenme, en sevdiğin klasör;
-  arkadaşlarınla paylaşabileceğin bir kart olarak (Spotify Wrapped gibi).
+- [x] **0.9 Aylık özet ve ses yükseltme**
+  - **Aylık özet:** Ana ekrandaki özet kartından ya da üstteki grafik simgesinden; "Bu ay en çok
+    izlediğin videolar", toplam izlenme, izleme süresi, açılan yer ve en sevdiğin klasör. Tek
+    dokunuşla 1080×1920 hikâye kartı (PNG) olarak arkadaşlarınla paylaşabilir, listedeki videolara
+    dokunarak doğrudan izleyebilirsin.
+  - **Ses yükseltme (%200):** Üç nokta menüsünden sesi kısık videolar için %200'e kadar ses
+    güçlendirme (ExoPlayer `LoudnessEnhancer` ve VLC ses çarpanı ile).
+  - Başarımlar ve ayarlarda güncel günlük seri (`currentStreak`) gösterimi.
 
 ### Fikir havuzu
 Henüz bir sürüme konmamış fikirler; sırası gelince yukarıya taşınır.
@@ -53,8 +58,6 @@ Henüz bir sürüme konmamış fikirler; sırası gelince yukarıya taşınır.
 - **Arka planda oynatma** · Uygulamadan çıkınca ya da ekran kapanınca videonun sesi devam etsin.
   Android bunun için bildirim çubuğunda bir oynatıcı göstermeyi zorunlu tutuyor (oynat /
   durdur / sonraki).
-- **Ses yükseltme** · Sesi kısık videolar için %100'ün üstüne çıkabilen ses ayarı (en fazla
-  %200; daha fazlası hoparlörde cızırtı yapar).
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

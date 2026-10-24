@@ -121,6 +121,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
 
     var userPaused by remember { mutableStateOf(false) }
     var muted by rememberSaveable { mutableStateOf(false) }
+    var boosted by rememberSaveable { mutableStateOf(false) }
 
     // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
     var chipText by remember { mutableStateOf("") }
@@ -183,6 +184,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     }
     LaunchedEffect(current?.id) { userPaused = false }
     LaunchedEffect(muted) { playback.setMuted(muted) }
+    LaunchedEffect(boosted) { playback.setBoosted(boosted) }
 
     LaunchedEffect(chipTick) {
         if (chipTick == 0) return@LaunchedEffect
@@ -219,6 +221,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 favorite = vm.isFavorite(item),
                 views = vm.viewsOf(item),
                 muted = muted,
+                boosted = boosted,
                 albumName = vm.albumNameOf(item),
                 avatar = vm.coverOf(item.albumId) ?: item,
                 onTogglePause = {
@@ -236,6 +239,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 },
                 onShare = { shareVideo(context, item) },
                 onToggleMute = { muted = !muted },
+                onToggleBoost = {
+                    boosted = !boosted
+                    if (boosted && muted) muted = false
+                    chipText = if (boosted) "Ses %200'e yükseltildi" else "Ses normale döndü (%100)"
+                    chipTick++
+                },
                 onToggleFavorite = {
                     val favorite = !vm.isFavorite(item)
                     MediaActions.favoriteRequest(context, listOf(item), favorite)?.let { request ->
@@ -382,6 +391,7 @@ private fun ReelPage(
     /** Bu videoyu kaç kez izledin */
     views: Int,
     muted: Boolean,
+    boosted: Boolean,
     albumName: String,
     avatar: VideoItem,
     onTogglePause: () -> Unit,
@@ -390,6 +400,7 @@ private fun ReelPage(
     onViewsTap: () -> Unit,
     onShare: () -> Unit,
     onToggleMute: () -> Unit,
+    onToggleBoost: () -> Unit,
     onToggleFavorite: () -> Unit,
     onInfo: () -> Unit,
     onSeek: (Float) -> Unit,
@@ -469,10 +480,12 @@ private fun ReelPage(
                 favorite = favorite,
                 views = views,
                 muted = muted,
+                boosted = boosted,
                 onLike = onToggleLike,
                 onViews = onViewsTap,
                 onShare = onShare,
                 onMute = onToggleMute,
+                onBoost = onToggleBoost,
                 onFavorite = onToggleFavorite,
                 onInfo = onInfo,
                 onDelete = onDelete,
@@ -700,10 +713,12 @@ private fun ActionRail(
     favorite: Boolean,
     views: Int,
     muted: Boolean,
+    boosted: Boolean,
     onLike: () -> Unit,
     onViews: () -> Unit,
     onShare: () -> Unit,
     onMute: () -> Unit,
+    onBoost: () -> Unit,
     onFavorite: () -> Unit,
     onInfo: () -> Unit,
     onDelete: (() -> Unit)?,
@@ -749,11 +764,15 @@ private fun ActionRail(
         RailButton(icon = R.drawable.ic_send, tint = Color.White, label = "Paylaş", onClick = onShare)
         RailButton(
             icon = if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_on,
-            tint = Color.White,
-            label = if (muted) "Sessiz" else "Ses",
+            tint = if (!muted && boosted) FavoriteYellow else Color.White,
+            label = when {
+                muted -> "Sessiz"
+                boosted -> "%200"
+                else -> "Ses"
+            },
             onClick = onMute,
         )
-        // Üç nokta: favoriler ve video bilgisi
+        // Üç nokta: favoriler, ses yükseltme ve video bilgisi
         Box {
             RailButton(icon = R.drawable.ic_more_vert, tint = Color.White, label = "", description = "Diğer", onClick = { menuOpen = true })
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -773,6 +792,20 @@ private fun ActionRail(
                         },
                     )
                 }
+                DropdownMenuItem(
+                    text = { Text(if (boosted) "Normal ses (%100)" else "Sesi yükselt (%200)") },
+                    leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.ic_volume_on),
+                            contentDescription = null,
+                            tint = if (boosted) FavoriteYellow else Color.White,
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onBoost()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text("Video bilgisi") },
                     leadingIcon = { Icon(painterResource(R.drawable.ic_info), contentDescription = null, tint = Color.White) },

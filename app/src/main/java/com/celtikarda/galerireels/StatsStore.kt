@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.AtomicFile
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,7 @@ import org.json.JSONObject
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -40,7 +42,7 @@ data class VideoStat(
 data class TrashedVideo(val id: Long, val key: String, val name: String, val bytes: Long, val at: Long)
 
 /** Dosyadan okunan ya da dosyaya yazılacak her şey */
-private class SavedData(
+internal class SavedData(
     val videos: Map<String, VideoStat>,
     /** gün ("2026-10-20") → video anahtarı → o gün kaç kez izlendi */
     val days: Map<String, Map<String, Int>>,
@@ -73,6 +75,10 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     /** gün → o gün temizlenen bayt */
     private val cleaned = mutableStateMapOf<String, Long>()
 
+    /** Günlük geçmiş ya da aktif günler değişince ekranların (aylık özet, başarımlar) yenilenmesi için */
+    var historyRevision by mutableIntStateOf(0)
+        private set
+
     /** Çöp kutusuna taşıdıklarımız; geri getirilebilir ya da kalıcı silinebilir */
     val trashed = mutableStateListOf<TrashedVideo>()
     val cleanedToday: Long get() = cleaned[today()] ?: 0L
@@ -92,16 +98,67 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
 
     /** Uygulamanın üst üste açıldığı en uzun gün sayısı */
     fun bestStreak(): Int {
-        var best = 0
-        var run = 0
-        var previous: LocalDate? = null
-        for (day in activeDays.map { LocalDate.parse(it, dayFormat) }.sorted()) {
-            run = if (previous != null && previous.plusDays(1) == day) run + 1 else 1
-            best = maxOf(best, run)
-            previous = day
-        }
-        return best
+        historyRevision // Compose gözlemi için
+        return computeBestStreak(activeDays)
     }
+
+    /** Bugün (ya da dün) itibarıyla devam eden üst üste açılma serisi */
+    fun currentStreak(todayDate: LocalDate = LocalDate.now()): Int {
+        historyRevision
+        return computeCurrentStreak(activeDays, todayDate)
+    }
+
+    // --- Aylık özet sorguları
+
+    /** Kayıtta verisi olan aylar (en yeniden eskiye); içinde bulunduğumuz ay her zaman listededir */
+    fun availableMonths(): List<YearMonth> {
+        historyRevision
+        val months = HashSet<YearMonth>()
+        months += YearMonth.now()
+        (days.keys + activeDays + cleaned.keys).forEach { day ->
+            if (day.length >= 7) runCatching { YearMonth.parse(day.substring(0, 7)) }.getOrNull()?.let { months += it }
+        }
+        return months.sortedDescending()
+    }
+
+    /** Verilen ayda hangi video kaç kez izlendi (video anahtarı → izlenme sayısı) */
+    fun monthViews(month: YearMonth): Map<String, Int> {
+        historyRevision
+        val prefix = month.toString() // "2026-10"
+        val totals = HashMap<String, Int>()
+        for ((date, dayCounts) in days) {
+            if (!date.startsWith(prefix)) continue
+            for ((key, count) in dayCounts) {
+                if (count > 0) totals[key] = (totals[key] ?: 0) + count
+            }
+        }
+        return totals
+    }
+
+    /** Verilen ayda uygulamanın kullanıldığı gün sayısı */
+    fun monthActiveDays(month: YearMonth): Int {
+        historyRevision
+        val prefix = month.toString()
+        val seen = HashSet<String>()
+        activeDays.filterTo(seen) { it.startsWith(prefix) }
+        days.keys.filterTo(seen) { it.startsWith(prefix) }
+        cleaned.entries.filter { it.key.startsWith(prefix) && it.value > 0 }.mapTo(seen) { it.key }
+        return seen.size
+    }
+
+    /** Verilen ayda temizlenen toplam bayt */
+    fun monthCleanedBytes(month: YearMonth): Long {
+        historyRevision
+        val prefix = month.toString()
+        return cleaned.entries.filter { it.key.startsWith(prefix) }.sumOf { it.value }
+    }
+
+    /** Verilen ayda beğenilen video sayısı */
+    fun monthLikedCount(month: YearMonth): Int =
+        stats.values.count { s ->
+            s.liked && s.likeChangedAt > 0 &&
+                YearMonth.from(Instant.ofEpochMilli(s.likeChangedAt).atZone(ZoneId.systemDefault())) == month
+        }
 
     fun recordUnlocked(ids: List<String>) {
         val now = System.currentTimeMillis()
@@ -166,7 +223,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         stats[key] = current.copy(views = current.views + 1, lastViewedAt = System.currentTimeMillis())
         val day = days.getOrPut(today()) { HashMap() }
         day[key] = (day[key] ?: 0) + 1
-        markActiveToday()
+        activeDays.add(today())
+        historyRevision++
         scheduleSave()
     }
 
@@ -175,7 +233,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         val now = System.currentTimeMillis()
         videos.forEach { trashed += TrashedVideo(it.id, it.key, it.name, it.sizeBytes, now) }
         cleaned[today()] = cleanedToday + videos.sumOf { it.sizeBytes }
-        markActiveToday()
+        activeDays.add(today())
+        historyRevision++
         scheduleSave()
     }
 
@@ -187,6 +246,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             val day = dayOf(t.at)
             cleaned[day] = ((cleaned[day] ?: 0L) - t.bytes).coerceAtLeast(0L)
         }
+        historyRevision++
         scheduleSave()
     }
 
@@ -197,7 +257,10 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
 
     /** Uygulamanın bugün açıldığını kaydeder (başarımlarda "üst üste gün" için) */
     fun markActiveToday() {
-        if (activeDays.add(today())) scheduleSave()
+        if (activeDays.add(today())) {
+            historyRevision++
+            scheduleSave()
+        }
     }
 
     /**
@@ -261,6 +324,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         saved.trash.forEach { t -> if (trashed.none { it.id == t.id }) trashed += t }
         // Aynı başarım iki kayıtta da açılmışsa ilk açıldığı an geçerli
         saved.achievements.forEach { (id, at) -> unlocked[id] = minOf(unlocked[id] ?: at, at) }
+        historyRevision++
     }
 
     private suspend fun save() {
@@ -325,7 +389,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         }
     }
 
-    private companion object {
+    internal companion object {
         const val KEY_TREE = "tree_uri"
         const val KEY_DIR = "dir_id"
         const val KEY_DISMISSED = "prompt_dismissed"
@@ -337,6 +401,33 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
 
         fun dayOf(millis: Long): String =
             Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().format(dayFormat)
+
+        fun computeBestStreak(activeDays: Set<String>): Int {
+            var best = 0
+            var run = 0
+            var previous: LocalDate? = null
+            for (day in activeDays.mapNotNull { runCatching { LocalDate.parse(it, dayFormat) }.getOrNull() }.sorted()) {
+                run = if (previous != null && previous.plusDays(1) == day) run + 1 else 1
+                best = maxOf(best, run)
+                previous = day
+            }
+            return best
+        }
+
+        fun computeCurrentStreak(activeDays: Set<String>, today: LocalDate = LocalDate.now()): Int {
+            val parsed = activeDays.mapNotNullTo(HashSet()) { runCatching { LocalDate.parse(it, dayFormat) }.getOrNull() }
+            var cursor = when {
+                today in parsed -> today
+                today.minusDays(1) in parsed -> today.minusDays(1)
+                else -> return 0
+            }
+            var streak = 0
+            while (cursor in parsed) {
+                streak++
+                cursor = cursor.minusDays(1)
+            }
+            return streak
+        }
 
         fun toJson(data: SavedData): String {
             val videos = JSONObject()

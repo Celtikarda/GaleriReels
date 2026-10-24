@@ -3,17 +3,22 @@ package com.celtikarda.galerireels.ui
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val tr: Locale = Locale.forLanguageTag("tr-TR")
 private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", tr)
+private val monthFormat = DateTimeFormatter.ofPattern("MMMM yyyy", tr)
 
 fun localDate(millis: Long): LocalDate =
     Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
 
 fun formatDate(millis: Long): String = dateFormat.format(localDate(millis))
+
+fun formatMonth(month: YearMonth): String =
+    monthFormat.format(month).replaceFirstChar { it.titlecase(tr) }
 
 private val dateTimeFormat = DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", tr)
 
@@ -41,6 +46,20 @@ fun formatDuration(ms: Long): String {
     val m = (total % 3600) / 60
     val s = total % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+/** Toplam izleme süresi: "2 sa 15 dk", "14 dk", "45 sn" */
+fun formatWatchTime(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return when {
+        h > 0 && m > 0 -> "$h sa $m dk"
+        h > 0 -> "$h saat"
+        m > 0 -> "$m dk"
+        else -> "$s sn"
+    }
 }
 
 fun formatCount(n: Int): String = String.format(tr, "%,d", n)

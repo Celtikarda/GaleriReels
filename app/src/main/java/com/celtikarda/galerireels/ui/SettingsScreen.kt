@@ -141,6 +141,11 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 "${formatCount(stats.totalLikes)} beğeni · ${formatCount(stats.totalViews)} izlenme " +
                     "(${formatCount(stats.watchedVideos)} video)",
             )
+            val currentStreak = stats.currentStreak()
+            val bestStreak = stats.bestStreak()
+            if (bestStreak > 0) {
+                InfoLine("Seri", "$currentStreak gün üst üste (en uzun $bestStreak gün)")
+            }
 
             val warning = stats.folderError
                 ?: if (folder == null) "Klasör seçilmedi: uygulamayı silersen beğenilerin ve izlenmelerin kaybolur." else null

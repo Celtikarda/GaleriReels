@@ -44,7 +44,15 @@ private val GoldYellow = Color(0xFFFFC83D)
 
 @Composable
 fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
-    val input = remember(vm.stats.totalViews, vm.favoriteIds, vm.stats.cleanedTotal) { vm.achievementInput() }
+    val input = remember(
+        vm.stats.totalViews,
+        vm.stats.totalLikes,
+        vm.favoriteIds,
+        vm.stats.cleanedTotal,
+        vm.stats.historyRevision,
+        vm.folderCount,
+    ) { vm.achievementInput() }
+    val currentStreak = remember(vm.stats.historyRevision) { vm.stats.currentStreak() }
     val unlocked = vm.stats.unlocked
     // Açılanlar önce (en yeni en üstte), sonra kalanlar listedeki sırasıyla
     val sorted = achievements.sortedWith(
@@ -73,8 +81,9 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                val streakNote = if (currentStreak > 0) " · 🔥 $currentStreak günlük seri" else ""
                 Text(
-                    "İzledikçe, temizledikçe ve uygulamayı her gün açtıkça yenileri açılır.",
+                    "İzledikçe, temizledikçe ve uygulamayı her gün açtıkça yenileri açılır$streakNote",
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 14.sp,
                     modifier = Modifier.padding(start = 12.dp, top = 2.dp),
@@ -113,8 +122,8 @@ private fun AchievementCard(achievement: Achievement, input: AchievementInput, u
         )
         Text(achievement.description, color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp)
         Spacer(Modifier.height(10.dp))
-        if (done) {
-            Text("Açıldı · ${formatDate(unlockedAt!!)}", color = GoldYellow.copy(alpha = 0.85f), fontSize = 12.sp)
+        if (unlockedAt != null) {
+            Text("Açıldı · ${formatDate(unlockedAt)}", color = GoldYellow.copy(alpha = 0.85f), fontSize = 12.sp)
         } else {
             ProgressLine(progress.toFloat() / achievement.target)
             val text = achievement.format?.let { f ->

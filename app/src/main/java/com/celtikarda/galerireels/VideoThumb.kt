@@ -29,15 +29,22 @@ data class VideoThumb(val uri: Uri, val maxSize: Int)
  * Videonun siyah olmayan küçük resmini Bitmap olarak döner (Coil ve aylık özet kartı ortak kullanır).
  */
 suspend fun loadThumbBitmap(context: Context, uri: Uri, maxSize: Int): Bitmap? {
+    val isImage = uri.toString().contains("/images/")
     val system = if (Build.VERSION.SDK_INT >= 29) {
         runCatching { context.contentResolver.loadThumbnail(uri, Size(maxSize, maxSize), null) }.getOrNull()
     } else {
         null
     }
-    val raw = system?.takeUnless { isNearlyBlack(it) }
-        ?: FrameCache.get(context, uri)?.let { scaleDownBitmap(it, maxSize) }
-        ?: system
-        ?: return null
+    val raw = if (isImage) {
+        system ?: runCatching {
+            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }?.let { scaleDownBitmap(it, maxSize) }
+        }.getOrNull() ?: return null
+    } else {
+        system?.takeUnless { isNearlyBlack(it) }
+            ?: FrameCache.get(context, uri)?.let { scaleDownBitmap(it, maxSize) }
+            ?: system
+            ?: return null
+    }
     return if (Build.VERSION.SDK_INT >= 26 && raw.config == Bitmap.Config.HARDWARE) {
         raw.copy(Bitmap.Config.ARGB_8888, false)
     } else {

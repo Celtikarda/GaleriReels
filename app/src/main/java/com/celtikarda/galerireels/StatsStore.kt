@@ -38,8 +38,8 @@ data class VideoStat(
     val lastViewedAt: Long = 0,
 )
 
-/** Uygulamanın Android çöp kutusuna taşıdığı video (30 gün sonra Android kendisi siler) */
-data class TrashedVideo(val id: Long, val key: String, val name: String, val bytes: Long, val at: Long)
+/** Uygulamanın Android çöp kutusuna taşıdığı video veya fotoğraf (30 gün sonra Android kendisi siler) */
+data class TrashedVideo(val id: Long, val key: String, val name: String, val bytes: Long, val at: Long, val isPhoto: Boolean = false)
 
 /** Dosyadan okunan ya da dosyaya yazılacak her şey */
 internal class SavedData(
@@ -205,6 +205,14 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     /** Uygulamadan çıkınca ya da ekran kapanınca videonun sesi arka planda devam etsin mi */
     var backgroundPlay by mutableStateOf(prefs.getBoolean(KEY_BG_PLAY, false))
         private set
+    /** Gösterilecek içerik türü: Videolar, Fotoğraflar ya da Tümü */
+    var mediaMode by mutableStateOf(
+        MediaMode.entries.firstOrNull { it.name == prefs.getString(KEY_MEDIA_MODE, null) } ?: MediaMode.VIDEOS,
+    )
+        private set
+    /** İlk açılışta hangi tür içerik gösterileceği soruldu mu */
+    var mediaModeAsked by mutableStateOf(prefs.getBoolean(KEY_MEDIA_MODE_ASKED, false))
+        private set
     /** Klasöre en son başarıyla yazılan an */
     var lastFolderSave by mutableStateOf(prefs.getLong(KEY_LAST_SAVE, 0L))
         private set
@@ -262,7 +270,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     /** Temizlikte çöp kutusuna taşındılar; bugün temizlenene eklenir */
     fun recordTrashed(videos: List<VideoItem>) {
         val now = System.currentTimeMillis()
-        videos.forEach { trashed += TrashedVideo(it.id, it.key, it.name, it.sizeBytes, now) }
+        videos.forEach { trashed += TrashedVideo(it.id, it.key, it.name, it.sizeBytes, now, it.isPhoto) }
         cleaned[today()] = cleanedToday + videos.sumOf { it.sizeBytes }
         activeDays.add(today())
         historyRevision++
@@ -330,6 +338,15 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     fun updateBackgroundPlay(enabled: Boolean) {
         backgroundPlay = enabled
         prefs.edit { putBoolean(KEY_BG_PLAY, enabled) }
+    }
+
+    fun updateMediaMode(mode: MediaMode) {
+        mediaMode = mode
+        mediaModeAsked = true
+        prefs.edit {
+            putString(KEY_MEDIA_MODE, mode.name)
+            putBoolean(KEY_MEDIA_MODE_ASKED, true)
+        }
     }
 
     /** Uygulama arka plana geçerken bekleyen kaydı hemen yapar. */
@@ -432,6 +449,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_DISMISSED = "prompt_dismissed"
         const val KEY_LAST_SAVE = "last_folder_save"
         const val KEY_BG_PLAY = "background_play"
+        const val KEY_MEDIA_MODE = "media_mode"
+        const val KEY_MEDIA_MODE_ASKED = "media_mode_asked"
 
         private val dayFormat = DateTimeFormatter.ISO_LOCAL_DATE
 
@@ -498,7 +517,13 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                     "trash",
                     JSONArray(
                         data.trash.map {
-                            JSONObject().put("id", it.id).put("key", it.key).put("name", it.name).put("bytes", it.bytes).put("at", it.at)
+                            JSONObject()
+                                .put("id", it.id)
+                                .put("key", it.key)
+                                .put("name", it.name)
+                                .put("bytes", it.bytes)
+                                .put("at", it.at)
+                                .put("isPhoto", it.isPhoto)
                         },
                     ),
                 )
@@ -530,7 +555,14 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             val trashJson = root.optJSONArray("trash")
             val trash = (0 until (trashJson?.length() ?: 0)).map { i ->
                 val o = trashJson!!.getJSONObject(i)
-                TrashedVideo(o.optLong("id"), o.optString("key"), o.optString("name"), o.optLong("bytes"), o.optLong("at"))
+                TrashedVideo(
+                    o.optLong("id"),
+                    o.optString("key"),
+                    o.optString("name"),
+                    o.optLong("bytes"),
+                    o.optLong("at"),
+                    o.optBoolean("isPhoto"),
+                )
             }
             val achievementsJson = root.optJSONObject("achievements")
             val achievements = achievementsJson?.keys()?.asSequence()?.associateWith { achievementsJson.optLong(it) }.orEmpty()

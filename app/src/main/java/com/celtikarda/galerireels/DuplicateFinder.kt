@@ -20,6 +20,8 @@ object DuplicateFinder {
 
     /** İki videonun kopya sayılması için en fazla süre farkı (ms) */
     private const val MAX_DURATION_DIFF_MS = 2_500L
+    /** İki fotoğrafın peş peşe/benzer aday sayılması için en fazla çekim zamanı farkı (ms, 3 dakika) */
+    private const val MAX_PHOTO_TIME_DIFF_MS = 180_000L
     /** 64-bit dHash üzerinde izin verilen en fazla bit farkı (Hamming uzaklığı, 64 üzerinden 10) */
     internal const val MAX_HAMMING_DISTANCE = 10
 
@@ -27,19 +29,22 @@ object DuplicateFinder {
     private var diskLoaded = false
 
     /**
-     * Galerideki videoları tarar; her benzer/kopya grubunda en iyi kopyayı (beğenilen/favori ya da
-     * en yüksek çözünürlüklü olanı) koruyup silinebilecek fazlalık kopyaları döner.
+     * Galerideki videoları ve fotoğrafları tarar; her benzer/kopya grubunda en iyi kopyayı
+     * (beğenilen/favori ya da en yüksek çözünürlüklü olanı) koruyup silinebilecek fazlalık kopyaları döner.
      */
     suspend fun findExtraCopies(
         context: Context,
-        videos: List<VideoItem>,
+        items: List<VideoItem>,
         keepKeys: Set<String>,
     ): List<VideoItem> = withContext(Dispatchers.IO) {
-        if (videos.size < 2) return@withContext emptyList()
+        if (items.size < 2) return@withContext emptyList()
         loadCacheIfNeeded(context)
 
-        // Sadece süresi başka bir videoya yakın olan adayların dHash özetini çıkar (hızlı eleme)
-        val sortedByDur = videos.filter { it.durationMs > 0 }.sortedBy { it.durationMs }
+        val videos = items.filter { !it.isPhoto && it.durationMs > 0 }
+        val photos = items.filter { it.isPhoto }
+
+        // 1) Videolar: süresi başka bir videoya yakın olan adaylar
+        val sortedByDur = videos.sortedBy { it.durationMs }
         val candidates = HashSet<VideoItem>()
         for (i in sortedByDur.indices) {
             val a = sortedByDur[i]
@@ -48,24 +53,41 @@ object DuplicateFinder {
                 candidates += sortedByDur[i - 1]
             }
         }
+
+        // 2) Fotoğraflar: yakın zamanda (peş peşe/burst) çekilenler ya da dosya boyutu birebir aynı olanlar
+        val sortedByDate = photos.sortedBy { it.dateMillis }
+        for (i in sortedByDate.indices) {
+            val a = sortedByDate[i]
+            if (i > 0 && abs(a.dateMillis - sortedByDate[i - 1].dateMillis) <= MAX_PHOTO_TIME_DIFF_MS) {
+                candidates += a
+                candidates += sortedByDate[i - 1]
+            }
+        }
+        photos.groupBy { it.sizeBytes }.values.filter { it.size >= 2 }.forEach { group ->
+            candidates.addAll(group)
+        }
+
         if (candidates.size < 2) return@withContext emptyList()
 
         val hashes = HashMap<String, Long>()
         var cacheDirty = false
-        for (video in candidates) {
-            val cached = memoryCache[video.key]
+        for (item in candidates) {
+            val cached = memoryCache[item.key]
             if (cached != null) {
-                if (cached != 0L) hashes[video.key] = cached
+                if (cached != 0L) hashes[item.key] = cached
                 continue
             }
-            val computed = computeVideoDHash(context, video) ?: 0L
-            memoryCache[video.key] = computed
+            val computed = computeVideoDHash(context, item) ?: 0L
+            memoryCache[item.key] = computed
             cacheDirty = true
-            if (computed != 0L) hashes[video.key] = computed
+            if (computed != 0L) hashes[item.key] = computed
         }
         if (cacheDirty) saveCache(context)
 
-        selectExtraCopies(candidates.toList(), hashes, keepKeys)
+        val videoCandidates = candidates.filter { !it.isPhoto }
+        val photoCandidates = candidates.filter { it.isPhoto }
+        (selectExtraCopies(videoCandidates, hashes, keepKeys) + selectExtraPhotoCopies(photoCandidates, hashes, keepKeys))
+            .sortedByDescending { it.sizeBytes }
     }
 
     /**
@@ -146,6 +168,71 @@ object DuplicateFinder {
         for (indices in groups) {
             val group = indices.map { sorted[it] }
             // Korunacak asıl kopya: önce beğenilen/favori olan, sonra en yüksek çözünürlük, sonra en büyük boyut, sonra en eski tarih
+            val keeper = group.maxWithOrNull(
+                compareBy<VideoItem> { it.key in keepKeys }
+                    .thenBy { it.width.toLong() * it.height.toLong() }
+                    .thenBy { it.sizeBytes }
+                    .thenByDescending { it.dateMillis },
+            ) ?: continue
+            for (item in group) {
+                if (item.id != keeper.id && item.key !in keepKeys) {
+                    extras += item
+                }
+            }
+        }
+        return extras.sortedByDescending { it.sizeBytes }
+    }
+
+    /**
+     * Fotoğraf adayları ve dHash özetlerinden benzer/kopya fotoğraf gruplarını bulur,
+     * en iyi fotoğrafı koruyup fazlalık kopyaları döner.
+     */
+    internal fun selectExtraPhotoCopies(
+        candidates: List<VideoItem>,
+        hashes: Map<String, Long>,
+        keepKeys: Set<String>,
+    ): List<VideoItem> {
+        if (candidates.size < 2) return emptyList()
+        val sorted = candidates.sortedBy { it.dateMillis }
+        val parent = IntArray(sorted.size) { it }
+        fun find(x: Int): Int {
+            var r = x
+            while (parent[r] != r) r = parent[r]
+            var c = x
+            while (c != r) {
+                val nxt = parent[c]
+                parent[c] = r
+                c = nxt
+            }
+            return r
+        }
+        fun union(a: Int, b: Int) {
+            val ra = find(a)
+            val rb = find(b)
+            if (ra != rb) parent[rb] = ra
+        }
+
+        for (i in sorted.indices) {
+            val a = sorted[i]
+            val hashA = hashes[a.key]
+            for (j in i + 1 until sorted.size) {
+                val b = sorted[j]
+                val closeInTime = b.dateMillis - a.dateMillis <= MAX_PHOTO_TIME_DIFF_MS
+                val sameSize = a.sizeBytes == b.sizeBytes
+                if (!closeInTime && !sameSize) continue
+                val hashMatch = hashA != null && hashes[b.key]?.let { hashB ->
+                    hammingDistance(hashA, hashB) <= MAX_HAMMING_DISTANCE
+                } == true
+                if (sameSize || hashMatch) {
+                    union(i, j)
+                }
+            }
+        }
+
+        val groups = sorted.indices.groupBy { find(it) }.values.filter { it.size >= 2 }
+        val extras = ArrayList<VideoItem>()
+        for (indices in groups) {
+            val group = indices.map { sorted[it] }
             val keeper = group.maxWithOrNull(
                 compareBy<VideoItem> { it.key in keepKeys }
                     .thenBy { it.width.toLong() * it.height.toLong() }

@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -53,8 +54,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.celtikarda.galerireels.DecoderCheck
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
+import com.celtikarda.galerireels.MediaMode
 import com.celtikarda.galerireels.MediaRepository
 import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.TrashedVideo
 import com.celtikarda.galerireels.VideoItem
 
 private val WarningOrange = Color(0xFFFFB020)
@@ -91,8 +94,9 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             }
         }
     }
-    val trashAction = { ids: List<Long>, restore: Boolean ->
-        val uris = ids.map { MediaRepository.uriOf(it) }
+    val trashAction = { items: List<TrashedVideo>, restore: Boolean ->
+        val uris = items.map { MediaRepository.uriOf(it.id, it.isPhoto) }
+        val ids = items.map { it.id }
         val request = if (restore) MediaActions.trashRequest(context, uris, trash = false) else MediaActions.deleteRequest(context, uris)
         if (request != null) {
             pendingTrash = ids to restore
@@ -113,6 +117,33 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = Color.White)
             }
             Text("Ayarlar", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        }
+
+        SectionTitle("Medya modu", R.drawable.ic_play)
+        Card {
+            val currentMode = stats.mediaMode
+            Text(
+                "Uygulamada sadece videoları, sadece fotoğrafları ya da ikisini birden Reels gibi " +
+                    "dikey kaydırarak gezebilir ve sola kaydırarak temizleyebilirsin.",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            InfoLine("Seçili mod", currentMode.title)
+            InfoLine(
+                "Galeride",
+                "${formatCount(vm.allVideosCount)} video · ${formatCount(vm.allPhotosCount)} fotoğraf",
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MediaMode.entries.forEach { entry ->
+                    if (entry == currentMode) {
+                        Button(onClick = { vm.setMediaMode(entry) }) { Text(entry.title) }
+                    } else {
+                        OutlinedButton(onClick = { vm.setMediaMode(entry) }) { Text(entry.title) }
+                    }
+                }
+            }
         }
 
         SectionTitle("Beğeniler ve izlenmeler", R.drawable.ic_eye)
@@ -181,10 +212,10 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Spacer(Modifier.height(10.dp))
                 val trash = stats.trashed.toList()
                 if (trash.isEmpty()) {
-                    Text("Çöp kutusunda uygulamanın sildiği video yok.", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                    Text("Çöp kutusunda uygulamanın sildiği içerik yok.", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
                 } else {
                     Text(
-                        "Çöp kutusunda ${formatCount(trash.size)} video (${formatSize(trash.sumOf { it.bytes })}). " +
+                        "Çöp kutusunda ${formatCount(trash.size)} öğe (${formatSize(trash.sumOf { it.bytes })}). " +
                             "Telefon bunları silindikten 30 gün sonra kendiliğinden siler; o zamana kadar geri getirebilirsin. " +
                             "Yerin hemen açılması için kalıcı olarak silebilirsin.",
                         color = Color.White,
@@ -192,10 +223,10 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     )
                     Spacer(Modifier.height(12.dp))
                     Row {
-                        OutlinedButton(onClick = { trashAction(trash.map { it.id }, true) }) { Text("Geri getir") }
+                        OutlinedButton(onClick = { trashAction(trash, true) }) { Text("Geri getir") }
                         Spacer(Modifier.width(8.dp))
                         Button(
-                            onClick = { trashAction(trash.map { it.id }, false) },
+                            onClick = { trashAction(trash, false) },
                             colors = ButtonDefaults.buttonColors(containerColor = DeleteRed, contentColor = Color.White),
                         ) { Text("Kalıcı olarak sil") }
                     }
@@ -329,10 +360,10 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
  */
 fun openIssueReport(context: Context, item: VideoItem? = null, errorText: String? = null) {
     val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—"
-    val title = if (item != null) {
-        "Video oynatma sorunu (${item.width}x${item.height})"
-    } else {
-        "Sorun bildirimi / Öneri"
+    val title = when {
+        item != null && item.isPhoto -> "Fotoğraf görüntüleme sorunu (${item.width}x${item.height})"
+        item != null -> "Video oynatma sorunu (${item.width}x${item.height})"
+        else -> "Sorun bildirimi / Öneri"
     }
     val body = buildString {
         appendLine("### Açıklama")
@@ -347,15 +378,19 @@ fun openIssueReport(context: Context, item: VideoItem? = null, errorText: String
         appendLine("- **Telefon:** ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("- **Android:** ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
         if (item != null) {
-            val engine = when (DecoderCheck.decision(item.id)) {
-                true -> "VLC (yazılım)"
-                false -> "ExoPlayer (donanım)"
-                null -> "—"
-            }
             appendLine("- **Format:** ${item.mimeType ?: "—"}")
             appendLine("- **Çözünürlük:** ${item.width} × ${item.height}")
-            appendLine("- **Boyut / Süre:** ${formatSize(item.sizeBytes)} · ${formatDuration(item.durationMs)}")
-            appendLine("- **Oynatıcı:** $engine")
+            if (item.isPhoto) {
+                appendLine("- **Boyut:** ${formatSize(item.sizeBytes)}")
+            } else {
+                val engine = when (DecoderCheck.decision(item.id)) {
+                    true -> "VLC (yazılım)"
+                    false -> "ExoPlayer (donanım)"
+                    null -> "—"
+                }
+                appendLine("- **Boyut / Süre:** ${formatSize(item.sizeBytes)} · ${formatDuration(item.durationMs)}")
+                appendLine("- **Oynatıcı:** $engine")
+            }
         }
     }
     val url = "https://github.com/Celtikarda/GaleriReels/issues/new?title=${Uri.encode(title)}&body=${Uri.encode(body)}"

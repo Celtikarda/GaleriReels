@@ -15,7 +15,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     /** Beğeniler ve izlenmeler; uygulama silinse de kalsın diye kullanıcının seçtiği klasöre de yazılır */
     val stats = StatsStore(app, viewModelScope).also { it.load() }
     // Temizlikte silinince değişir; ekranlar yenilensin diye gözlenebilir
-    private var all by mutableStateOf<List<VideoItem>>(emptyList())
+    private var allVideos by mutableStateOf<List<VideoItem>>(emptyList())
+    private var allPhotos by mutableStateOf<List<VideoItem>>(emptyList())
+    private val all: List<VideoItem>
+        get() = when (stats.mediaMode) {
+            MediaMode.VIDEOS -> allVideos
+            MediaMode.PHOTOS -> allPhotos
+            MediaMode.ALL -> (allVideos + allPhotos).sortedByDescending { it.dateMillis }
+        }
     private var folders by mutableStateOf<List<Album>>(emptyList())
     private var lastToken: Any? = null
     private var pendingVideoId: Long? = null
@@ -59,19 +66,29 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     var favoriteIds by mutableStateOf<Set<Long>>(emptySet())
         private set
 
-    /** Galerideki toplam video sayısı (gizlenenler dahil; izin ekranı kontrolü için) */
+    /** Seçili moddaki toplam öğe sayısı (gizlenenler dahil; izin ekranı kontrolü için) */
     val totalVideoCount: Int get() = all.size
+    val allVideosCount: Int get() = allVideos.size
+    val allPhotosCount: Int get() = allPhotos.size
+    val totalAnyMediaCount: Int get() = allVideos.size + allPhotos.size
     val videoCount: Int get() = visibleVideos.size
     val folderCount: Int get() = visibleFolders.size
+
+    fun setMediaMode(mode: MediaMode) {
+        stats.updateMediaMode(mode)
+        folders = buildFolders(all)
+        if (loaded) scanDuplicates()
+    }
 
     /** Aynı token ile tekrar çağrılırsa (ör. ekran döndüğünde) yeniden yüklemez. */
     fun load(token: Any) {
         if (token == lastToken) return
         lastToken = token
         viewModelScope.launch {
-            all = MediaRepository.loadVideos(getApplication())
+            allVideos = MediaRepository.loadVideos(getApplication())
+            allPhotos = MediaRepository.loadPhotos(getApplication())
             folders = buildFolders(all)
-            favoriteIds = all.filter { it.favorite }.mapTo(HashSet()) { it.id }
+            favoriteIds = (allVideos + allPhotos).filter { it.favorite }.mapTo(HashSet()) { it.id }
             stats.awaitLoaded()
             migrateOldLikes()
             loaded = true
@@ -81,14 +98,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Ekrandaki kutucuklar: Tüm videolar, Favoriler, Beğendiklerin, sonra klasörler */
+    /** Ekrandaki kutucuklar: Tüm videolar/fotoğraflar, Favoriler, Beğendiklerin, sonra klasörler */
     fun albumTiles(): List<Album> {
         val visible = visibleVideos
         if (visible.isEmpty()) return emptyList()
         val liked = visible.filter { isLiked(it) }
         val favorites = visible.filter { isFavorite(it) }
+        val allTitle = when (stats.mediaMode) {
+            MediaMode.VIDEOS -> "Tüm videolar"
+            MediaMode.PHOTOS -> "Tüm fotoğraflar"
+            MediaMode.ALL -> "Tüm medya"
+        }
         return buildList {
-            add(Album(Album.ALL, "Tüm videolar", visible.size, visible.first()))
+            add(Album(Album.ALL, allTitle, visible.size, visible.first()))
             if (favorites.isNotEmpty()) add(Album(Album.FAVORITES, "Favoriler", favorites.size, favorites.first()))
             if (liked.isNotEmpty()) add(Album(Album.LIKED, "Beğendiklerin", liked.size, liked.first()))
             addAll(visibleFolders)
@@ -119,9 +141,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun reloadVideos() {
         if (!loaded) return
         viewModelScope.launch {
-            all = MediaRepository.loadVideos(getApplication())
+            allVideos = MediaRepository.loadVideos(getApplication())
+            allPhotos = MediaRepository.loadPhotos(getApplication())
             folders = buildFolders(all)
-            favoriteIds = all.filter { it.favorite }.mapTo(HashSet()) { it.id }
+            favoriteIds = (allVideos + allPhotos).filter { it.favorite }.mapTo(HashSet()) { it.id }
             scanDuplicates()
         }
     }
@@ -146,14 +169,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Sadece tespit edilen kopya/benzer videolarla temizlik modunu başlatır */
+    /** Sadece tespit edilen kopya/benzer içeriklerle temizlik modunu başlatır */
     fun openDuplicateCleanup() {
         val copies = duplicateCopies.filter { !isLiked(it) && !isFavorite(it) }
         if (copies.isEmpty()) return
         source = copies
         items = copies
         cleanupMarked = emptyList()
-        openAlbum = Album(Album.CLEANUP, "Kopya videolar", copies.size, copies.first())
+        val title = when (stats.mediaMode) {
+            MediaMode.VIDEOS -> "Kopya videolar"
+            MediaMode.PHOTOS -> "Kopya fotoğraflar"
+            MediaMode.ALL -> "Kopya medya"
+        }
+        openAlbum = Album(Album.CLEANUP, title, copies.size, copies.first())
     }
 
     /** Silinmeye aday olanlar: beğenilen, favori ve gizlenen klasörlerdeki videolar temizlikte gösterilmez */
@@ -195,7 +223,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun onTrashed(videos: List<VideoItem>) {
         stats.recordTrashed(videos)
         val ids = videos.mapTo(HashSet()) { it.id }
-        all = all.filter { it.id !in ids }
+        allVideos = allVideos.filter { it.id !in ids }
+        allPhotos = allPhotos.filter { it.id !in ids }
         duplicateCopies = duplicateCopies.filter { it.id !in ids }
         folders = buildFolders(all)
         cleanupMarked = emptyList()
@@ -317,7 +346,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun coverOf(albumId: String): VideoItem? = folders.firstOrNull { it.id == albumId }?.cover
 
-    fun albumNameOf(item: VideoItem): String = folders.firstOrNull { it.id == item.albumId }?.name ?: item.albumName ?: "Video"
+    fun albumNameOf(item: VideoItem): String = folders.firstOrNull { it.id == item.albumId }?.name ?: item.albumName ?: if (item.isPhoto) "Fotoğraf" else "Video"
 
     fun open(album: Album) {
         val visible = visibleVideos

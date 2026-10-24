@@ -58,7 +58,10 @@ class StatsAndAchievementsTest {
             ),
             activeDays = setOf("2026-10-20", "2026-10-21"),
             cleaned = mapOf("2026-10-21" to 52_428_800L),
-            trash = listOf(TrashedVideo(11L, "old.mp4|500", "old.mp4", 500L, 1700000100L)),
+            trash = listOf(
+                TrashedVideo(11L, "old.mp4|500", "old.mp4", 500L, 1700000100L, isPhoto = false),
+                TrashedVideo(12L, "img.jpg|250", "img.jpg", 250L, 1700000200L, isPhoto = true),
+            ),
             achievements = mapOf("first_view" to 1700000050L),
             hiddenAlbums = setOf("whatsapp_bucket", "screen_recorder_bucket"),
         )
@@ -205,6 +208,22 @@ class StatsAndAchievementsTest {
         )
         // Yüksek boyutlu/orijinal olan korunur, düşük boyutlu WhatsApp kopyası fazlalık olarak döner
         assertEquals(listOf(11L), extras.map { it.id })
+
+        // Seri çekim / benzer fotoğraflar için selectExtraPhotoCopies testi
+        val photo1 = original.copy(id = 20L, key = "IMG_001.jpg|4000000", name = "IMG_001.jpg", sizeBytes = 4_000_000L, durationMs = 0L, isPhoto = true, dateMillis = 1700000000000L)
+        val photo2Burst = original.copy(id = 21L, key = "IMG_002.jpg|3800000", name = "IMG_002.jpg", sizeBytes = 3_800_000L, durationMs = 0L, isPhoto = true, dateMillis = 1700000002000L)
+        val photoDifferent = original.copy(id = 22L, key = "IMG_003.jpg|3900000", name = "IMG_003.jpg", sizeBytes = 3_900_000L, durationMs = 0L, isPhoto = true, dateMillis = 1700000003000L)
+
+        val photoExtras = DuplicateFinder.selectExtraPhotoCopies(
+            candidates = listOf(photo1, photo2Burst, photoDifferent),
+            hashes = mapOf(
+                photo1.key to hashA,
+                photo2Burst.key to hashB,
+                photoDifferent.key to hashDiff,
+            ),
+            keepKeys = emptySet(),
+        )
+        assertEquals(listOf(21L), photoExtras.map { it.id })
     }
 
     private val dummyUri: Uri by lazy {

@@ -49,6 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.celtikarda.galerireels.DataFolder
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaAccess
+import com.celtikarda.galerireels.MediaMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -141,12 +142,32 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                 onPick = pickFolder,
                 onLater = vm.stats::dismissFolderPrompt,
             )
-            vm.totalVideoCount == 0 -> MessageScreen(
-                title = "Video bulunamadı",
-                body = if (access == MediaAccess.PARTIAL) "Sadece seçtiğin videoları görebiliyorum." else "Galeride hiç video yok gibi görünüyor.",
-                buttonText = if (access == MediaAccess.PARTIAL) "Video seç" else null,
-                onButton = requestAccess,
+            !vm.stats.mediaModeAsked -> MediaModeSetupScreen(
+                videoCount = vm.allVideosCount,
+                photoCount = vm.allPhotosCount,
+                onSelect = vm::setMediaMode,
             )
+            vm.totalVideoCount == 0 -> {
+                val mode = vm.stats.mediaMode
+                val hasOther = vm.totalAnyMediaCount > 0
+                MessageScreen(
+                    title = "${mode.title} bulunamadı",
+                    body = when {
+                        access == MediaAccess.PARTIAL -> "Sadece seçtiğin içerikleri görebiliyorum."
+                        hasOther -> "Galeride hiç ${mode.itemWord} yok ama diğer modda içerik var."
+                        else -> "Galeride hiç fotoğraf ya da video yok gibi görünüyor."
+                    },
+                    buttonText = when {
+                        access == MediaAccess.PARTIAL -> "Medya seç"
+                        hasOther -> "Tüm medyayı göster"
+                        else -> null
+                    },
+                    onButton = {
+                        if (access == MediaAccess.PARTIAL) requestAccess()
+                        else vm.setMediaMode(MediaMode.ALL)
+                    },
+                )
+            }
             openAlbum != null -> key(openAlbum.id) {
                 ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
             }
@@ -246,6 +267,40 @@ private fun FolderSetupScreen(onPick: () -> Unit, onLater: () -> Unit) {
         secondaryText = "Şimdi değil",
         onSecondary = onLater,
     )
+}
+
+/** İlk açılışta: kullanıcının videoları mı, fotoğrafları mı yoksa ikisini birden mi gezmek istediğini sorar */
+@Composable
+private fun MediaModeSetupScreen(videoCount: Int, photoCount: Int, onSelect: (MediaMode) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        AppLogo(size = 72.dp)
+        Spacer(Modifier.height(20.dp))
+        Text("Ne gezmek istersin?", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Fotoğraflarını da tıpkı videolar gibi Reels olarak dikey kaydırabilir ve sola kaydırarak " +
+                "temizleyebilirsin. İstediğin zaman ana ekrandan veya Ayarlar'dan değiştirebilirsin.",
+            color = Color.White.copy(alpha = 0.75f),
+            fontSize = 15.sp,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(28.dp))
+        Button(onClick = { onSelect(MediaMode.VIDEOS) }) {
+            Text("Sadece videolar (${formatCount(videoCount)})")
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = { onSelect(MediaMode.PHOTOS) }) {
+            Text("Sadece fotoğraflar (${formatCount(photoCount)})")
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = { onSelect(MediaMode.ALL) }) {
+            Text("Tümü · Fotoğraf + Video (${formatCount(videoCount + photoCount)})")
+        }
+    }
 }
 
 @Composable

@@ -25,9 +25,18 @@ data class VideoItem(
     /** Ekranda görüneceği haliyle (döndürülmüş) boyut; galeri bilmiyorsa 0 */
     val width: Int,
     val height: Int,
+    /** Fotoğraf ise true, video ise false */
+    val isPhoto: Boolean = false,
 ) {
     /** En / boy; bilinmiyorsa 0 */
     val aspectRatio: Float get() = if (width > 0 && height > 0) width.toFloat() / height else 0f
+}
+
+/** Uygulamada hangi medya türünün gösterileceği */
+enum class MediaMode(val title: String, val itemWord: String, val pluralWord: String) {
+    VIDEOS("Videolar", "video", "videolar"),
+    PHOTOS("Fotoğraflar", "fotoğraf", "fotoğraflar"),
+    ALL("Tümü", "içerik", "içerikler"),
 }
 
 data class Album(

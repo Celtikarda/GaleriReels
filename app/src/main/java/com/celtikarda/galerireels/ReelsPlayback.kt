@@ -191,6 +191,14 @@ class ReelsPlayback(
             lastPositionMs = 0L
             watchedMs = 0L
         }
+        if (item.isPhoto) {
+            if (!paused && !hostPaused) watchedMs += 250L
+            if (!viewCounted && watchedMs >= 1_500L) {
+                viewCounted = true
+                onViewed(item)
+            }
+            return
+        }
         val position = when {
             vlcItemId == item.id -> vlc?.timeMs
             else -> players[item.id]?.currentPosition
@@ -232,7 +240,7 @@ class ReelsPlayback(
     }
 
     private suspend fun decide(item: VideoItem) {
-        if (DecoderCheck.decision(item.id) != null) return
+        if (item.isPhoto || DecoderCheck.decision(item.id) != null) return
         withContext(Dispatchers.IO) { DecoderCheck.needsVlc(appContext, item) }
     }
 
@@ -256,7 +264,8 @@ class ReelsPlayback(
     /** Videoları oynatıcılara dağıtır; zaten hazırlanmış olanlara dokunmaz. */
     private fun assign() {
         val current = current
-        val exoItems = (listOfNotNull(current) + neighbors).filter { DecoderCheck.decision(it.id) == false }
+        val allVisible = listOfNotNull(current) + neighbors
+        val exoItems = allVisible.filter { !it.isPhoto && DecoderCheck.decision(it.id) == false }
         val kept = slots.filter { slot -> exoItems.any { it.id == slot.itemId } }
         val free = slots.filterNot { it in kept }.toMutableList()
         for (item in exoItems) {
@@ -265,9 +274,10 @@ class ReelsPlayback(
         free.forEach { it.clear() }
 
         players = slots.mapNotNull { slot -> slot.itemId?.let { it to slot.player } }.toMap()
-        renderedIds = renderedIds.filter { it in players || it == vlcItemId }.toSet()
+        val photoIds = allVisible.filter { it.isPhoto }.mapTo(HashSet()) { it.id }
+        renderedIds = renderedIds.filter { it in players || it == vlcItemId }.toSet() + photoIds
 
-        if (current != null && DecoderCheck.decision(current.id) == true) playVlc(current) else stopVlc()
+        if (current != null && !current.isPhoto && DecoderCheck.decision(current.id) == true) playVlc(current) else stopVlc()
         applyPlaying()
         // Önceden hazırlanmış video: ilk karesi zaten ekranda
         if (current != null && current.id in renderedIds) OpenTimer.firstFrame(current.id, "hazır")

@@ -57,6 +57,7 @@ import coil3.compose.AsyncImage
 import com.celtikarda.galerireels.Album
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
+import com.celtikarda.galerireels.MediaMode
 import com.celtikarda.galerireels.Memories
 import com.celtikarda.galerireels.MonthlyRecap
 import com.celtikarda.galerireels.R
@@ -73,6 +74,7 @@ fun AlbumsScreen(
     onOpenRecap: () -> Unit,
 ) {
     val tiles = vm.albumTiles()
+    val mode = vm.stats.mediaMode
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
@@ -113,10 +115,12 @@ fun AlbumsScreen(
                     }
                 }
                 Text(
-                    "${formatCount(vm.videoCount)} video · ${formatCount(vm.folderCount)} klasör",
+                    "${formatCount(vm.videoCount)} ${mode.itemWord} · ${formatCount(vm.folderCount)} klasör",
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 14.sp,
                 )
+                Spacer(Modifier.height(10.dp))
+                MediaModeSelector(current = mode, onSelect = vm::setMediaMode)
                 if (partialAccess) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -145,6 +149,7 @@ fun AlbumsScreen(
                 val unwatched = vm.unwatched()
                 val duplicates = vm.duplicateCopies
                 CleanupCard(
+                    mode = mode,
                     unwatchedCount = unwatched.size,
                     unwatchedBytes = unwatched.sumOf { it.sizeBytes },
                     cleanedToday = vm.stats.cleanedToday,
@@ -217,7 +222,7 @@ fun AlbumsScreen(
         }
 
         items(collections, key = { it.id }) { album ->
-            AlbumTile(album, onClick = { vm.open(album) })
+            AlbumTile(album, itemWord = mode.itemWord, onClick = { vm.open(album) })
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -253,6 +258,7 @@ fun AlbumsScreen(
         items(folders, key = { it.id }) { album ->
             AlbumTile(
                 album = album,
+                itemWord = mode.itemWord,
                 onClick = { vm.open(album) },
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -305,6 +311,39 @@ fun AlbumsScreen(
     }
 }
 
+/** Ana ekranda Videolar / Fotoğraflar / Tümü arasında hızlı geçiş sekmesi */
+@Composable
+private fun MediaModeSelector(current: MediaMode, onSelect: (MediaMode) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF1C1C1E))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        MediaMode.entries.forEach { entry ->
+            val selected = entry == current
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (selected) InstaBlue else Color.Transparent)
+                    .clickable { onSelect(entry) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    entry.title,
+                    color = if (selected) Color.White else Color.White.copy(alpha = 0.7f),
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
 /** Aylık özet kartının ana ekrandaki kısa girişi */
 @Composable
 private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
@@ -349,9 +388,10 @@ private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
     }
 }
 
-/** Temizlik modunun girişi: hiç izlenmeyenlerin kapladığı yer, bugün temizlenen ve kopya videolar */
+/** Temizlik modunun girişi: hiç izlenmeyenlerin kapladığı yer, bugün temizlenen ve kopya içerikler */
 @Composable
 private fun CleanupCard(
+    mode: MediaMode,
     unwatchedCount: Int,
     unwatchedBytes: Long,
     cleanedToday: Long,
@@ -360,6 +400,7 @@ private fun CleanupCard(
     onStart: () -> Unit,
     onStartDuplicates: () -> Unit,
 ) {
+    val actionWord = if (mode == MediaMode.PHOTOS) "bakmadığın" else "izlemediğin"
     Column(
         Modifier
             .fillMaxWidth()
@@ -387,9 +428,9 @@ private fun CleanupCard(
                 Text("Temizlik", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (unwatchedCount > 0) {
-                        "Hiç izlemediğin ${formatCount(unwatchedCount)} video ${formatSize(unwatchedBytes)} yer kaplıyor"
+                        "Hiç $actionWord ${formatCount(unwatchedCount)} ${mode.itemWord} ${formatSize(unwatchedBytes)} yer kaplıyor"
                     } else {
-                        "Artık istemediğin videoları sil, yer aç"
+                        "Artık istemediğin içerikleri sil, yer aç"
                     },
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 13.sp,
@@ -416,7 +457,7 @@ private fun CleanupCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Benzer / kopya ${formatCount(duplicateCount)} video (${formatSize(duplicateBytes)}) bulundu",
+                    "Benzer / kopya ${formatCount(duplicateCount)} ${mode.itemWord} (${formatSize(duplicateBytes)}) bulundu",
                     color = FavoriteYellow,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -494,10 +535,10 @@ private fun RecentTile(video: VideoItem, views: Int, onClick: () -> Unit) {
     }
 }
 
-/** Telefonun galerisindeki gibi: kare kapak, altında klasör adı ve video sayısı */
+/** Telefonun galerisindeki gibi: kare kapak, altında klasör adı ve içerik sayısı */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AlbumTile(album: Album, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -531,7 +572,7 @@ private fun AlbumTile(album: Album, onClick: () -> Unit, onLongClick: (() -> Uni
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text("${formatCount(album.count)} video", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+        Text("${formatCount(album.count)} $itemWord", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
     }
 }
 

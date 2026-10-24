@@ -305,13 +305,13 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 albumName = vm.albumNameOf(item),
                 avatar = vm.coverOf(item.albumId) ?: item,
                 onTogglePause = {
-                    if (active) {
+                    if (active && !item.isPhoto) {
                         userPaused = !userPaused
                         playback.setPaused(userPaused)
                     }
                 },
                 onSpeedHold = { holding ->
-                    if (active) {
+                    if (active && !item.isPhoto) {
                         if (holding && userPaused) {
                             userPaused = false
                             playback.setPaused(false)
@@ -328,7 +328,11 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onToggleLike = { vm.toggleLike(item) },
                 onViewsTap = {
                     val views = vm.viewsOf(item)
-                    chipText = if (views == 0) "Bu videoyu henüz izlemedin" else "Bu videoyu ${formatCount(views)} kez izledin"
+                    chipText = if (item.isPhoto) {
+                        if (views == 0) "Bu fotoğrafa henüz bakmadın" else "Bu fotoğrafa ${formatCount(views)} kez baktın"
+                    } else {
+                        if (views == 0) "Bu videoyu henüz izlemedin" else "Bu videoyu ${formatCount(views)} kez izledin"
+                    }
                     chipTick++
                 },
                 onShare = { shareVideo(context, item) },
@@ -566,7 +570,7 @@ private fun ReelPage(
                             onTap = { tap() },
                             onLongPress = { offset ->
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val isEdge = offset.x < size.width * 0.25f || offset.x > size.width * 0.75f
+                                val isEdge = !item.isPhoto && (offset.x < size.width * 0.25f || offset.x > size.width * 0.75f)
                                 if (isEdge) {
                                     speedHold(true)
                                 } else {
@@ -624,6 +628,7 @@ private fun ReelPage(
                 )
 
                 ActionRail(
+                    isPhoto = item.isPhoto,
                     liked = liked,
                     favorite = favorite,
                     views = views,
@@ -646,7 +651,7 @@ private fun ReelPage(
                         .graphicsLayer { alpha = uiAlpha },
                 )
 
-                if (active) {
+                if (active && !item.isPhoto) {
                     VideoProgress(
                         progress = {
                             when {
@@ -708,6 +713,17 @@ private fun CleanupBar(count: Int, bytes: Long, onUndo: () -> Unit, onDelete: ()
  */
 @Composable
 private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, aspectRatio: Float, firstFrameShown: Boolean) {
+    if (item.isPhoto) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            AsyncImage(
+                model = item.uri,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        return
+    }
     // Galeri boyutu bilmiyorsa ve video VLC'deyse oranı VLC'den öğreniriz
     var vlcAspect by remember(item.id) { mutableFloatStateOf(0f) }
     val ratio = if (aspectRatio > 0f) aspectRatio else vlcAspect
@@ -829,7 +845,12 @@ private fun BottomInfo(item: VideoItem, albumName: String, avatar: VideoItem, fa
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "♫  Orijinal ses · ${formatDuration(item.durationMs)}",
+            if (item.isPhoto) {
+                val dims = if (item.width > 0) "${item.width} × ${item.height} · " else ""
+                "📷  Fotoğraf · $dims${formatSize(item.sizeBytes)}"
+            } else {
+                "♫  Orijinal ses · ${formatDuration(item.durationMs)}"
+            },
             color = Color.White.copy(alpha = 0.9f),
             fontSize = 13.sp,
             maxLines = 1,
@@ -864,6 +885,7 @@ private fun Avatar(cover: VideoItem, modifier: Modifier) {
 
 @Composable
 private fun ActionRail(
+    isPhoto: Boolean = false,
     liked: Boolean,
     favorite: Boolean,
     views: Int,
@@ -919,17 +941,19 @@ private fun ActionRail(
             onClick = onViews,
         )
         RailButton(icon = R.drawable.ic_send, tint = Color.White, label = "Paylaş", onClick = onShare)
-        RailButton(
-            icon = if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_on,
-            tint = if (!muted && boosted) FavoriteYellow else Color.White,
-            label = when {
-                muted -> "Sessiz"
-                boosted -> "%200"
-                else -> "Ses"
-            },
-            onClick = onMute,
-        )
-        // Üç nokta: favoriler, ses yükseltme ve video bilgisi
+        if (!isPhoto) {
+            RailButton(
+                icon = if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_on,
+                tint = if (!muted && boosted) FavoriteYellow else Color.White,
+                label = when {
+                    muted -> "Sessiz"
+                    boosted -> "%200"
+                    else -> "Ses"
+                },
+                onClick = onMute,
+            )
+        }
+        // Üç nokta: favoriler, ses yükseltme ve video/fotoğraf bilgisi
         Box {
             RailButton(icon = R.drawable.ic_more_vert, tint = Color.White, label = "", description = "Diğer", onClick = { menuOpen = true })
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -949,36 +973,38 @@ private fun ActionRail(
                         },
                     )
                 }
+                if (!isPhoto) {
+                    DropdownMenuItem(
+                        text = { Text(if (boosted) "Normal ses (%100)" else "Sesi yükselt (%200)") },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_volume_on),
+                                contentDescription = null,
+                                tint = if (boosted) FavoriteYellow else Color.White,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onBoost()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (backgroundPlay) "Arka planda oynat: Açık" else "Arka planda oynat: Kapalı") },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_play),
+                                contentDescription = null,
+                                tint = if (backgroundPlay) CleanupGreen else Color.White,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onBackgroundPlay()
+                        },
+                    )
+                }
                 DropdownMenuItem(
-                    text = { Text(if (boosted) "Normal ses (%100)" else "Sesi yükselt (%200)") },
-                    leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.ic_volume_on),
-                            contentDescription = null,
-                            tint = if (boosted) FavoriteYellow else Color.White,
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onBoost()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(if (backgroundPlay) "Arka planda oynat: Açık" else "Arka planda oynat: Kapalı") },
-                    leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.ic_play),
-                            contentDescription = null,
-                            tint = if (backgroundPlay) CleanupGreen else Color.White,
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onBackgroundPlay()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Video bilgisi") },
+                    text = { Text(if (isPhoto) "Fotoğraf bilgisi" else "Video bilgisi") },
                     leadingIcon = { Icon(painterResource(R.drawable.ic_info), contentDescription = null, tint = Color.White) },
                     onClick = {
                         menuOpen = false
@@ -1000,19 +1026,19 @@ private fun VideoInfoDialog(item: VideoItem, views: Int, liked: Boolean, favorit
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Tamam") } },
-        title = { Text("Video bilgisi") },
+        title = { Text(if (item.isPhoto) "Fotoğraf bilgisi" else "Video bilgisi") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 InfoRow("Ad", item.name)
                 InfoRow("Klasör", item.albumPath.ifEmpty { "—" })
                 InfoRow("Boyut", formatSize(item.sizeBytes))
                 if (item.width > 0) InfoRow("Çözünürlük", "${item.width} × ${item.height}")
-                InfoRow("Süre", formatDuration(item.durationMs))
+                if (!item.isPhoto) InfoRow("Süre", formatDuration(item.durationMs))
                 InfoRow("Tarih", formatDate(item.dateMillis))
-                InfoRow("İzlenme", "${formatCount(views)} kez")
+                InfoRow(if (item.isPhoto) "Görüntülenme" else "İzlenme", "${formatCount(views)} kez")
                 InfoRow("Beğeni", if (liked) "Beğendin" else "—")
                 InfoRow("Favori", if (favorite) "Evet" else "Hayır")
-                InfoRow("Oynatıcı", engine)
+                if (!item.isPhoto) InfoRow("Oynatıcı", engine)
             }
         },
     )
@@ -1225,7 +1251,7 @@ private fun VideoProgress(progress: () -> Float, durationMs: Long, onSeek: (Floa
 
 private fun shareVideo(context: Context, item: VideoItem) {
     val send = Intent(Intent.ACTION_SEND).apply {
-        type = item.mimeType ?: "video/*"
+        type = item.mimeType ?: if (item.isPhoto) "image/*" else "video/*"
         putExtra(Intent.EXTRA_STREAM, item.uri)
         clipData = ClipData.newRawUri(null, item.uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

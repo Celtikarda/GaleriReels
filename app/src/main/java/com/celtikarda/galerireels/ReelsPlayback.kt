@@ -30,6 +30,7 @@ import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.extractor.DefaultExtractorsFactory
 import android.os.Handler
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,6 +89,9 @@ class ReelsPlayback(
     private var boosted = false
     /** Uzun basılı tutunca 2x oynatma hızı */
     private var speed = 1f
+    /** Uzun basılı tutunca 2x hızda geriye sarma */
+    private var rewinding = false
+    private var rewindJob: Job? = null
     private var released = false
     private var arrangeJob: Job? = null
     private var vlcRequested = false
@@ -114,6 +118,7 @@ class ReelsPlayback(
             paused = false
             error = null
             setSpeed(1f)
+            setRewinding(false)
             current?.let { OpenTimer.start(it.id) }
         }
         this.current = current
@@ -150,6 +155,47 @@ class ReelsPlayback(
         vlc?.setSpeed(speed)
     }
 
+    fun setRewinding(rewinding: Boolean) {
+        if (this.rewinding == rewinding) return
+        this.rewinding = rewinding
+        rewindJob?.cancel()
+        rewindJob = null
+        slots.forEach { it.updateScrubbing() }
+        applyPlaying()
+        if (rewinding) {
+            rewindJob = scope.launch {
+                var lastTickMs = SystemClock.uptimeMillis()
+                var targetPosMs: Long? = null
+                while (true) {
+                    delay(60)
+                    val item = current ?: break
+                    val now = SystemClock.uptimeMillis()
+                    val elapsedMs = (now - lastTickMs).coerceIn(1L, 250L)
+                    lastTickMs = now
+                    val stepMs = elapsedMs * 2L
+                    if (vlcItemId == item.id) {
+                        val engine = vlc ?: continue
+                        val duration = item.durationMs.takeIf { it > 0L } ?: continue
+                        val basePos = targetPosMs ?: (engine.progress * duration).toLong()
+                        val nextPos = (basePos - stepMs).coerceAtLeast(0L)
+                        targetPosMs = nextPos
+                        if (nextPos != basePos) {
+                            engine.seek((nextPos.toFloat() / duration).coerceIn(0f, 1f))
+                        }
+                    } else {
+                        val player = players[item.id] ?: continue
+                        val basePos = targetPosMs ?: player.currentPosition
+                        val nextPos = (basePos - stepMs).coerceAtLeast(0L)
+                        targetPosMs = nextPos
+                        if (nextPos != basePos) {
+                            player.seekTo(nextPos)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fun onHostPause() {
         hostPaused = true
         applyPlaying()
@@ -178,6 +224,7 @@ class ReelsPlayback(
     fun release() {
         released = true
         arrangeJob?.cancel()
+        rewindJob?.cancel()
         slots.forEach {
             it.releaseEnhancer()
             it.player.release()
@@ -212,6 +259,10 @@ class ReelsPlayback(
             vlcItemId == item.id -> vlc?.timeMs
             else -> players[item.id]?.currentPosition
         } ?: return
+        if (rewinding) {
+            lastPositionMs = position
+            return
+        }
         val delta = position - lastPositionMs
         if (position < lastPositionMs - 500 && position < 1500) {
             // Video başa sardı: yeni oynatma (çubuktan ortalara geri sarmak yeni izlenme sayılmaz)
@@ -299,7 +350,7 @@ class ReelsPlayback(
         slots.filter { it.itemId != currentId || currentId == null }.forEach { it.deactivate() }
         slots.firstOrNull { currentId != null && it.itemId == currentId }?.activate(play)
         if (vlcItemId != null) {
-            if (play) vlc?.resume() else vlc?.pause()
+            if (play && !rewinding) vlc?.resume() else vlc?.pause()
         }
     }
 
@@ -349,6 +400,7 @@ class ReelsPlayback(
             player.clearVideoSurface()
             player.playWhenReady = false
             updateSpeed()
+            updateScrubbing()
             player.setMediaItem(MediaItem.Builder().setUri(item.uri).setMediaId(item.id.toString()).build())
             player.prepare()
             updateBoost()
@@ -359,6 +411,7 @@ class ReelsPlayback(
             itemId = null
             active = false
             updateSpeed()
+            updateScrubbing()
             updateBoost()
             player.stop()
             player.clearMediaItems()
@@ -369,6 +422,7 @@ class ReelsPlayback(
             active = true
             player.playWhenReady = play
             updateSpeed()
+            updateScrubbing()
             updateBoost()
         }
 
@@ -376,6 +430,7 @@ class ReelsPlayback(
             if (!active) return
             active = false
             updateSpeed()
+            updateScrubbing()
             updateBoost()
             player.playWhenReady = false
             // Geri dönülünce baştan başlasın; beklerken de ilk karesi görünsün
@@ -386,6 +441,13 @@ class ReelsPlayback(
             val target = if (active) speed else 1f
             if (player.playbackParameters.speed != target) {
                 player.setPlaybackSpeed(target)
+            }
+        }
+
+        fun updateScrubbing() {
+            val target = active && rewinding
+            if (player.isScrubbingModeEnabled != target) {
+                player.setScrubbingModeEnabled(target)
             }
         }
 
@@ -460,7 +522,7 @@ class ReelsPlayback(
         // (2x hızda 60 Hz ekranda fazla karelerin atlanması normaldir, o sırada motor değiştirilmez)
         override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
             val name = decoderName ?: return
-            if (speed <= 1f && droppedFrames >= 50 && elapsedMs < 4000 && isSoftwareDecoder(name)) switchToVlc(eventTime)
+            if (speed <= 1f && !rewinding && droppedFrames >= 50 && elapsedMs < 4000 && isSoftwareDecoder(name)) switchToVlc(eventTime)
         }
 
         // Yazılım çözücü videoyu kapasitesinin üstünde bulduysa en baştan VLC'ye geç

@@ -49,6 +49,7 @@ enum class ThemeMode(val title: String) {
 /** Reels ekranında sol veya sağ kenara (%25) basılı tutulunca yapılacak işlem */
 enum class EdgeHoldAction(val title: String) {
     FAST_FORWARD("2x İleri"),
+    REWIND("2x Geri"),
     CLEAR_VIEW("Net görünüm"),
     NONE("Kapalı"),
 }

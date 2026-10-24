@@ -228,7 +228,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         private set
     /** Reels ekranında sol kenara (%25) basılı tutulunca yapılacak işlem */
     var leftHoldAction by mutableStateOf(
-        EdgeHoldAction.entries.firstOrNull { it.name == prefs.getString(KEY_LEFT_HOLD, null) } ?: EdgeHoldAction.FAST_FORWARD,
+        EdgeHoldAction.entries.firstOrNull { it.name == prefs.getString(KEY_LEFT_HOLD, null) } ?: EdgeHoldAction.REWIND,
     )
         private set
     /** Reels ekranında sağ kenara (%25) basılı tutulunca yapılacak işlem */

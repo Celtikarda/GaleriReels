@@ -166,6 +166,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var muted by rememberSaveable { mutableStateOf(false) }
     var boosted by rememberSaveable { mutableStateOf(false) }
     var fastForward by remember { mutableStateOf(false) }
+    var rewind by remember { mutableStateOf(false) }
     var clearView by remember { mutableStateOf(false) }
 
     // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
@@ -249,11 +250,13 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     LaunchedEffect(current?.id) {
         userPaused = false
         fastForward = false
+        rewind = false
         clearView = false
     }
     LaunchedEffect(muted) { playback.setMuted(muted) }
     LaunchedEffect(boosted) { playback.setBoosted(boosted) }
     LaunchedEffect(fastForward) { playback.setSpeed(if (fastForward) 2f else 1f) }
+    LaunchedEffect(rewind) { playback.setRewinding(rewind) }
 
     LaunchedEffect(chipTick) {
         if (chipTick == 0) return@LaunchedEffect
@@ -362,6 +365,15 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                         fastForward = holding
                     }
                 },
+                onRewindHold = { holding ->
+                    if (active && !item.isPhoto) {
+                        if (holding && userPaused) {
+                            userPaused = false
+                            playback.setPaused(false)
+                        }
+                        rewind = holding
+                    }
+                },
                 onClearHold = { holding ->
                     if (active) {
                         clearView = holding
@@ -464,7 +476,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
 
         AnimatedVisibility(
-            visible = fastForward || chipVisible,
+            visible = fastForward || rewind || chipVisible,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -473,8 +485,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             exit = fadeOut(),
         ) {
             Text(
-                if (fastForward) "2x Hız ⏩" else chipText,
-                color = if (fastForward) FavoriteYellow else Color.White,
+                when {
+                    fastForward -> "2x İleri ⏩"
+                    rewind -> "⏪ 2x Geri"
+                    else -> chipText
+                },
+                color = if (fastForward || rewind) FavoriteYellow else Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -552,6 +568,7 @@ private fun ReelPage(
     avatar: VideoItem,
     onTogglePause: () -> Unit,
     onSpeedHold: (Boolean) -> Unit,
+    onRewindHold: (Boolean) -> Unit,
     onClearHold: (Boolean) -> Unit,
     onDoubleTapLike: () -> Unit,
     onToggleLike: () -> Unit,
@@ -572,6 +589,7 @@ private fun ReelPage(
     var burstAt by remember { mutableStateOf(Offset.Zero) }
     val tap by rememberUpdatedState(onTogglePause)
     val speedHold by rememberUpdatedState(onSpeedHold)
+    val rewindHold by rememberUpdatedState(onRewindHold)
     val clearHold by rememberUpdatedState(onClearHold)
     val leftAction by rememberUpdatedState(leftHoldAction)
     val rightAction by rememberUpdatedState(rightHoldAction)
@@ -632,6 +650,10 @@ private fun ReelPage(
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         speedHold(true)
                                     }
+                                    EdgeHoldAction.REWIND -> {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        rewindHold(true)
+                                    }
                                     EdgeHoldAction.CLEAR_VIEW -> {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         clearHold(true)
@@ -644,6 +666,7 @@ private fun ReelPage(
                                     awaitRelease()
                                 } finally {
                                     speedHold(false)
+                                    rewindHold(false)
                                     clearHold(false)
                                 }
                             },

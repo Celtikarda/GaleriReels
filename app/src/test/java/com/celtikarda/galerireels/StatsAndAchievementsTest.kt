@@ -66,7 +66,7 @@ class StatsAndAchievementsTest {
             hiddenAlbums = setOf("whatsapp_bucket", "screen_recorder_bucket"),
             mediaMode = MediaMode.ALL,
             themeMode = ThemeMode.LIGHT,
-            leftHoldAction = EdgeHoldAction.CLEAR_VIEW,
+            leftHoldAction = EdgeHoldAction.REWIND,
             rightHoldAction = EdgeHoldAction.FAST_FORWARD,
         )
 
@@ -82,7 +82,7 @@ class StatsAndAchievementsTest {
         assertEquals(original.hiddenAlbums, parsed.hiddenAlbums)
         assertEquals(MediaMode.ALL, parsed.mediaMode)
         assertEquals(ThemeMode.LIGHT, parsed.themeMode)
-        assertEquals(EdgeHoldAction.CLEAR_VIEW, parsed.leftHoldAction)
+        assertEquals(EdgeHoldAction.REWIND, parsed.leftHoldAction)
         assertEquals(EdgeHoldAction.FAST_FORWARD, parsed.rightHoldAction)
     }
 

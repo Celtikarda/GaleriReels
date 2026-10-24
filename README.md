@@ -1,15 +1,16 @@
 # Galeri Reels
 
-Telefonun galerisindeki videoları Instagram Reels gibi, kaydırarak izlemeye yarayan Android uygulaması.
+Telefonun galerisindeki videoları ve fotoğrafları Instagram Reels gibi, kaydırarak gezmeye ve temizlemeye yarayan Android uygulaması.
 
-- Galerideki klasörleri gösterir, bir klasör seçince videoları tam ekran, alt alta kaydırarak oynatır
-- Çift dokunarak beğenme, basılı tutarak 2x hızlı oynatma, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
-- Her videonun beğenisi ve kaç kez izlendiği kaydedilir; kayıt seçilen bir klasörde de
+- Galerideki klasörleri gösterir; sadece **Videolar**, sadece **Fotoğraflar** ya da **Tümü** modunda tam ekran, alt alta kaydırarak oynatır/gösterir
+- Çift dokunarak beğenme, sağ/sol kenarlara basılı tutarak 2x hızlı oynatma, ortaya basılı tutarak net görünüm (arayüzü gizleme), paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
+- Her içeriğin beğenisi ve kaç kez izlendiği/bakıldığı kaydedilir; kayıt seçilen bir klasörde de
   (Documents › GaleriReels) tutulur, uygulama silinip yeniden kurulsa da geri gelir
-- Favoriler (telefonun galerisiyle ortak), Tarihte bugün anıları ve Temizlik modu: istemediğin videoları sola kaydırıp sil, algısal görüntü özeti (dHash) ile kopya/benzer videoları yakala, ne kadar yer açtığını gör
+- Favoriler (telefonun galerisiyle ortak), Tarihte bugün anıları ve Temizlik modu: istemediğin video ve fotoğrafları sola kaydırıp sil, algısal görüntü özeti (dHash) ile kopya/benzer videoları ve seri çekim fotoğrafları yakala, ne kadar yer açtığını gör
 - Aylık özet: bu ay en çok izlediğin videoları, izleme süreni ve en sevdiğin klasörü Spotify Wrapped tarzı kart olarak gör ve paylaş
 - Arka planda oynatma: ayarlar açıldığında ekran kapansa da ses devam eder ve bildirim çubuğundan oynat / durdur / sonraki kontrol edilir
 - Telefonun donanımının açamadığı büyük videolar (ör. 1440x1600@60) VLC motoruyla oynatılır
+- Ayarlar ve video hata ekranından sıfır internet izniyle (tarayıcı üzerinden cihaz/çözücü bilgilerini hazır doldurarak) sorun bildirme ve öneri gönderme
 
 Sadece Android (64-bit ARM, Android 8.0+). APK'yı [Releases](../../releases) sayfasından indirebilirsiniz.
 
@@ -65,6 +66,20 @@ kolaylaştırmak.
   - **Klasör gizleme / hariç tutma:** Ana ekranda herhangi bir klasöre basılı tutarak gizle; gizlenen
     klasörler "Tüm videolar", "Tarihte bugün" ve "Temizlik" önerilerine girmez, Ayarlar'dan istediğin
     zaman izlenebilir veya tekrar görünür yapılabilir.
+- [x] **1.1 Fotoğraf modu, kenardan 2x hız / ortada net görünüm ve sorun bildirimi**
+  - **Fotoğraf modu (`MediaMode`):** Uygulama ilk açıldığında **Sadece videolar**, **Sadece fotoğraflar**
+    ya da **Tümü (Fotoğraf + Video)** seçimi sorulur; ana ekrandaki sekmeden veya Ayarlar'dan her an
+    değiştirilebilir. Fotoğraflar da Reels gibi tam ekran dikey kaydırılır, çift dokunuşla beğenilir ve
+    Temizlik modunda sola kaydırılarak silinebilir.
+  - **Benzer / seri çekim fotoğraf tespiti (`DuplicateFinder`):** 64-bit algısal görüntü özeti (dHash)
+    ile yakın zamanda çekilmiş seri (burst) fotoğraflar veya WhatsApp kopyaları yakalanıp "Kopyaları incele"
+    altında sunulur.
+  - **YouTube tarzı sağ/sol kenardan 2x hız & ortada net görünüm:** Videonun sol veya sağ kenarına (%25)
+    basılı tutunca 2x hızlı oynatır; orta kısmına (%50) basılı tutunca üst/alt bilgileri ve butonları
+    gizleyerek videoyu/fotoğrafı net gösterir.
+  - **Sorun bildir / Öneri gönder:** Ayarlar ekranına ve açılmayan videoların hata kutusuna eklendi;
+    internet izni istemeden cihaz modeli, Android sürümü ve video çözücü bilgilerini hazır doldurarak
+    GitHub Issue sayfasını açar.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

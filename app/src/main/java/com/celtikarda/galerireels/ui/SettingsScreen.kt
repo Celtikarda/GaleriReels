@@ -1,8 +1,10 @@
 package com.celtikarda.galerireels.ui
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -48,10 +50,12 @@ import androidx.compose.ui.unit.sp
 import com.celtikarda.galerireels.DataFolder
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.celtikarda.galerireels.DecoderCheck
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.MediaRepository
 import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.VideoItem
 
 private val WarningOrange = Color(0xFFFFB020)
 
@@ -302,8 +306,61 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Text("Kaynak kodu", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.width(96.dp))
                 Text("github.com/Celtikarda/GaleriReels", color = InstaBlue, fontSize = 14.sp)
             }
+            Row(
+                Modifier
+                    .clickable { openIssueReport(context) }
+                    .padding(vertical = 3.dp)
+            ) {
+                Text("Geri bildirim", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text("Sorun bildir / Öneri gönder", color = InstaBlue, fontSize = 14.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = { openIssueReport(context) }) {
+                Text("Sorun bildir")
+            }
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * GitHub Issues sayfasını telefon modeli, Android sürümü ve varsa video hata bilgileriyle
+ * önceden doldurulmuş olarak açar (internet izni gerekmez, tarayıcıya yönlendirir).
+ */
+fun openIssueReport(context: Context, item: VideoItem? = null, errorText: String? = null) {
+    val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—"
+    val title = if (item != null) {
+        "Video oynatma sorunu (${item.width}x${item.height})"
+    } else {
+        "Sorun bildirimi / Öneri"
+    }
+    val body = buildString {
+        appendLine("### Açıklama")
+        if (errorText != null) {
+            appendLine("Karşılaşılan hata: $errorText")
+        } else {
+            appendLine("(Yaşadığın sorunu ya da önerini buraya yazabilirsin)")
+        }
+        appendLine()
+        appendLine("### Cihaz ve Uygulama Bilgisi")
+        appendLine("- **Uygulama sürümü:** $version")
+        appendLine("- **Telefon:** ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("- **Android:** ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+        if (item != null) {
+            val engine = when (DecoderCheck.decision(item.id)) {
+                true -> "VLC (yazılım)"
+                false -> "ExoPlayer (donanım)"
+                null -> "—"
+            }
+            appendLine("- **Format:** ${item.mimeType ?: "—"}")
+            appendLine("- **Çözünürlük:** ${item.width} × ${item.height}")
+            appendLine("- **Boyut / Süre:** ${formatSize(item.sizeBytes)} · ${formatDuration(item.durationMs)}")
+            appendLine("- **Oynatıcı:** $engine")
+        }
+    }
+    val url = "https://github.com/Celtikarda/GaleriReels/issues/new?title=${Uri.encode(title)}&body=${Uri.encode(body)}"
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 }
 

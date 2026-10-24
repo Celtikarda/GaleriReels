@@ -592,7 +592,14 @@ private fun ReelPage(
             )
 
             if (paused && !clearView) PlayIcon(Modifier.align(Alignment.Center))
-            if (error != null) ErrorBox(error, Modifier.align(Alignment.Center))
+            if (error != null) {
+                val ctx = LocalContext.current
+                ErrorBox(
+                    message = error,
+                    onReport = { openIssueReport(ctx, item = item, errorText = error) },
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
             if (burstId > 0) key(burstId) { HeartBurst(burstAt) }
 
             if (uiAlpha > 0f) {
@@ -1095,7 +1102,7 @@ private fun PlayIcon(modifier: Modifier) {
 }
 
 @Composable
-private fun ErrorBox(message: String, modifier: Modifier) {
+private fun ErrorBox(message: String, onReport: () -> Unit, modifier: Modifier) {
     Column(
         modifier
             .padding(32.dp)
@@ -1107,6 +1114,10 @@ private fun ErrorBox(message: String, modifier: Modifier) {
         Text("Bu video oynatılamadı", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         Text(message, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onReport) {
+            Text("Sorunu bildir", color = InstaBlue, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 

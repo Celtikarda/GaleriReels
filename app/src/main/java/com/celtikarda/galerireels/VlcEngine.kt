@@ -259,31 +259,41 @@ class VlcEngine private constructor(private val appContext: Context, private val
         /**
          * VLC'nin açılışı (kütüphaneleri yüklemesi) yarım saniye kadar sürüyor; bunu arka planda
          * yapar, motor hazır olunca ana iş parçacığında [onReady]'yi çağırır.
+         * VLC açılamazsa (ör. tanımadığı bir seçenek) uygulama çökmesin diye [onFailed] çağrılır.
          */
-        fun createAsync(context: Context, onReady: (VlcEngine) -> Unit) {
+        fun createAsync(context: Context, onReady: (VlcEngine) -> Unit, onFailed: () -> Unit) {
             val appContext = context.applicationContext
             thread(name = "vlc-init") {
-                val libVlc = LibVLC(
-                    appContext,
-                    arrayListOf(
-                        "--no-osd",
-                        "--avcodec-threads=0", // tüm çekirdekleri kullan
-                        // Yüksek çözünürlüklü videolarda ve 2x hızlı oynatmada yazılımsal çözmeyi
-                        // hızlandırır: referans olmayan karelerde ağır deblocking filtresini atlar ve
-                        // geride kalan kareleri çözücüye sokmadan düşürür
-                        "--avcodec-fast",
-                        "--avcodec-skip-loop-filter=1",
-                        "--drop-late-frames",
-                        "--skip-frames",
-                        // Altyazı / ekran yazısı yok. Açık kalınca VLC ilk videoda telefondaki bütün
-                        // yazı tiplerini tarıyor (vivo'da 342 dosya, 216 MB): önbellek yokken yarım
-                        // dakikadan uzun sürüyor ve video o bitene kadar açılmıyordu.
-                        "--no-spu",
-                        "--text-renderer=none",
-                    ),
-                )
+                val libVlc = try {
+                    LibVLC(appContext, options())
+                } catch (e: IllegalStateException) {
+                    Log.e(TAG, "LibVLC açılamadı", e)
+                    Handler(Looper.getMainLooper()).post { onFailed() }
+                    return@thread
+                }
                 Handler(Looper.getMainLooper()).post { onReady(VlcEngine(appContext, libVlc)) }
             }
         }
+
+        /**
+         * libVLC tanımadığı tek bir seçenekte bile hiç açılmıyor ("can't create LibVLC instance");
+         * seçenek adları libVLC 3.x'teki adlarla birebir aynı olmalı (vlc --help).
+         */
+        private fun options() = arrayListOf(
+            "--no-osd",
+            "--avcodec-threads=0", // tüm çekirdekleri kullan
+            // Yüksek çözünürlüklü videolarda ve 2x hızlı oynatmada yazılımsal çözmeyi
+            // hızlandırır: referans olmayan karelerde ağır deblocking filtresini atlar ve
+            // geride kalan kareleri çözücüye sokmadan düşürür
+            "--avcodec-fast",
+            "--avcodec-skiploopfilter=1",
+            "--drop-late-frames",
+            "--skip-frames",
+            // Altyazı / ekran yazısı yok. Açık kalınca VLC ilk videoda telefondaki bütün
+            // yazı tiplerini tarıyor (vivo'da 342 dosya, 216 MB): önbellek yokken yarım
+            // dakikadan uzun sürüyor ve video o bitene kadar açılmıyordu.
+            "--no-spu",
+            "--text-renderer=none",
+        )
     }
 }

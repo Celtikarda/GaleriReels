@@ -95,6 +95,8 @@ class ReelsPlayback(
     private var released = false
     private var arrangeJob: Job? = null
     private var vlcRequested = false
+    /** VLC bu cihazda açılamadı; VLC gerektiren videolar hata mesajı gösterir */
+    private var vlcFailed = false
 
     // İzlenme sayımı: hangi video, bu oynatmada sayıldı mı, son bakılan konum
     private var viewItemId: Long? = null
@@ -308,17 +310,24 @@ class ReelsPlayback(
     private fun prepareVlc() {
         if (vlcRequested) return
         vlcRequested = true
-        VlcEngine.createAsync(appContext) { engine ->
-            if (released) {
-                engine.release()
-            } else {
-                engine.setMuted(muted)
-                engine.setBoosted(boosted)
-                engine.setSpeed(speed)
-                vlc = engine
-                arrange()
-            }
-        }
+        VlcEngine.createAsync(
+            appContext,
+            onReady = { engine ->
+                if (released) {
+                    engine.release()
+                } else {
+                    engine.setMuted(muted)
+                    engine.setBoosted(boosted)
+                    engine.setSpeed(speed)
+                    vlc = engine
+                    arrange()
+                }
+            },
+            onFailed = {
+                vlcFailed = true
+                if (!released) arrange()
+            },
+        )
     }
 
     /** Videoları oynatıcılara dağıtır; zaten hazırlanmış olanlara dokunmaz. */
@@ -356,6 +365,10 @@ class ReelsPlayback(
 
     private fun playVlc(item: VideoItem) {
         if (vlcItemId == item.id) return
+        if (vlcFailed) {
+            error = item.id to "Bu video telefonun çözücüsüyle açılamıyor ve VLC başlatılamadı."
+            return
+        }
         // VLC henüz hazır değilse hazır olunca arrange() tekrar çağrılır
         val engine = vlc ?: return prepareVlc()
         stopVlc()

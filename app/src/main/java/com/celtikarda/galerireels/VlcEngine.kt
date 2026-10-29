@@ -13,6 +13,7 @@ import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IVLCVout
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
@@ -38,6 +39,10 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var muted = false
     private var boosted = false
     private var speed = 1f
+    /** Geri sarılıyor: ses kısılır (video ileri-geri atlarken cızırtı olmasın) */
+    private var scrubbing = false
+    /** Hızlı sarmada vlc-control kuyruğunda bekleyen hedef (ms); -1 = bekleyen yok */
+    private val pendingSeekMs = AtomicLong(-1L)
     /** Her play() / stop() ile artar; önceki videodan gecikmiş gelen olaylar ve işler yok sayılır */
     private var generation = 0
     /** VLC'ye verilmiş videonun numarası; olaylar ancak bu [generation] ile aynıysa geçerli */
@@ -95,7 +100,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
     }
 
     private fun targetVolume(): Int = when {
-        muted -> 0
+        muted || scrubbing -> 0
         boosted -> 200
         else -> 100
     }
@@ -189,6 +194,29 @@ class VlcEngine private constructor(private val appContext: Context, private val
         positionCache = fraction
         val gen = generation
         onControl { if (gen == controlGeneration) player.position = fraction }
+    }
+
+    /**
+     * Basılı tutarak geri sarmada kullanılır: en yakın ana kareye (keyframe) atlar. Tam isabetli
+     * sarma yazılımsal çözülen ağır videolarda ana kareden hedefe kadar her kareyi çözüyor; sık
+     * sık yapılınca bir sonraki sarma gelmeden hiçbir kare ekrana çıkmıyor ve video donuyordu.
+     * Kuyrukta bekleyen sarma varsa yenisi onun hedefini günceller, sarmalar birikmez.
+     */
+    fun seekFast(timeMs: Long) {
+        if (!hasMedia) return
+        timeCache = timeMs
+        val gen = generation
+        if (pendingSeekMs.getAndSet(timeMs) != -1L) return
+        onControl {
+            val target = pendingSeekMs.getAndSet(-1L)
+            if (gen == controlGeneration && target >= 0L) player.setTime(target, true)
+        }
+    }
+
+    fun setScrubbing(scrubbing: Boolean) {
+        if (this.scrubbing == scrubbing) return
+        this.scrubbing = scrubbing
+        if (hasMedia) applyVolume()
     }
 
     fun setMuted(muted: Boolean) {

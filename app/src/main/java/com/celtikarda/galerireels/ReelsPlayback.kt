@@ -163,27 +163,29 @@ class ReelsPlayback(
         rewindJob?.cancel()
         rewindJob = null
         slots.forEach { it.updateScrubbing() }
+        vlc?.setScrubbing(rewinding)
         applyPlaying()
         if (rewinding) {
             rewindJob = scope.launch {
                 var lastTickMs = SystemClock.uptimeMillis()
                 var targetPosMs: Long? = null
                 while (true) {
-                    delay(60)
+                    // VLC ana kareye atlıyor; daha sık sarınca ana kare çözülüp ekrana çıkmadan
+                    // yeni sarma geliyor. ExoPlayer'ın sarma (scrubbing) modu sık sarmayı kaldırıyor.
+                    delay(if (vlcItemId != null && vlcItemId == current?.id) 250 else 60)
                     val item = current ?: break
                     val now = SystemClock.uptimeMillis()
-                    val elapsedMs = (now - lastTickMs).coerceIn(1L, 250L)
+                    val elapsedMs = (now - lastTickMs).coerceIn(1L, 500L)
                     lastTickMs = now
                     val stepMs = elapsedMs * 2L
                     if (vlcItemId == item.id) {
                         val engine = vlc ?: continue
-                        val duration = item.durationMs.takeIf { it > 0L } ?: continue
-                        val basePos = targetPosMs ?: (engine.progress * duration).toLong()
+                        // VLC geri sarma sırasında oynamaya devam ediyor (duraklatılınca atlanan
+                        // kare ekrana çıkmıyor); hedef konum kendi saatimizle 2x geriye gider
+                        val basePos = targetPosMs ?: engine.timeMs
                         val nextPos = (basePos - stepMs).coerceAtLeast(0L)
                         targetPosMs = nextPos
-                        if (nextPos != basePos) {
-                            engine.seek((nextPos.toFloat() / duration).coerceIn(0f, 1f))
-                        }
+                        if (nextPos != basePos) engine.seekFast(nextPos)
                     } else {
                         val player = players[item.id] ?: continue
                         val basePos = targetPosMs ?: player.currentPosition
@@ -319,6 +321,7 @@ class ReelsPlayback(
                     engine.setMuted(muted)
                     engine.setBoosted(boosted)
                     engine.setSpeed(speed)
+                    engine.setScrubbing(rewinding)
                     vlc = engine
                     arrange()
                 }
@@ -359,7 +362,7 @@ class ReelsPlayback(
         slots.filter { it.itemId != currentId || currentId == null }.forEach { it.deactivate() }
         slots.firstOrNull { currentId != null && it.itemId == currentId }?.activate(play)
         if (vlcItemId != null) {
-            if (play && !rewinding) vlc?.resume() else vlc?.pause()
+            if (play) vlc?.resume() else vlc?.pause()
         }
     }
 

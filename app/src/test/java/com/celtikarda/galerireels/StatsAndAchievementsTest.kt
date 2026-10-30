@@ -29,6 +29,25 @@ class StatsAndAchievementsTest {
     }
 
     @Test
+    fun `begeni sayisi kaydedilir ve eski kayitlardaki begeni bir sayilir`() {
+        val counted = VideoStat(liked = true, likes = 5, likeChangedAt = 1000L)
+        val parsed = StatsStore.parse(StatsStore.toJson(SavedData(
+            videos = mapOf("a.mp4|1" to counted),
+            days = emptyMap(), activeDays = emptySet(), cleaned = emptyMap(), trash = emptyList(),
+            achievements = emptyMap(), hiddenAlbums = emptySet(),
+            mediaMode = null, themeMode = null, leftHoldAction = null, rightHoldAction = null,
+        )))
+        assertEquals(5, parsed.videos.getValue("a.mp4|1").likes)
+
+        // 1.3 öncesi dosya: "likes" alanı yok
+        val old = StatsStore.parse("""{"videos":{"b.mp4|2":{"liked":true,"likeChangedAt":1000,"views":3}}}""")
+        assertEquals(1, old.videos.getValue("b.mp4|2").likes)
+
+        val merged = StatsStore.merge(counted, VideoStat(liked = true, likes = 7, likeChangedAt = 2000L))
+        assertEquals(7, merged.likes)
+    }
+
+    @Test
     fun `bestStreak ve currentStreak ust uste gunleri dogru hesaplar`() {
         val days = setOf(
             "2026-10-01",

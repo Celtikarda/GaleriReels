@@ -342,7 +342,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 fullscreen = fullscreen,
                 leftHoldAction = vm.stats.leftHoldAction,
                 rightHoldAction = vm.stats.rightHoldAction,
-                liked = vm.isLiked(item),
+                liked = vm.isLikedNow(item),
+                likes = vm.likesOf(item),
                 favorite = vm.isFavorite(item),
                 views = vm.viewsOf(item),
                 muted = muted,
@@ -530,7 +531,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             VideoInfoDialog(
                 item = item,
                 views = vm.viewsOf(item),
-                liked = vm.isLiked(item),
+                likes = vm.likesOf(item),
                 favorite = vm.isFavorite(item),
                 onDismiss = { infoItem = null },
             )
@@ -555,7 +556,10 @@ private fun ReelPage(
     fullscreen: Boolean,
     leftHoldAction: EdgeHoldAction,
     rightHoldAction: EdgeHoldAction,
+    /** Bu açılışta beğenildi mi (kalp dolu) */
     liked: Boolean,
+    /** Toplam beğeni sayısı */
+    likes: Int,
     /** Telefonun galerisinde favori mi */
     favorite: Boolean,
     /** Bu videoyu kaç kez izledin */
@@ -715,6 +719,7 @@ private fun ReelPage(
                     isPhoto = item.isPhoto,
                     fullscreen = fullscreen,
                     liked = liked,
+                    likes = likes,
                     favorite = favorite,
                     views = views,
                     muted = muted,
@@ -985,6 +990,7 @@ private fun ActionRail(
     isPhoto: Boolean = false,
     fullscreen: Boolean = false,
     liked: Boolean,
+    likes: Int,
     favorite: Boolean,
     views: Int,
     muted: Boolean,
@@ -1022,11 +1028,11 @@ private fun ActionRail(
         if (onDelete != null) {
             RailButton(icon = R.drawable.ic_delete, tint = Color.White, label = "Sil", compact = fullscreen, onClick = onDelete)
         }
-        // Instagram'daki gibi kalbin altında beğeni sayısı (tek kullanıcı: 0 ya da 1)
+        // Instagram'daki gibi kalbin altında beğeni sayısı; kalp sadece bu açılışta beğenildiyse dolu
         RailButton(
             icon = if (liked) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline,
             tint = if (liked) LikeRed else Color.White,
-            label = if (liked) "1" else "0",
+            label = formatCount(likes),
             description = if (liked) "Beğeniyi geri al" else "Beğen",
             iconScale = likeScale.value,
             compact = fullscreen,
@@ -1118,7 +1124,7 @@ private fun ActionRail(
 }
 
 @Composable
-private fun VideoInfoDialog(item: VideoItem, views: Int, liked: Boolean, favorite: Boolean, onDismiss: () -> Unit) {
+private fun VideoInfoDialog(item: VideoItem, views: Int, likes: Int, favorite: Boolean, onDismiss: () -> Unit) {
     val engine = when (DecoderCheck.decision(item.id)) {
         true -> "VLC (yazılımla çözülüyor)"
         false -> "Telefonun çözücüsü"
@@ -1137,7 +1143,7 @@ private fun VideoInfoDialog(item: VideoItem, views: Int, liked: Boolean, favorit
                 if (!item.isPhoto) InfoRow("Süre", formatDuration(item.durationMs))
                 InfoRow("Tarih", formatDate(item.dateMillis))
                 InfoRow(if (item.isPhoto) "Görüntülenme" else "İzlenme", "${formatCount(views)} kez")
-                InfoRow("Beğeni", if (liked) "Beğendin" else "—")
+                InfoRow("Beğeni", if (likes > 0) "${formatCount(likes)} kez" else "—")
                 InfoRow("Favori", if (favorite) "Evet" else "Hayır")
                 if (!item.isPhoto) InfoRow("Oynatıcı", engine)
             }

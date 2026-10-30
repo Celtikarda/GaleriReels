@@ -31,7 +31,10 @@ import java.time.format.DateTimeFormatter
 
 /** Bir videonun kayıtlı bilgileri */
 data class VideoStat(
+    /** En az bir kez beğenildi (Beğendiklerin klasörü, temizlikte koruma) */
     val liked: Boolean = false,
+    /** Kaç kez beğenildi; kalp her açılışta yeniden basılabilir, her basış bir beğeni ekler */
+    val likes: Int = 0,
     /** Beğeninin en son değiştiği an; iki kayıt birleşirken yenisi geçerli olur */
     val likeChangedAt: Long = 0,
     val views: Int = 0,
@@ -274,9 +277,13 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         snapshotFlow { loaded }.first { it }
     }
 
-    fun setLiked(key: String, liked: Boolean) {
-        val now = System.currentTimeMillis()
-        stats[key] = stat(key).copy(liked = liked, likeChangedAt = now)
+    fun addLike(key: String) = changeLikes(key, +1)
+
+    fun removeLike(key: String) = changeLikes(key, -1)
+
+    private fun changeLikes(key: String, delta: Int) {
+        val likes = (stat(key).likes + delta).coerceAtLeast(0)
+        stats[key] = stat(key).copy(liked = likes > 0, likes = likes, likeChangedAt = System.currentTimeMillis())
         scheduleSave()
     }
 
@@ -563,6 +570,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                     key,
                     JSONObject()
                         .put("liked", s.liked)
+                        .put("likes", s.likes)
                         .put("likeChangedAt", s.likeChangedAt)
                         .put("views", s.views)
                         .put("lastViewedAt", s.lastViewedAt),
@@ -610,8 +618,11 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             val videos = root.optJSONObject("videos")
             val videoStats = videos?.keys()?.asSequence()?.associateWith { key ->
                 val o = videos.getJSONObject(key)
+                val liked = o.optBoolean("liked")
                 VideoStat(
-                    liked = o.optBoolean("liked"),
+                    liked = liked,
+                    // 1.3 öncesi dosyalarda sayı yok; beğenilmişse bir beğeni
+                    likes = o.optInt("likes", if (liked) 1 else 0),
                     likeChangedAt = o.optLong("likeChangedAt"),
                     views = o.optInt("views"),
                     lastViewedAt = o.optLong("lastViewedAt"),
@@ -656,6 +667,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         /** İki kaydı birleştirir: en çok izlenme, en son değişen beğeni */
         fun merge(a: VideoStat, b: VideoStat) = VideoStat(
             liked = if (b.likeChangedAt > a.likeChangedAt) b.liked else a.liked,
+            likes = if (b.likeChangedAt > a.likeChangedAt) b.likes else a.likes,
             likeChangedAt = maxOf(a.likeChangedAt, b.likeChangedAt),
             views = maxOf(a.views, b.views),
             lastViewedAt = maxOf(a.lastViewedAt, b.lastViewedAt),

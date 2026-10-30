@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -432,16 +433,33 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isLiked(item: VideoItem): Boolean = stats.stat(item.key).liked
 
+    /**
+     * Bu açılışta beğenilenler. Kaydedilmez: uygulama kapatılınca kalp boşalır ama beğeni sayısı
+     * kalır; yeniden beğenince sayı bir artar.
+     */
+    private val likedThisSession = mutableStateSetOf<String>()
+
+    /** Kalp dolu mu: bu açılışta beğenildi mi */
+    fun isLikedNow(item: VideoItem): Boolean = item.key in likedThisSession
+
+    fun likesOf(item: VideoItem): Int = stats.stat(item.key).likes
+
     fun viewsOf(item: VideoItem): Int = stats.stat(item.key).views
 
+    /** Kalbe basma: bu açılışta beğenilmediyse bir beğeni ekler, beğenildiyse onu geri alır */
     fun toggleLike(item: VideoItem) {
-        stats.setLiked(item.key, !isLiked(item))
+        if (likedThisSession.remove(item.key)) {
+            stats.removeLike(item.key)
+        } else {
+            likedThisSession.add(item.key)
+            stats.addLike(item.key)
+        }
         checkAchievements()
     }
 
     /** Çift dokunma: Instagram'daki gibi sadece beğenir, beğeniyi geri almaz */
     fun like(item: VideoItem) {
-        if (!isLiked(item)) stats.setLiked(item.key, true)
+        if (likedThisSession.add(item.key)) stats.addLike(item.key)
         checkAchievements()
     }
 
@@ -455,7 +473,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         val oldLikes = LikesStore(getApplication())
         val ids = oldLikes.load()
         if (ids.isEmpty()) return
-        all.filter { it.id in ids }.forEach { stats.setLiked(it.key, true) }
+        all.filter { it.id in ids && !isLiked(it) }.forEach { stats.addLike(it.key) }
         oldLikes.clear()
     }
 

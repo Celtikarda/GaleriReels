@@ -3,7 +3,7 @@
 Telefonun galerisindeki videoları ve fotoğrafları Instagram Reels gibi, kaydırarak gezmeye ve temizlemeye yarayan Android uygulaması.
 
 - Galerideki klasörleri gösterir; sadece **Videolar**, sadece **Fotoğraflar** ya da **Tümü** modunda tam ekran, alt alta kaydırarak oynatır/gösterir
-- Çift dokunarak beğenme, sağ/sol kenarlara basılı tutarak 2x hızlı oynatma, ortaya basılı tutarak net görünüm (arayüzü gizleme), yatay tam ekran (Landscape) izleme, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
+- Çift dokunarak beğenme (kaç kez beğendiğin sayılır), sağ/sol kenarlara basılı tutarak 2x hızlı oynatma, ortaya basılı tutarak net görünüm (arayüzü gizleme), yatay tam ekran (Landscape) izleme, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
 - Her içeriğin beğenisi ve kaç kez izlendiği/bakıldığı kaydedilir; kayıt seçilen bir klasörde de
   (Documents › GaleriReels) tutulur, uygulama silinip yeniden kurulsa da geri gelir
 - Favoriler (telefonun galerisiyle ortak), Tarihte bugün anıları ve Temizlik modu: istemediğin video ve fotoğrafları sola kaydırıp sil, algısal görüntü özeti (dHash) ile kopya/benzer videoları ve seri çekim fotoğrafları yakala, ne kadar yer açtığını gör
@@ -97,12 +97,16 @@ kolaylaştırmak.
     optimizasyonlarıyla 60 fps ve yüksek çözünürlüklü videolarda 2x takılmaları giderildi.
   - Sıfırdan kurulumda klasör seçilmeden önce başarım bildirimi çıkması düzeltildi.
 
-- [x] **1.3 Güncelleme bildirimi, daha akıcı 2x ve sadeleşen tam ekran**
+- [x] **1.3 Güncelleme bildirimi, beğeni sayacı ve sadeleşen tam ekran**
   - **Yeni sürüm bildirimi (`UpdateChecker`):** Uygulama en fazla 12 saatte bir GitHub'daki son sürüme
     bakar; yenisi varsa ana ekranda sürüm notlarıyla bir pencere açılır ve **İndir** ile APK iner.
     Eski sürümün üstüne kurulur, veriler silinmez. "Sonra" denirse aynı sürüm için tekrar sormaz;
     **Ayarlar › Uygulama › Güncellemeler**'den görülebilir, elle kontrol edilebilir ya da tamamen kapatılabilir.
     Bunun için uygulamaya internet izni eklendi; sadece sürüm numarası okunur, telefondan hiçbir şey gönderilmez.
+  - **Beğeni sayacı:** Kalbin altındaki sayı artık videoyu kaç kez beğendiğini gösterir. Uygulama
+    arkadan kapatılınca sayı kalır ama kalp boşalır; tekrar beğenince sayı bir artar. Aynı açılışta kalbe
+    yeniden basmak o beğeniyi geri alır. Eski beğeniler 1 olarak aktarılır; Beğendiklerin klasörü ve
+    temizlikte beğenilenlerin korunması aynen sürer.
   - **Tam ekran butonu tek yerde:** Sağdaki işlem sütunundaki ve üç nokta menüsündeki tekrar eden
     "Tam ekran" kaldırıldı; tam ekrana geçmek ve çıkmak için üst çubuktaki buton kullanılır.
 

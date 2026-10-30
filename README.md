@@ -11,7 +11,8 @@ Telefonun galerisindeki videoları ve fotoğrafları Instagram Reels gibi, kayd�
 - Arka planda oynatma: ayarlar açıldığında ekran kapansa da ses devam eder ve bildirim çubuğundan oynat / durdur / sonraki kontrol edilir
 - Telefonun donanımının açamadığı büyük videolar (ör. 1440x1600@60) VLC motoruyla oynatılır
 - **Gece (koyu), Aydınlık (açık) ve Sistem teması:** Ana ekrandaki güneş/ay simgesiyle ya da Ayarlar'dan tek dokunuşla tema geçişi (Reels oynatıcı ekranı her zaman sinema siyahı kalır)
-- Ayarlar ve video hata ekranından sıfır internet izniyle (tarayıcı üzerinden cihaz/çözücü bilgilerini hazır doldurarak) sorun bildirme ve öneri gönderme
+- Ayarlar ve video hata ekranından (tarayıcı üzerinden cihaz/çözücü bilgilerini hazır doldurarak) sorun bildirme ve öneri gönderme
+- **Güncelleme bildirimi:** Yeni sürüm çıkınca uygulama haber verir, tek dokunuşla APK'yı indirirsin. Uygulama internete sadece bunun için, GitHub'daki son sürüm numarasını okumak üzere bağlanır; videoların ve verilerin telefonundan çıkmaz. Ayarlar'dan kapatılabilir.
 
 Sadece Android (64-bit ARM, Android 8.0+). APK'yı [Releases](../../releases) sayfasından indirebilirsiniz.
 
@@ -34,7 +35,7 @@ kolaylaştırmak.
     Beğendiklerin ve favorilerin listeye hiç girmez. Silinenler Android'in çöp kutusuna gider:
     30 gün içinde Ayarlar'dan geri getirebilir ya da hemen kalıcı olarak silebilirsin.
   - Her videoyu hangi gün izlediğin de kaydedilmeye başladı (aylık özet ve başarımlar için).
-    Bu bilgi sadece senin telefonunda ve seçtiğin klasörde durur; uygulamanın internet izni yoktur.
+    Bu bilgi sadece senin telefonunda ve seçtiğin klasörde durur, hiçbir yere gönderilmez.
 - [x] **0.7 Yeni görünüm** · Klasörler 3 sütun, kare kapaklı ve adları altta (telefonun
   galerisi gibi); parlak videolarda da okunan yazılar; kararmayla başlayan videolarda simsiyah
   çıkan küçük resimler artık videonun içinden bir kareyle gösteriliyor.
@@ -95,6 +96,15 @@ kolaylaştırmak.
     sadece ekrandaki oynatıcıya hız uygulanması ve VLC `avcodec-fast` / `skip-loop-filter`
     optimizasyonlarıyla 60 fps ve yüksek çözünürlüklü videolarda 2x takılmaları giderildi.
   - Sıfırdan kurulumda klasör seçilmeden önce başarım bildirimi çıkması düzeltildi.
+
+- [x] **1.3 Güncelleme bildirimi, daha akıcı 2x ve sadeleşen tam ekran**
+  - **Yeni sürüm bildirimi (`UpdateChecker`):** Uygulama en fazla 12 saatte bir GitHub'daki son sürüme
+    bakar; yenisi varsa ana ekranda sürüm notlarıyla bir pencere açılır ve **İndir** ile APK iner.
+    Eski sürümün üstüne kurulur, veriler silinmez. "Sonra" denirse aynı sürüm için tekrar sormaz;
+    **Ayarlar › Uygulama › Güncellemeler**'den görülebilir, elle kontrol edilebilir ya da tamamen kapatılabilir.
+    Bunun için uygulamaya internet izni eklendi; sadece sürüm numarası okunur, telefondan hiçbir şey gönderilmez.
+  - **Tam ekran butonu tek yerde:** Sağdaki işlem sütunundaki ve üç nokta menüsündeki tekrar eden
+    "Tam ekran" kaldırıldı; tam ekrana geçmek ve çıkmak için üst çubuktaki buton kullanılır.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

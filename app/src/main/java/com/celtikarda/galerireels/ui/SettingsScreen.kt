@@ -5,11 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import androidx.compose.foundation.clickable
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -35,11 +36,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,9 +52,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.celtikarda.galerireels.DataFolder
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.celtikarda.galerireels.DataFolder
 import com.celtikarda.galerireels.DecoderCheck
 import com.celtikarda.galerireels.EdgeHoldAction
 import com.celtikarda.galerireels.GalleryViewModel
@@ -63,6 +65,7 @@ import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.ThemeMode
 import com.celtikarda.galerireels.TrashedVideo
 import com.celtikarda.galerireels.VideoItem
+import kotlinx.coroutines.launch
 
 private val WarningOrange = Color(0xFFFFB020)
 
@@ -403,6 +406,60 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             Spacer(Modifier.height(10.dp))
             OutlinedButton(onClick = { openIssueReport(context) }) {
                 Text("Sorun bildir")
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Card {
+            val updates = vm.updates
+            val update = updates.available
+            val scope = rememberCoroutineScope()
+            var showDialog by remember { mutableStateOf(false) }
+            Text("Güncellemeler", color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Açıkken uygulama yeni sürüm çıkınca haber verir. Bunun için sadece GitHub'daki son sürüm " +
+                    "numarasına bakar; telefonundan hiçbir bilgi göndermez.",
+                color = appColors.textSecondary,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            InfoLine("Bildirim", if (updates.enabled) "Açık" else "Kapalı")
+            if (update != null) {
+                Row(
+                    Modifier
+                        .clickable { showDialog = true }
+                        .padding(vertical = 3.dp)
+                ) {
+                    Text("Yeni sürüm", color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                    Text("${update.version} hazır, indir", color = InstaBlue, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (updates.enabled) {
+                    OutlinedButton(onClick = { updates.updateEnabled(false) }) { Text("Kapat") }
+                } else {
+                    Button(onClick = { updates.updateEnabled(true) }) { Text("Aç") }
+                }
+                OutlinedButton(
+                    enabled = !updates.checking,
+                    onClick = {
+                        scope.launch {
+                            val text = when (updates.check(force = true)) {
+                                true -> null
+                                false -> "En son sürümü kullanıyorsun ($version)"
+                                null -> "Bağlanılamadı, internet bağlantını kontrol et"
+                            }
+                            if (text == null) showDialog = true
+                            else Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) {
+                    Text(if (updates.checking) "Bakılıyor…" else "Şimdi kontrol et")
+                }
+            }
+            if (showDialog && update != null) {
+                UpdateDialog(update = update, onDismiss = { showDialog = false })
             }
         }
         Spacer(Modifier.height(24.dp))

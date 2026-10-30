@@ -20,14 +20,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -55,6 +60,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.celtikarda.galerireels.AppUpdate
 import com.celtikarda.galerireels.DataFolder
 import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaAccess
@@ -128,6 +134,11 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
 
     LaunchedEffect(openVideoId) {
         if (openVideoId != null) vm.openVideo(openVideoId)
+    }
+
+    // Yeni sürüm var mı; açılışı yavaşlatmasın diye videolar yüklendikten sonra
+    LaunchedEffect(vm.loaded) {
+        if (vm.loaded) vm.updates.check()
     }
 
     val openAlbum = vm.openAlbum
@@ -217,6 +228,13 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                         onOpenRecap = { showRecap = true },
                     )
                 }
+                // Video izlerken ve ilk kurulum ekranlarında araya girmesin; ana ekrana gelince gösterilir
+                val update = vm.updates.available
+                val onHome = vm.loaded && openAlbum == null && vm.stats.mediaModeAsked &&
+                    (vm.stats.folder != null || vm.stats.folderPromptDismissed)
+                if (update != null && vm.updates.showPrompt && onHome) {
+                    UpdateDialog(update = update, onDismiss = vm.updates::dismissPrompt)
+                }
                 // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar, özet) durum çubuğunun arkası
                 if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
 
@@ -280,7 +298,7 @@ private fun PermissionScreen(deniedBefore: Boolean, onRequest: () -> Unit, onOpe
         body = if (deniedBefore) {
             "İzin verilmedi. Pencere tekrar açılmazsa izni Ayarlar > İzinler > Fotoğraflar ve videolar kısmından açabilirsin."
         } else {
-            "Telefonundaki videoları dikey kaydırarak izlemek için galeri erişimi gerekiyor. Uygulamanın internet izni yok, hiçbir şey telefonundan çıkmaz."
+            "Telefonundaki videoları dikey kaydırarak izlemek için galeri erişimi gerekiyor. Videoların ve verilerin telefonundan hiçbir yere gönderilmez."
         },
         buttonText = "Galeriye izin ver",
         onButton = onRequest,
@@ -368,3 +386,51 @@ private fun MessageScreen(
         }
     }
 }
+
+/** GitHub'da yeni sürüm çıkınca bir kez gösterilir; "Sonra" denirse Ayarlar › Uygulama'da durur */
+@Composable
+fun UpdateDialog(update: AppUpdate, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = appColors.card,
+        titleContentColor = appColors.textPrimary,
+        textContentColor = appColors.textSecondary,
+        title = { Text("Yeni sürüm: ${update.version}", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                Text(update.title, color = appColors.textPrimary, fontWeight = FontWeight.SemiBold)
+                if (update.notes.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(plainNotes(update.notes), fontSize = 14.sp)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "İndirince APK'yı aç ve kur. Eski sürümün üstüne kurulur, beğenilerin ve izlenmelerin silinmez.",
+                    fontSize = 13.sp,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Sonra", color = appColors.textSecondary) }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismiss()
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl)))
+                }
+            ) {
+                Text("İndir", color = InstaBlue, fontWeight = FontWeight.Bold)
+            }
+        },
+    )
+}
+
+/** GitHub sürüm notlarındaki Markdown işaretlerini (## başlık, **kalın**, `kod`) düz yazıya çevirir */
+private fun plainNotes(markdown: String): String = markdown
+    .lines()
+    .joinToString("\n") { line -> if (line.startsWith("#")) line.trimStart('#', ' ') else line }
+    .replace("**", "")
+    .replace("`", "")
+    .trim()

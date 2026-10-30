@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Sadece yeni sürüm kontrolü: GitHub'daki son sürüm numarasını okur (UpdateChecker) -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".GaleriApp"

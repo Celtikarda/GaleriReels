@@ -407,7 +407,6 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     }
                 },
                 onInfo = { infoItem = item },
-                onToggleFullscreen = { fullscreen = !fullscreen },
                 onSeek = { fraction -> playback.seekTo(item, fraction) },
                 onDelete = if (cleanup) {
                     {
@@ -579,7 +578,6 @@ private fun ReelPage(
     onToggleBackgroundPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onInfo: () -> Unit,
-    onToggleFullscreen: () -> Unit,
     onSeek: (Float) -> Unit,
     /** Temizlik modunda: videoyu silinecekler listesine ekler (sola kaydırma ya da çöp kutusu) */
     onDelete: (() -> Unit)?,
@@ -729,7 +727,6 @@ private fun ReelPage(
                     onBoost = onToggleBoost,
                     onBackgroundPlay = onToggleBackgroundPlay,
                     onFavorite = onToggleFavorite,
-                    onFullscreen = onToggleFullscreen,
                     onInfo = onInfo,
                     onDelete = onDelete,
                     modifier = Modifier
@@ -1000,7 +997,6 @@ private fun ActionRail(
     onBoost: () -> Unit,
     onBackgroundPlay: () -> Unit,
     onFavorite: () -> Unit,
-    onFullscreen: () -> Unit,
     onInfo: () -> Unit,
     onDelete: (() -> Unit)?,
     modifier: Modifier,
@@ -1058,32 +1054,10 @@ private fun ActionRail(
                 onClick = onMute,
             )
         }
-        RailButton(
-            icon = if (fullscreen) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen,
-            tint = Color.White,
-            label = if (fullscreen) "Küçült" else "Tam ekran",
-            description = if (fullscreen) "Tam ekrandan çık" else "Tam ekran",
-            compact = fullscreen,
-            onClick = onFullscreen,
-        )
-        // Üç nokta: favoriler, ses yükseltme, tam ekran ve video/fotoğraf bilgisi
+        // Üç nokta: favoriler, ses yükseltme ve video/fotoğraf bilgisi
         Box {
             RailButton(icon = R.drawable.ic_more_vert, tint = Color.White, label = "", description = "Diğer", compact = fullscreen, onClick = { menuOpen = true })
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(if (fullscreen) "Tam ekrandan çık" else "Tam ekran (Yatay)") },
-                    leadingIcon = {
-                        Icon(
-                            painterResource(if (fullscreen) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen),
-                            contentDescription = null,
-                            tint = appColors.textPrimary,
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onFullscreen()
-                    },
-                )
                 if (MediaActions.favoritesSupported) {
                     DropdownMenuItem(
                         text = { Text(if (favorite) "Favorilerden çıkar" else "Favorilere ekle") },

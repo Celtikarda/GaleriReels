@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.util.Log
 import android.view.SurfaceView
 import org.videolan.libvlc.LibVLC
@@ -39,6 +40,8 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var muted = false
     private var boosted = false
     private var speed = 1f
+    /** 2x'e geçildiği an; bırakılınca görüntüyü sese eşitlemek gerekip gerekmediği için */
+    private var fastSinceMs = 0L
     /** Geri sarılıyor: ses kısılır (video ileri-geri atlarken cızırtı olmasın) */
     private var scrubbing = false
     /** Hızlı sarmada vlc-control kuyruğunda bekleyen hedef (ms); -1 = bekleyen yok */
@@ -66,7 +69,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
             onControl {
                 player.media?.let { media ->
                     media.stats?.let { s ->
-                        Log.i(TAG, "kare: çözülen=${s.decodedVideo} gösterilen=${s.displayedPictures} kaybolan=${s.lostPictures}")
+                        Log.i(TAG, "kare: çözülen=${s.decodedVideo} gösterilen=${s.displayedPictures} kaybolan=${s.lostPictures} sesKayıp=${s.lostAbuffers}")
                     }
                     media.release()
                 }
@@ -230,10 +233,22 @@ class VlcEngine private constructor(private val appContext: Context, private val
     }
 
     fun setSpeed(speed: Float) {
+        val wasFast = this.speed > 1f
         this.speed = speed
+        val now = SystemClock.uptimeMillis()
+        // Kısa basışlarda görüntü sesten kopmuyor; gereksiz sarma minik bir takılma yaratır
+        val resync = wasFast && speed <= 1f && now - fastSinceMs > RESYNC_AFTER_MS
+        if (!wasFast && speed > 1f) fastSinceMs = now
         if (!hasMedia) return
         val gen = generation
-        onControl { if (gen == controlGeneration) player.rate = speed }
+        onControl {
+            if (gen != controlGeneration) return@onControl
+            player.rate = speed
+            // Ağır videoda çözücü 2x'e yetişemeyince görüntü sesin gerisinde kalıyor
+            // (--no-drop-late-frames); sesin olduğu yere tam isabetli sarınca birikmiş
+            // geç kareler atılır ve görüntü hemen yetişir
+            if (resync) player.setTime(player.time, false)
+        }
     }
 
     private fun applyVolume() {
@@ -283,6 +298,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
 
     companion object {
         private const val TAG = "VlcEngine"
+        private const val RESYNC_AFTER_MS = 1500L
 
         /**
          * VLC'nin açılışı (kütüphaneleri yüklemesi) yarım saniye kadar sürüyor; bunu arka planda
@@ -311,12 +327,15 @@ class VlcEngine private constructor(private val appContext: Context, private val
             "--no-osd",
             "--avcodec-threads=0", // tüm çekirdekleri kullan
             // Yüksek çözünürlüklü videolarda ve 2x hızlı oynatmada yazılımsal çözmeyi
-            // hızlandırır: referans olmayan karelerde ağır deblocking filtresini atlar ve
-            // geride kalan kareleri çözücüye sokmadan düşürür
+            // hızlandırır: referans olmayan karelerde ağır deblocking filtresini atlar
             "--avcodec-fast",
             "--avcodec-skiploopfilter=1",
-            "--drop-late-frames",
-            "--skip-frames",
+            // Geç kalan kareleri atmak 2x'te ağır videoları (ör. AV1 1080p60) daha da
+            // takılgan yapıyordu: atılan kare yine çözülmüş oluyor, ekrana ~45 kare/sn çıkıyordu.
+            // Atmayınca ~88 kare/sn; görüntü sesin biraz gerisinde kalabiliyor, 2x bırakılınca
+            // setSpeed eşitliyor.
+            "--no-drop-late-frames",
+            "--no-skip-frames",
             // Altyazı / ekran yazısı yok. Açık kalınca VLC ilk videoda telefondaki bütün
             // yazı tiplerini tarıyor (vivo'da 342 dosya, 216 MB): önbellek yokken yarım
             // dakikadan uzun sürüyor ve video o bitene kadar açılmıyordu.

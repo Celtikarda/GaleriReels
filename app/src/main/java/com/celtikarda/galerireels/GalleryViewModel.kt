@@ -15,6 +15,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Beğeniler ve izlenmeler; uygulama silinse de kalsın diye kullanıcının seçtiği klasöre de yazılır */
     val stats = StatsStore(app, viewModelScope).also { it.load() }
+    /** GitHub'da yeni sürüm çıktı mı */
+    val updates = UpdateChecker(app)
     // Temizlikte silinince değişir; ekranlar yenilensin diye gözlenebilir
     private var allVideos by mutableStateOf<List<VideoItem>>(emptyList())
     private var allPhotos by mutableStateOf<List<VideoItem>>(emptyList())

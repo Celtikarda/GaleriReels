@@ -473,6 +473,7 @@ private fun CleanupCard(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.width(12.dp))
                 Text("Kopyaları incele", color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }

@@ -457,6 +457,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         checkAchievements()
     }
 
+    /** Kalbe basılı tutunca: önceki açılışlarda verilmiş olsa da bir beğeniyi geri alır */
+    fun removeOneLike(item: VideoItem) {
+        likedThisSession.remove(item.key)
+        stats.removeLike(item.key)
+    }
+
+    /** Bütün beğenileri siler; video Beğendiklerin'den çıkar, temizlikte artık korunmaz */
+    fun clearLikes(item: VideoItem) {
+        likedThisSession.remove(item.key)
+        stats.clearLikes(item.key)
+    }
+
     /** Çift dokunma: Instagram'daki gibi sadece beğenir, beğeniyi geri almaz */
     fun like(item: VideoItem) {
         if (likedThisSession.add(item.key)) stats.addLike(item.key)

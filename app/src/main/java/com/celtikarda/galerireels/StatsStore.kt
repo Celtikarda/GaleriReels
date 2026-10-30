@@ -281,6 +281,8 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
 
     fun removeLike(key: String) = changeLikes(key, -1)
 
+    fun clearLikes(key: String) = changeLikes(key, -stat(key).likes)
+
     private fun changeLikes(key: String, delta: Int) {
         val likes = (stat(key).likes + delta).coerceAtLeast(0)
         stats[key] = stat(key).copy(liked = likes > 0, likes = likes, likeChangedAt = System.currentTimeMillis())

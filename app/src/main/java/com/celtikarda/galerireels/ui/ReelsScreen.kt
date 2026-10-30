@@ -24,6 +24,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -186,6 +187,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
     }
     var infoItem by remember { mutableStateOf<VideoItem?>(null) }
+    // Tüm beğenileri kaldırmadan önce onay
+    var pendingClearLikes by remember { mutableStateOf<VideoItem?>(null) }
     val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val toggleBackgroundPlay: () -> Unit = {
         val nextState = !vm.stats.backgroundPlay
@@ -382,6 +385,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 },
                 onDoubleTapLike = { vm.like(item) },
                 onToggleLike = { vm.toggleLike(item) },
+                onRemoveOneLike = {
+                    vm.removeOneLike(item)
+                    chipText = "Bir beğeni geri alındı"
+                    chipTick++
+                },
+                onClearLikes = { pendingClearLikes = item },
                 onViewsTap = {
                     val views = vm.viewsOf(item)
                     chipText = if (item.isPhoto) {
@@ -527,6 +536,39 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             )
         }
 
+        pendingClearLikes?.let { item ->
+            AlertDialog(
+                onDismissRequest = { pendingClearLikes = null },
+                containerColor = appColors.card,
+                titleContentColor = appColors.textPrimary,
+                textContentColor = appColors.textSecondary,
+                title = { Text("Tüm beğeniler kaldırılsın mı?", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "${formatCount(vm.likesOf(item))} beğeninin hepsi silinecek. " +
+                            "${if (item.isPhoto) "Fotoğraf" else "Video"} Beğendiklerin'den çıkar ve Temizlik'te artık korunmaz."
+                    )
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingClearLikes = null }) {
+                        Text("İptal", color = appColors.textSecondary)
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            vm.clearLikes(item)
+                            pendingClearLikes = null
+                            chipText = "Beğeniler kaldırıldı"
+                            chipTick++
+                        }
+                    ) {
+                        Text("Kaldır", color = LikeRed, fontWeight = FontWeight.Bold)
+                    }
+                },
+            )
+        }
+
         infoItem?.let { item ->
             VideoInfoDialog(
                 item = item,
@@ -575,6 +617,8 @@ private fun ReelPage(
     onClearHold: (Boolean) -> Unit,
     onDoubleTapLike: () -> Unit,
     onToggleLike: () -> Unit,
+    onRemoveOneLike: () -> Unit,
+    onClearLikes: () -> Unit,
     onViewsTap: () -> Unit,
     onShare: () -> Unit,
     onToggleMute: () -> Unit,
@@ -726,6 +770,8 @@ private fun ReelPage(
                     boosted = boosted,
                     backgroundPlay = backgroundPlay,
                     onLike = onToggleLike,
+                    onRemoveOneLike = onRemoveOneLike,
+                    onClearLikes = onClearLikes,
                     onViews = onViewsTap,
                     onShare = onShare,
                     onMute = onToggleMute,
@@ -997,6 +1043,8 @@ private fun ActionRail(
     boosted: Boolean,
     backgroundPlay: Boolean,
     onLike: () -> Unit,
+    onRemoveOneLike: () -> Unit,
+    onClearLikes: () -> Unit,
     onViews: () -> Unit,
     onShare: () -> Unit,
     onMute: () -> Unit,
@@ -1008,6 +1056,7 @@ private fun ActionRail(
     modifier: Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var likeMenuOpen by remember { mutableStateOf(false) }
 
     // Beğenince kalp hafifçe zıplar
     val likeScale = remember { Animatable(1f) }
@@ -1029,15 +1078,34 @@ private fun ActionRail(
             RailButton(icon = R.drawable.ic_delete, tint = Color.White, label = "Sil", compact = fullscreen, onClick = onDelete)
         }
         // Instagram'daki gibi kalbin altında beğeni sayısı; kalp sadece bu açılışta beğenildiyse dolu
-        RailButton(
-            icon = if (liked) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline,
-            tint = if (liked) LikeRed else Color.White,
-            label = formatCount(likes),
-            description = if (liked) "Beğeniyi geri al" else "Beğen",
-            iconScale = likeScale.value,
-            compact = fullscreen,
-            onClick = onLike,
-        )
+        // Basılı tutunca: önceki açılışlarda verilen beğenileri geri alma menüsü
+        Box {
+            RailButton(
+                icon = if (liked) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline,
+                tint = if (liked) LikeRed else Color.White,
+                label = formatCount(likes),
+                description = if (liked) "Beğeniyi geri al" else "Beğen",
+                iconScale = likeScale.value,
+                compact = fullscreen,
+                onClick = onLike,
+                onLongClick = if (likes > 0) ({ likeMenuOpen = true }) else null,
+            )
+            DropdownMenu(expanded = likeMenuOpen, onDismissRequest = { likeMenuOpen = false }) {
+                Text(
+                    "${formatCount(likes)} beğeni",
+                    color = appColors.textSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+                LikeRemovalItems(
+                    likes = likes,
+                    onRemoveOne = onRemoveOneLike,
+                    onClear = onClearLikes,
+                    close = { likeMenuOpen = false },
+                )
+            }
+        }
         RailButton(
             icon = R.drawable.ic_eye,
             tint = Color.White,
@@ -1078,6 +1146,14 @@ private fun ActionRail(
                             menuOpen = false
                             onFavorite()
                         },
+                    )
+                }
+                if (likes > 0) {
+                    LikeRemovalItems(
+                        likes = likes,
+                        onRemoveOne = onRemoveOneLike,
+                        onClear = onClearLikes,
+                        close = { menuOpen = false },
                     )
                 }
                 if (!isPhoto) {
@@ -1159,6 +1235,33 @@ private fun InfoRow(label: String, value: String) {
     }
 }
 
+/** Kalbe basılı tutunca ve üç nokta menüsünde: beğenileri geri alma seçenekleri */
+@Composable
+private fun LikeRemovalItems(likes: Int, onRemoveOne: () -> Unit, onClear: () -> Unit, close: () -> Unit) {
+    val icon = @Composable {
+        Icon(painterResource(R.drawable.ic_heart_outline), contentDescription = null, tint = appColors.textPrimary)
+    }
+    DropdownMenuItem(
+        text = { Text("Bir beğeniyi geri al (${formatCount(likes)} → ${formatCount(likes - 1)})") },
+        leadingIcon = icon,
+        onClick = {
+            close()
+            onRemoveOne()
+        },
+    )
+    // Tek beğeni varsa üstteki seçenek zaten hepsini kaldırır
+    if (likes > 1) {
+        DropdownMenuItem(
+            text = { Text("Tüm beğenileri kaldır") },
+            leadingIcon = icon,
+            onClick = {
+                close()
+                onClear()
+            },
+        )
+    }
+}
+
 @Composable
 private fun RailButton(
     icon: Int,
@@ -1168,15 +1271,23 @@ private fun RailButton(
     description: String = label,
     iconScale: Float = 1f,
     compact: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
 ) {
+    val haptic = LocalHapticFeedback.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(64.dp)
-            .clickable(
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
+                onLongClick = onLongClick?.let { longClick ->
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        longClick()
+                    }
+                },
             ),
     ) {
         Icon(

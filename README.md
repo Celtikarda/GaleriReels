@@ -110,6 +110,12 @@ kolaylaştırmak.
   - **Tam ekran butonu tek yerde:** Sağdaki işlem sütunundaki ve üç nokta menüsündeki tekrar eden
     "Tam ekran" kaldırıldı; tam ekrana geçmek ve çıkmak için üst çubuktaki buton kullanılır.
 
+- [x] **1.3.1 Beğenileri geri alma**
+  - Kalbe **basılı tutunca** açılan menüden ya da üç nokta menüsünden, önceki açılışlarda verilmiş olsa da
+    **bir beğeniyi geri alabilir** veya **tüm beğenileri kaldırabilirsin** (onay sorar). Beğenisi kalmayan
+    video Beğendiklerin'den çıkar ve Temizlik'te artık korunmaz.
+  - Temizlik kartındaki "… bulundu" yazısı ile "Kopyaları incele" arasına boşluk eklendi.
+
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki
   platforma göre yeniden düzenlenmesi gerekiyor. Android sürümü olgunlaşınca karar verilecek.

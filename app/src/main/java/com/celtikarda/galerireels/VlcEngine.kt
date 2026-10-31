@@ -34,6 +34,8 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private val main = Handler(Looper.getMainLooper())
 
     // Ana iş parçacığında kullanılanlar
+    /** VLC'nin görüntüyü çizdiği yüzey */
+    private var attachedView: SurfaceView? = null
     private var hasMedia = false
     private var pendingStart = false
     private var muted = false
@@ -105,7 +107,11 @@ class VlcEngine private constructor(private val appContext: Context, private val
         else -> 100
     }
 
-    fun play(uri: Uri, onFirstFrame: () -> Unit, onError: () -> Unit) {
+    /**
+     * [waitForView] true ise eldeki yüzey başka bir videonun sayfasında: video hazırlanır ama yeni
+     * yüzey bağlanana kadar başlamaz (eski yüzeye çizip onu kaldırırken beklemeye yol açmasın).
+     */
+    fun play(uri: Uri, onFirstFrame: () -> Unit, onError: () -> Unit, waitForView: Boolean = false) {
         val gen = ++generation
         readyGeneration = 0
         this.onFirstFrame = onFirstFrame
@@ -114,7 +120,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
         positionCache = 0f
         timeCache = 0L
         // Görüntü yüzeyi bağlanmadan başlarsa VLC görüntü çıkışı açamaz; yüzey hazır olunca başla
-        pendingStart = !vout.areViewsAttached()
+        pendingStart = waitForView || !vout.areViewsAttached()
         val startNow = !pendingStart
         val volume = targetVolume()
 
@@ -158,7 +164,8 @@ class VlcEngine private constructor(private val appContext: Context, private val
         onControl { if (gen == controlGeneration) player.play() }
     }
 
-    fun stop() {
+    /** [onStopped] VLC görüntü yüzeyini bıraktıktan sonra ana iş parçacığında çağrılır */
+    fun stop(onStopped: (() -> Unit)? = null) {
         generation++
         readyGeneration = 0
         main.removeCallbacks(statsLogger)
@@ -166,7 +173,10 @@ class VlcEngine private constructor(private val appContext: Context, private val
         pendingStart = false
         positionCache = 0f
         timeCache = 0L
-        onControl { stopPlayer() }
+        onControl {
+            stopPlayer()
+            onStopped?.let { main.post(it) }
+        }
     }
 
     /** vlc-control iş parçacığında: önceki videoyu durdurup dosyasını kapatır */
@@ -262,7 +272,10 @@ class VlcEngine private constructor(private val appContext: Context, private val
      * boyutlandırmak çağıranın işi.
      */
     fun attach(view: SurfaceView, width: Int, height: Int, onAspectRatio: (Float) -> Unit) {
+        // Önceki sayfanın yüzeyi hâlâ bağlıysa önce o bırakılır
+        if (vout.areViewsAttached() && attachedView !== view) detach()
         if (!vout.areViewsAttached()) {
+            attachedView = view
             vout.setVideoView(view)
             vout.attachViews { _, _, _, visibleWidth, visibleHeight, sarNum, sarDen ->
                 if (visibleWidth > 0 && visibleHeight > 0) {
@@ -276,6 +289,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
     }
 
     fun detach() {
+        attachedView = null
         if (vout.areViewsAttached()) vout.detachViews()
     }
 

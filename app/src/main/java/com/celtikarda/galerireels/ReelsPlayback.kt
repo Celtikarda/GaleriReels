@@ -80,6 +80,13 @@ class ReelsPlayback(
     /** Şu an VLC ile oynayan video */
     var vlcItemId by mutableStateOf<Long?>(null)
         private set
+    /**
+     * VLC'nin görüntü yüzeyinin durduğu sayfanın videosu. Video değişince yüzey hemen kaldırılmaz:
+     * Android yüzeyi kaldırırken VLC'nin onu bırakmasını ana iş parçacığında bekliyor, VLC o sırada
+     * daha duruyorsa kaydırmanın sonunda ekran 40–120 ms donuyordu. Yüzey VLC durduktan sonra kalkar.
+     */
+    var vlcViewItemId by mutableStateOf<Long?>(null)
+        private set
     /** Oynatılamayan video → kullanıcıya gösterilecek açıklama */
     var error by mutableStateOf<Pair<Long, String>?>(null)
         private set
@@ -478,6 +485,10 @@ class ReelsPlayback(
         val engine = vlc ?: return prepareVlc()
         stopVlc()
         vlcItemId = item.id
+        // Yüzey hâlâ önceki VLC videosunun sayfasındaysa o video durunca bu sayfaya geçer
+        // (bkz. stopVlc); bu video o zamana kadar hazırlanıp bekler
+        val viewBusy = vlcViewItemId != null && vlcViewItemId != item.id
+        if (!viewBusy) vlcViewItemId = item.id
         engine.play(
             item.uri,
             onFirstFrame = {
@@ -489,12 +500,17 @@ class ReelsPlayback(
                 }
             },
             onError = { error = item.id to "Dosya bozuk ya da gerçek bir video değil." },
+            waitForView = viewBusy,
         )
     }
 
     private fun stopVlc() {
         val id = vlcItemId ?: return
-        vlc?.stop()
+        vlc?.stop(onStopped = {
+            // VLC yüzeyi bıraktı: yüzey beklemeden kaldırılabilir, VLC ile sırada bekleyen video
+            // varsa onun sayfasına geçer (bu arada aynı video yeniden açıldıysa yerinde kalır)
+            if (vlcViewItemId == id && vlcItemId != id) vlcViewItemId = vlcItemId
+        })
         vlcItemId = null
         renderedIds = renderedIds - id
     }

@@ -41,7 +41,10 @@ android {
         release {
             // keystore.properties yoksa (ör. GitHub'dan indirip derleyen biri) imzasız APK çıkar
             signingConfig = signingConfigs.findByName("release")
-            isMinifyEnabled = false
+            // R8: kullanılmayan kodu atar ve kalanı optimize eder; Compose ekranları belirgin
+            // biçimde akıcılaşır (vivo'da kaydırırken geciken kare oranı ölçülerek seçildi)
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {

@@ -363,7 +363,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 item = item,
                 active = active,
                 player = playback.players[item.id],
-                vlc = playback.vlc?.takeIf { playback.vlcItemId == item.id },
+                vlc = playback.vlc?.takeIf { playback.vlcViewItemId == item.id },
                 aspectRatio = item.aspectRatio.takeIf { it > 0f } ?: playback.aspectRatios[item.id] ?: 0f,
                 // Hazırda bekleyen komşu, kaydırırken küçük resmiyle görünür: bazı videoların
                 // ilk karesi simsiyah (kararmadan açılan kurgular), küçük resim daha iyi duruyor

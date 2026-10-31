@@ -130,6 +130,11 @@ kolaylaştırmak.
   - **Başarımlar sadeleşti:** 16 rozet 8'e indi; sadece farklı videolar izlemek, bütün klasörleri gezmek,
     beğeni, favori ve yer açmak sayılıyor. Uygulamayı her gün açma ve aynı videoyu tekrar izleme rozetleri kaldırıldı.
 
+- [x] **1.4.1 Daha akıcı kaydırma**
+  - VLC ile oynayan videolardan (ör. 1440p edit'ler) kaydırınca sonda yaşanan 40–130 ms'lik takılma
+    giderildi: video yüzeyi artık VLC durduktan sonra kaldırılıyor, art arda iki VLC videosunda da beklemiyor.
+  - Uygulama derlenirken kod küçültülüp optimize ediliyor (R8): ekranlar daha akıcı, APK 35,7 MB'tan 26 MB'a indi.
+
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki
   platforma göre yeniden düzenlenmesi gerekiyor. Android sürümü olgunlaşınca karar verilecek.

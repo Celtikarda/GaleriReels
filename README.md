@@ -116,6 +116,20 @@ kolaylaştırmak.
     video Beğendiklerin'den çıkar ve Temizlik'te artık korunmaz.
   - Temizlik kartındaki "… bulundu" yazısı ile "Kopyaları incele" arasına boşluk eklendi.
 
+- [x] **1.4 Oynatıcı araçları**
+  - **Kaldığın yerden devam:** 1 dakikadan uzun videolar bir dahaki açılışta bıraktığın yerden başlar
+    (ilk ve son 5 saniyede bırakılanlar baştan).
+  - **Sarma önizlemesi:** Alttaki çizgiyi sürüklerken o andaki kare küçük bir resim olarak görünür.
+  - **Oynatma hızı:** Üç nokta menüsünden 0,5x – 2x; uzun basılı tutunca 2x yine çalışır.
+  - **Bitince:** Videonun başa sarması ya da sıradaki videoya geçmesi seçilebilir (hatırlanır).
+  - **A-B tekrarı:** Menüden önce A'yı, sonra B'yi işaretle; video bu aralığı tekrarlar.
+  - **Kare kare:** Video durdurulunca ortada "‹ 1 kare" / "1 kare ›" butonları çıkar.
+  - **Kareyi fotoğraf olarak kaydet:** Ekrandaki kare tam çözünürlükte Resimler/GaleriReels'e kaydedilir (Android 10+).
+  - **Yatay tam ekranda ±10 sn:** Sol / sağ kenara çift dokununca 10 saniye geri / ileri; art arda
+    dokundukça toplanır. Ortaya çift dokunmak yine beğenir.
+  - **Başarımlar sadeleşti:** 16 rozet 8'e indi; sadece farklı videolar izlemek, bütün klasörleri gezmek,
+    beğeni, favori ve yer açmak sayılıyor. Uygulamayı her gün açma ve aynı videoyu tekrar izleme rozetleri kaldırıldı.
+
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki
   platforma göre yeniden düzenlenmesi gerekiyor. Android sürümü olgunlaşınca karar verilecek.

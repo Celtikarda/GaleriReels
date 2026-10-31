@@ -53,7 +53,9 @@ Commit e-postası: hesap e-postayı gizli tutuyor, repoda `user.email` GitHub'ı
 | `Memories` | Geçmiş yıllarda bugünlerde (±3 gün) çekilen videoları bulur ("Tarihte bugün") |
 | `DuplicateFinder` | 64-bit algısal görüntü özeti (dHash) ve Hamming mesafesiyle benzer/kopya video tespiti |
 | `BackgroundPlayService` | Arka planda oynatma ön plan servisi ve bildirim çubuğu kontrolleri (oynat/durdur/sonraki) |
-| `Achievements` | 16 başarım rozeti ve açılma koşulları |
+| `Achievements` | 8 başarım rozeti ve açılma koşulları |
+| `ResumeStore` | Uzun videolarda kaldığın yer (SharedPreferences, en fazla 300 video) |
+| `VideoFrames` | Sarma önizlemesindeki kareler (`SeekPreview`) ve kareyi fotoğraf olarak kaydetme |
 | `DataFolder` | Kullanıcının seçtiği klasör (SAF): `Documents/GaleriReels` |
 | `ReelsPlayback` | Oynatma: 3 ExoPlayer (önceki/ekrandaki/sonraki hazır bekler) + 1 VLC; %200 ses yükseltme; izlenme sayımı |
 | `DecoderCheck` | Video ExoPlayer ile mi VLC ile mi oynatılacak (dosya başlığı + telefonun çözücü sınırları) |

@@ -353,15 +353,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         val watched = stats.watchedKeys()
         val albumOfKey = all.associate { it.key to it.albumId }
         return AchievementInput(
-            totalViews = stats.totalViews.toLong(),
             watchedVideos = watched.size.toLong(),
-            maxViewsOfOne = stats.maxViewsOfOne.toLong(),
             likes = stats.totalLikes.toLong(),
             favorites = favoriteIds.size.toLong(),
             foldersVisited = watched.mapNotNullTo(HashSet()) { albumOfKey[it] }.size.toLong(),
             totalFolders = folders.size.toLong(),
             cleanedBytes = stats.cleanedTotal,
-            bestStreak = stats.bestStreak().toLong(),
         )
     }
 

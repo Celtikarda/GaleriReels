@@ -149,28 +149,23 @@ class StatsAndAchievementsTest {
     @Test
     fun `basarimlar kosullar saglaninca acilir`() {
         val input = AchievementInput(
-            totalViews = 120,
             watchedVideos = 55,
-            maxViewsOfOne = 10,
             likes = 12,
             favorites = 3,
             foldersVisited = 5,
             totalFolders = 5,
             cleanedBytes = 200L * 1024 * 1024,
-            bestStreak = 7,
         )
         val unlockedIds = achievements.filter { it.isUnlocked(input) }.map { it.id }.toSet()
 
-        assertTrue("first_view" in unlockedIds)
-        assertTrue("views_100" in unlockedIds)
-        assertFalse("views_1000" in unlockedIds)
+        assertEquals(8, achievements.size)
         assertTrue("watched_50" in unlockedIds)
-        assertTrue("repeat_10" in unlockedIds)
+        assertFalse("watched_250" in unlockedIds)
         assertTrue("likes_10" in unlockedIds)
         assertFalse("favorites_10" in unlockedIds)
         assertTrue("folders_all" in unlockedIds)
         assertTrue("clean_100mb" in unlockedIds)
-        assertTrue("streak_7" in unlockedIds)
+        assertFalse("clean_1gb" in unlockedIds)
     }
 
     @Test

@@ -196,6 +196,14 @@ class VlcEngine private constructor(private val appContext: Context, private val
         onControl { if (gen == controlGeneration) player.position = fraction }
     }
 
+    /** Tam olarak [timeMs]'ye sarar (kaldığın yer, ±10 sn, kare kare, A-B tekrarı) */
+    fun seekTo(timeMs: Long) {
+        if (!hasMedia) return
+        timeCache = timeMs
+        val gen = generation
+        onControl { if (gen == controlGeneration) player.setTime(timeMs, false) }
+    }
+
     /**
      * Basılı tutarak geri sarmada kullanılır: en yakın ana kareye (keyframe) atlar. Tam isabetli
      * sarma yazılımsal çözülen ağır videolarda ana kareden hedefe kadar her kareyi çözüyor; sık

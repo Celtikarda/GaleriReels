@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.roundToLong
 
 /**
  * Reels ekranının oynatma tarafı.
@@ -54,9 +55,14 @@ class ReelsPlayback(
     private val scope: CoroutineScope,
     /** Ekrandaki video bir kez izlendi sayıldı (bkz. [countViews]) */
     private val onViewed: (VideoItem) -> Unit,
+    /** Video kaldığı yerden ([ResumeStore]) başladı; konum ms */
+    private val onResumed: (VideoItem, Long) -> Unit,
+    /** "Bitince sonrakine geç" açıkken ekrandaki video bitti; sıradaki yoksa false döner ve video başa sarar */
+    private val onEnded: () -> Boolean,
 ) {
 
     private val appContext = context.applicationContext
+    private val resume = ResumeStore(appContext)
     // önceki, ekrandaki, sonraki
     private val slots = List(3) { PlayerSlot(createPlayer(appContext)) }
 
@@ -77,6 +83,9 @@ class ReelsPlayback(
     /** Oynatılamayan video → kullanıcıya gösterilecek açıklama */
     var error by mutableStateOf<Pair<Long, String>?>(null)
         private set
+    /** A-B tekrarı: A noktası ve (işaretlendiyse) B noktası, ms. Video değişince kapanır. */
+    var abLoop by mutableStateOf<Pair<Long, Long?>?>(null)
+        private set
 
     private var current: VideoItem? = null
     private var neighbors: List<VideoItem> = emptyList()
@@ -87,8 +96,13 @@ class ReelsPlayback(
     private var muted = false
     /** Kısık sesli videolar için %200 ses yükseltme */
     private var boosted = false
-    /** Uzun basılı tutunca 2x oynatma hızı */
+    /** Oynatma hızı: menüden seçilen hız ya da uzun basılı tutunca 2x */
     private var speed = 1f
+    /** Video bitince başa sarmak yerine sıradakine geçilir */
+    private var autoAdvance = false
+    // VLC videoyu kendisi başa sarıyor; bitişi konumun sondan başa dönmesinden anlarız
+    private var loopItemId: Long? = null
+    private var lastLoopPositionMs = 0L
     /** Uzun basılı tutunca 2x hızda geriye sarma */
     private var rewinding = false
     private var rewindJob: Job? = null
@@ -112,14 +126,21 @@ class ReelsPlayback(
                 countViews()
             }
         }
+        scope.launch {
+            while (true) {
+                delay(50)
+                checkLoop()
+            }
+        }
     }
 
     /** Sayfa oturunca çağrılır: [current] oynar, [neighbors] (önce sıradaki) ilk karesinde bekler. */
     fun show(current: VideoItem?, neighbors: List<VideoItem>) {
         if (current?.id != this.current?.id) {
+            savePosition()
             paused = false
             error = null
-            setSpeed(1f)
+            abLoop = null
             setRewinding(false)
             current?.let { OpenTimer.start(it.id) }
         }
@@ -200,7 +221,13 @@ class ReelsPlayback(
         }
     }
 
+    fun setAutoAdvance(autoAdvance: Boolean) {
+        this.autoAdvance = autoAdvance
+        slots.forEach { it.updateRepeat() }
+    }
+
     fun onHostPause() {
+        savePosition()
         hostPaused = true
         applyPlaying()
     }
@@ -222,10 +249,54 @@ class ReelsPlayback(
         }
     }
 
-    /** VLC ile oynayan videonun 0..1 arası konumu */
-    val vlcProgress: Float get() = vlc?.progress ?: 0f
+    /** Videonun şu anki konumu (ms); oynatıcısı yoksa null */
+    fun positionOf(item: VideoItem): Long? = when {
+        vlcItemId == item.id -> vlc?.timeMs
+        else -> players[item.id]?.currentPosition
+    }
+
+    /** Tam olarak [ms]'ye sarar (videonun sonunu geçmez) */
+    fun seekToMs(item: VideoItem, ms: Long) {
+        val end = item.durationMs.takeIf { it > 0 }?.let { it - 250 } ?: Long.MAX_VALUE
+        val target = ms.coerceAtMost(end).coerceAtLeast(0L)
+        if (vlcItemId == item.id) vlc?.seekTo(target) else players[item.id]?.seekTo(target)
+    }
+
+    /** Çift dokunarak ±10 sn gibi göreli sarma */
+    fun seekBy(item: VideoItem, deltaMs: Long) {
+        val position = positionOf(item) ?: return
+        seekToMs(item, position + deltaMs)
+    }
+
+    /** Durdurulmuş videoda bir kare ileri / geri (kare hızı bilinmiyorsa 30 fps varsayılır) */
+    fun stepFrame(item: VideoItem, forward: Boolean) {
+        val fps = slots.firstOrNull { it.itemId == item.id }?.frameRate?.takeIf { it > 0f } ?: 30f
+        val frameMs = (1000f / fps).roundToLong().coerceAtLeast(1L)
+        seekBy(item, if (forward) frameMs else -frameMs)
+    }
+
+    /**
+     * A-B tekrarında bir adım: kapalıysa A'yı, A varsa B'yi işaretler (B, A'dan önceyse ikisi yer
+     * değiştirir), ikisi de varsa kapatır.
+     */
+    fun cycleAbLoop(item: VideoItem) {
+        val position = positionOf(item) ?: return
+        val ab = abLoop
+        abLoop = when {
+            ab == null -> position to null
+            ab.second == null -> {
+                val a = minOf(ab.first, position)
+                val b = maxOf(ab.first, position)
+                // Neredeyse aynı nokta: B sayılmaz, A yeniden işaretlenir
+                if (b - a < 300) position to null else a to b
+            }
+            else -> null
+        }
+        abLoop?.let { (a, b) -> if (b != null) seekToMs(item, a) }
+    }
 
     fun release() {
+        savePosition()
         released = true
         arrangeJob?.cancel()
         rewindJob?.cancel()
@@ -235,6 +306,37 @@ class ReelsPlayback(
         }
         vlc?.release()
         vlc = null
+    }
+
+    /** Ekrandaki uzun videonun konumunu kaydeder; bir dahaki açılışta oradan devam eder */
+    private fun savePosition() {
+        val item = current ?: return
+        if (item.isPhoto) return
+        val position = positionOf(item) ?: return
+        resume.save(item, position)
+    }
+
+    /** A-B tekrarında B'ye gelince A'ya döner; VLC'de video bitince (başa sarınca) [onEnded] */
+    private fun checkLoop() {
+        if (released) return
+        val item = current ?: return
+        if (item.isPhoto || rewinding) return
+        val position = positionOf(item) ?: return
+        if (item.id != loopItemId) {
+            loopItemId = item.id
+            lastLoopPositionMs = position
+        }
+        val ab = abLoop
+        val b = ab?.second
+        if (ab != null && b != null && position >= b) {
+            seekToMs(item, ab.first)
+        } else if (autoAdvance && vlcItemId == item.id && item.durationMs > 0 &&
+            position < 1000 && lastLoopPositionMs > item.durationMs - 1500
+        ) {
+            // VLC zaten başa sardı; sıradaki yoksa öylece devam eder
+            onEnded()
+        }
+        lastLoopPositionMs = position
     }
 
     /**
@@ -381,6 +483,10 @@ class ReelsPlayback(
             onFirstFrame = {
                 renderedIds = renderedIds + item.id
                 OpenTimer.firstFrame(item.id, "vlc")
+                resume.get(item)?.let { ms ->
+                    engine.seekTo(ms)
+                    onResumed(item, ms)
+                }
             },
             onError = { error = item.id to "Dosya bozuk ya da gerçek bir video değil." },
         )
@@ -397,11 +503,15 @@ class ReelsPlayback(
     private inner class PlayerSlot(val player: ExoPlayer) : AnalyticsListener {
         var itemId: Long? = null
             private set
+        private var item: VideoItem? = null
         private var active = false
         private var decoderName: String? = null
         private var videoFormat: Format? = null
         private var enhancer: LoudnessEnhancer? = null
         private var enhancerSessionId = C.AUDIO_SESSION_ID_UNSET
+
+        /** Videonun kare hızı; başlıkta yazmıyorsa 0 */
+        val frameRate: Float get() = videoFormat?.frameRate ?: 0f
 
         init {
             player.addAnalyticsListener(this)
@@ -409,6 +519,7 @@ class ReelsPlayback(
 
         fun load(item: VideoItem) {
             itemId = item.id
+            this.item = item
             active = false
             decoderName = null
             videoFormat = null
@@ -417,6 +528,7 @@ class ReelsPlayback(
             player.playWhenReady = false
             updateSpeed()
             updateScrubbing()
+            updateRepeat()
             player.setMediaItem(MediaItem.Builder().setUri(item.uri).setMediaId(item.id.toString()).build())
             player.prepare()
             updateBoost()
@@ -425,9 +537,11 @@ class ReelsPlayback(
         fun clear() {
             if (itemId == null) return
             itemId = null
+            item = null
             active = false
             updateSpeed()
             updateScrubbing()
+            updateRepeat()
             updateBoost()
             player.stop()
             player.clearMediaItems()
@@ -435,11 +549,21 @@ class ReelsPlayback(
         }
 
         fun activate(play: Boolean) {
+            if (!active) restorePosition()
             active = true
             player.playWhenReady = play
             updateSpeed()
             updateScrubbing()
+            updateRepeat()
             updateBoost()
+        }
+
+        /** Uzun video ekrana gelince kaldığı yerden başlar */
+        private fun restorePosition() {
+            val item = item ?: return
+            val ms = resume.get(item) ?: return
+            player.seekTo(ms)
+            onResumed(item, ms)
         }
 
         fun deactivate() {
@@ -447,6 +571,7 @@ class ReelsPlayback(
             active = false
             updateSpeed()
             updateScrubbing()
+            updateRepeat()
             updateBoost()
             player.playWhenReady = false
             // Geri dönülünce baştan başlasın; beklerken de ilk karesi görünsün
@@ -465,6 +590,12 @@ class ReelsPlayback(
             if (player.isScrubbingModeEnabled != target) {
                 player.setScrubbingModeEnabled(target)
             }
+        }
+
+        /** Ekrandaki video "bitince sonrakine geç" açıkken bir kez oynar, diğerleri başa sarar */
+        fun updateRepeat() {
+            val target = if (active && autoAdvance) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ONE
+            if (player.repeatMode != target) player.repeatMode = target
         }
 
         fun updateBoost() {
@@ -490,6 +621,10 @@ class ReelsPlayback(
             runCatching { enhancer?.release() }
             enhancer = null
             enhancerSessionId = C.AUDIO_SESSION_ID_UNSET
+        }
+
+        override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
+            if (state == Player.STATE_ENDED && active && ownId(eventTime) != null && !onEnded()) player.seekTo(0)
         }
 
         override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {

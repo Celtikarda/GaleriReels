@@ -27,6 +27,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,6 +83,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -111,10 +113,15 @@ import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.ReelsPlayback
+import com.celtikarda.galerireels.SeekPreview
 import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
 import com.celtikarda.galerireels.VlcEngine
+import com.celtikarda.galerireels.frameSaveSupported
+import com.celtikarda.galerireels.saveFrameAsPhoto
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -148,7 +155,42 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
     }
 
-    val playback = remember { ReelsPlayback(context, scope, onViewed = vm::addView) }
+    var userPaused by remember { mutableStateOf(false) }
+    var muted by rememberSaveable { mutableStateOf(false) }
+    var boosted by rememberSaveable { mutableStateOf(false) }
+    /** Menüden seçilen oynatma hızı (uzun basılı tutunca geçici olarak 2x) */
+    var speed by rememberSaveable { mutableFloatStateOf(1f) }
+    var fastForward by remember { mutableStateOf(false) }
+    var rewind by remember { mutableStateOf(false) }
+    var clearView by remember { mutableStateOf(false) }
+
+    // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
+    var chipText by remember { mutableStateOf("") }
+    var chipTick by remember { mutableIntStateOf(0) }
+    var chipVisible by remember { mutableStateOf(false) }
+    var inBackground by remember { mutableStateOf(false) }
+
+    val playback = remember {
+        ReelsPlayback(
+            context,
+            scope,
+            onViewed = vm::addView,
+            onResumed = { _, ms ->
+                chipText = "Kaldığın yerden: ${formatDuration(ms)}"
+                chipTick++
+            },
+            onEnded = {
+                val nextIndex = pagerState.settledPage + 1
+                if (nextIndex < vm.items.size) {
+                    // Arka planda kare çizilmediği için kaydırma animasyonu ilerlemez
+                    scope.launch { if (inBackground) pagerState.scrollToPage(nextIndex) else pagerState.animateScrollToPage(nextIndex) }
+                    true
+                } else {
+                    false
+                }
+            },
+        )
+    }
     DisposableEffect(playback) {
         onDispose {
             activity?.let { act ->
@@ -162,18 +204,6 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             playback.release()
         }
     }
-
-    var userPaused by remember { mutableStateOf(false) }
-    var muted by rememberSaveable { mutableStateOf(false) }
-    var boosted by rememberSaveable { mutableStateOf(false) }
-    var fastForward by remember { mutableStateOf(false) }
-    var rewind by remember { mutableStateOf(false) }
-    var clearView by remember { mutableStateOf(false) }
-
-    // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
-    var chipText by remember { mutableStateOf("") }
-    var chipTick by remember { mutableIntStateOf(0) }
-    var chipVisible by remember { mutableStateOf(false) }
 
     // Favori isteği: Android önce kullanıcıya sorar ("Medya yönetimi" izni verildiyse sormaz)
     var pendingFavorite by remember { mutableStateOf<Pair<VideoItem, Boolean>?>(null) }
@@ -258,7 +288,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     }
     LaunchedEffect(muted) { playback.setMuted(muted) }
     LaunchedEffect(boosted) { playback.setBoosted(boosted) }
-    LaunchedEffect(fastForward) { playback.setSpeed(if (fastForward) 2f else 1f) }
+    LaunchedEffect(fastForward, speed) { playback.setSpeed(if (fastForward) 2f else speed) }
+    LaunchedEffect(vm.stats.autoAdvance) { playback.setAutoAdvance(vm.stats.autoAdvance) }
     LaunchedEffect(rewind) { playback.setRewinding(rewind) }
 
     LaunchedEffect(chipTick) {
@@ -267,8 +298,6 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         delay(1400)
         chipVisible = false
     }
-
-    var inBackground by remember { mutableStateOf(false) }
 
     fun updateBackgroundNotification() {
         val item = items.getOrNull(pagerState.settledPage) ?: return
@@ -352,6 +381,9 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 muted = muted,
                 boosted = boosted,
                 backgroundPlay = vm.stats.backgroundPlay,
+                speed = speed,
+                autoAdvance = vm.stats.autoAdvance,
+                abLoop = playback.abLoop.takeIf { active },
                 albumName = vm.albumNameOf(item),
                 avatar = vm.coverOf(item.albumId) ?: item,
                 onTogglePause = {
@@ -418,6 +450,44 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 },
                 onInfo = { infoItem = item },
                 onSeek = { fraction -> playback.seekTo(item, fraction) },
+                onSeekBy = { deltaMs -> if (active) playback.seekBy(item, deltaMs) },
+                onStepFrame = { forward -> if (active) playback.stepFrame(item, forward) },
+                onPickSpeed = { picked ->
+                    speed = picked
+                    chipText = "Oynatma hızı: ${formatSpeed(picked)}"
+                    chipTick++
+                },
+                onToggleAutoAdvance = {
+                    val next = !vm.stats.autoAdvance
+                    vm.stats.updateAutoAdvance(next)
+                    chipText = if (next) "Video bitince sıradakine geçilecek" else "Video bitince başa sarılacak"
+                    chipTick++
+                },
+                onAbLoop = {
+                    if (active) {
+                        playback.cycleAbLoop(item)
+                        val ab = playback.abLoop
+                        val b = ab?.second
+                        chipText = when {
+                            ab == null -> "A-B tekrarı kapatıldı"
+                            b == null -> "A: ${formatDuration(ab.first)} · B için menüden tekrar seç"
+                            else -> "A-B tekrarı: ${formatDuration(ab.first)} – ${formatDuration(b)}"
+                        }
+                        chipTick++
+                    }
+                },
+                onSaveFrame = {
+                    val position = playback.positionOf(item)
+                    if (active && position != null) {
+                        chipText = "Kare kaydediliyor…"
+                        chipTick++
+                        scope.launch {
+                            val saved = saveFrameAsPhoto(context, item, position)
+                            chipText = if (saved != null) "Kare Resimler/GaleriReels'e kaydedildi" else "Bu videodan kare alınamadı"
+                            chipTick++
+                        }
+                    }
+                },
                 onDelete = if (cleanup) {
                     {
                         vm.markForCleanup(item)
@@ -609,6 +679,11 @@ private fun ReelPage(
     muted: Boolean,
     boosted: Boolean,
     backgroundPlay: Boolean,
+    /** Menüden seçilen oynatma hızı */
+    speed: Float,
+    autoAdvance: Boolean,
+    /** Ekrandaki videonun A-B tekrarı (A, B); yoksa null */
+    abLoop: Pair<Long, Long?>?,
     albumName: String,
     avatar: VideoItem,
     onTogglePause: () -> Unit,
@@ -627,6 +702,13 @@ private fun ReelPage(
     onToggleFavorite: () -> Unit,
     onInfo: () -> Unit,
     onSeek: (Float) -> Unit,
+    /** Tam ekranda kenarlara çift dokununca ±10 sn */
+    onSeekBy: (Long) -> Unit,
+    onStepFrame: (forward: Boolean) -> Unit,
+    onPickSpeed: (Float) -> Unit,
+    onToggleAutoAdvance: () -> Unit,
+    onAbLoop: () -> Unit,
+    onSaveFrame: () -> Unit,
     /** Temizlik modunda: videoyu silinecekler listesine ekler (sola kaydırma ya da çöp kutusu) */
     onDelete: (() -> Unit)?,
 ) {
@@ -640,7 +722,15 @@ private fun ReelPage(
     val leftAction by rememberUpdatedState(leftHoldAction)
     val rightAction by rememberUpdatedState(rightHoldAction)
     val doubleTap by rememberUpdatedState(onDoubleTapLike)
+    val seekBy by rememberUpdatedState(onSeekBy)
+    // Kenarlara çift dokunarak sarma sadece yatay tam ekranda; dikeyde her yer beğenir
+    val edgeSeek by rememberUpdatedState(fullscreen && !item.isPhoto)
     val delete by rememberUpdatedState(onDelete)
+    // Çift dokunarak sarma göstergesi: hangi taraf (-1 / 1), toplam saniye, kaçıncı dokunuş
+    var seekSide by remember { mutableIntStateOf(0) }
+    var seekSeconds by remember { mutableIntStateOf(0) }
+    var seekTick by remember { mutableIntStateOf(0) }
+    var lastSeekAt by remember { mutableStateOf(0L) }
     val uiAlpha by animateFloatAsState(
         targetValue = if (clearView) 0f else 1f,
         animationSpec = tween(180),
@@ -676,7 +766,7 @@ private fun ReelPage(
         Box(Modifier.fillMaxSize().offset { IntOffset(swipeX.value.roundToInt(), 0) }) {
             VideoSurface(item, player, vlc, aspectRatio, firstFrameShown)
 
-            // Tek dokunma: durdur/oynat · Çift dokunma: beğen
+            // Tek dokunma: durdur/oynat · Çift dokunma: beğen (yatay tam ekranda sol / sağ kenarda ∓10 sn)
             // Sağ/sol kenara (%25) basılı tutma: Ayarlar'da seçilen işlem · Ortaya basılı tutma: net görünüm (butonları gizle)
             Box(
                 Modifier
@@ -717,16 +807,53 @@ private fun ReelPage(
                                 }
                             },
                             onDoubleTap = { offset ->
-                                burstAt = offset
-                                burstId++
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                doubleTap()
+                                val side = when {
+                                    !edgeSeek -> 0
+                                    offset.x < size.width * 0.3f -> -1
+                                    offset.x > size.width * 0.7f -> 1
+                                    else -> 0
+                                }
+                                if (side != 0) {
+                                    // Aynı kenara art arda çift dokunulunca saniyeler toplanır
+                                    val now = System.currentTimeMillis()
+                                    seekSeconds = if (side == seekSide && now - lastSeekAt < 900) seekSeconds + 10 else 10
+                                    seekSide = side
+                                    lastSeekAt = now
+                                    seekTick++
+                                    seekBy(side * 10_000L)
+                                } else {
+                                    burstAt = offset
+                                    burstId++
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    doubleTap()
+                                }
                             },
                         )
                     }
             )
 
-            if (paused && !clearView) PlayIcon(Modifier.align(Alignment.Center))
+            if (paused && !clearView) {
+                PlayIcon(Modifier.align(Alignment.Center))
+                if (!item.isPhoto) {
+                    FrameStepButtons(
+                        onStep = onStepFrame,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(y = 76.dp),
+                    )
+                }
+            }
+            if (seekTick > 0) {
+                key(seekTick) {
+                    SeekBurst(
+                        seconds = seekSeconds,
+                        forward = seekSide > 0,
+                        modifier = Modifier
+                            .align(if (seekSide > 0) Alignment.CenterEnd else Alignment.CenterStart)
+                            .padding(horizontal = 72.dp),
+                    )
+                }
+            }
             if (error != null) {
                 val ctx = LocalContext.current
                 ErrorBox(
@@ -744,6 +871,8 @@ private fun ReelPage(
                     avatar = avatar,
                     favorite = favorite,
                     fullscreen = fullscreen,
+                    speed = speed,
+                    abLoop = abLoop,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .graphicsLayer { alpha = uiAlpha },
@@ -769,6 +898,9 @@ private fun ReelPage(
                     muted = muted,
                     boosted = boosted,
                     backgroundPlay = backgroundPlay,
+                    speed = speed,
+                    autoAdvance = autoAdvance,
+                    abLoop = abLoop,
                     onLike = onToggleLike,
                     onRemoveOneLike = onRemoveOneLike,
                     onClearLikes = onClearLikes,
@@ -779,6 +911,10 @@ private fun ReelPage(
                     onBackgroundPlay = onToggleBackgroundPlay,
                     onFavorite = onToggleFavorite,
                     onInfo = onInfo,
+                    onPickSpeed = onPickSpeed,
+                    onToggleAutoAdvance = onToggleAutoAdvance,
+                    onAbLoop = onAbLoop,
+                    onSaveFrame = onSaveFrame,
                     onDelete = onDelete,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -797,6 +933,7 @@ private fun ReelPage(
                             }
                         },
                         durationMs = item.durationMs,
+                        uri = item.uri,
                         onSeek = onSeek,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -939,6 +1076,8 @@ private fun BottomInfo(
     avatar: VideoItem,
     favorite: Boolean,
     fullscreen: Boolean = false,
+    speed: Float = 1f,
+    abLoop: Pair<Long, Long?>? = null,
     modifier: Modifier,
 ) {
     Column(
@@ -997,7 +1136,12 @@ private fun BottomInfo(
                 val dims = if (item.width > 0) "${item.width} × ${item.height} · " else ""
                 "📷  Fotoğraf · $dims${formatSize(item.sizeBytes)}"
             } else {
-                "♫  Orijinal ses · ${formatDuration(item.durationMs)}"
+                buildString {
+                    append("♫  Orijinal ses · ${formatDuration(item.durationMs)}")
+                    if (speed != 1f) append(" · ${formatSpeed(speed)}")
+                    val b = abLoop?.second
+                    if (abLoop != null && b != null) append(" · 🔁 ${formatDuration(abLoop.first)}–${formatDuration(b)}")
+                }
             },
             color = Color.White.copy(alpha = 0.9f),
             fontSize = 13.sp,
@@ -1042,6 +1186,9 @@ private fun ActionRail(
     muted: Boolean,
     boosted: Boolean,
     backgroundPlay: Boolean,
+    speed: Float,
+    autoAdvance: Boolean,
+    abLoop: Pair<Long, Long?>?,
     onLike: () -> Unit,
     onRemoveOneLike: () -> Unit,
     onClearLikes: () -> Unit,
@@ -1052,10 +1199,15 @@ private fun ActionRail(
     onBackgroundPlay: () -> Unit,
     onFavorite: () -> Unit,
     onInfo: () -> Unit,
+    onPickSpeed: (Float) -> Unit,
+    onToggleAutoAdvance: () -> Unit,
+    onAbLoop: () -> Unit,
+    onSaveFrame: () -> Unit,
     onDelete: (() -> Unit)?,
     modifier: Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var speedMenuOpen by remember { mutableStateOf(false) }
     var likeMenuOpen by remember { mutableStateOf(false) }
 
     // Beğenince kalp hafifçe zıplar
@@ -1185,6 +1337,68 @@ private fun ActionRail(
                             onBackgroundPlay()
                         },
                     )
+                    DropdownMenuItem(
+                        text = { Text("Oynatma hızı: ${formatSpeed(speed)}") },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_speed),
+                                contentDescription = null,
+                                tint = if (speed != 1f) FavoriteYellow else appColors.textPrimary,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            speedMenuOpen = true
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (autoAdvance) "Bitince: Sıradakine geç" else "Bitince: Başa sar") },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_repeat),
+                                contentDescription = null,
+                                tint = if (autoAdvance) CleanupGreen else appColors.textPrimary,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onToggleAutoAdvance()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                when {
+                                    abLoop == null -> "A-B tekrar: A noktasını işaretle"
+                                    abLoop.second == null -> "A-B tekrar: B noktasını işaretle"
+                                    else -> "A-B tekrarını kapat"
+                                }
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_repeat),
+                                contentDescription = null,
+                                tint = if (abLoop != null) FavoriteYellow else appColors.textPrimary,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onAbLoop()
+                        },
+                    )
+                    if (frameSaveSupported) {
+                        DropdownMenuItem(
+                            text = { Text("Bu kareyi fotoğraf olarak kaydet") },
+                            leadingIcon = {
+                                Icon(painterResource(R.drawable.ic_camera), contentDescription = null, tint = appColors.textPrimary)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onSaveFrame()
+                            },
+                        )
+                    }
                 }
                 DropdownMenuItem(
                     text = { Text(if (isPhoto) "Fotoğraf bilgisi" else "Video bilgisi") },
@@ -1194,6 +1408,30 @@ private fun ActionRail(
                         onInfo()
                     },
                 )
+            }
+            DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
+                Text(
+                    "Oynatma hızı",
+                    color = appColors.textSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+                speedOptions.forEach { option ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (option == 1f) "${formatSpeed(option)} (normal)" else formatSpeed(option),
+                                fontWeight = if (option == speed) FontWeight.Bold else FontWeight.Normal,
+                                color = if (option == speed) FavoriteYellow else appColors.textPrimary,
+                            )
+                        },
+                        onClick = {
+                            speedMenuOpen = false
+                            onPickSpeed(option)
+                        },
+                    )
+                }
             }
         }
     }
@@ -1342,6 +1580,53 @@ private fun HeartBurst(position: Offset) {
     )
 }
 
+private val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
+/** "1x", "1,5x", "0,75x" */
+private fun formatSpeed(speed: Float): String =
+    if (speed % 1f == 0f) "${speed.toInt()}x" else "${speed.toString().trimEnd('0').replace('.', ',')}x"
+
+/** Durdurulmuş videoda bir kare geri / ileri */
+@Composable
+private fun FrameStepButtons(onStep: (forward: Boolean) -> Unit, modifier: Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        listOf(false to "‹ 1 kare", true to "1 kare ›").forEach { (forward, label) ->
+            Text(
+                label,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable { onStep(forward) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** Yatay tam ekranda kenara çift dokununca: "⏪ 10 sn" / "20 sn ⏩", kısa süre görünüp kaybolur */
+@Composable
+private fun SeekBurst(seconds: Int, forward: Boolean, modifier: Modifier) {
+    val alpha = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        delay(450)
+        alpha.animateTo(0f, tween(250))
+    }
+    Text(
+        if (forward) "$seconds sn ⏩" else "⏪ $seconds sn",
+        color = Color.White,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+            .graphicsLayer { this.alpha = alpha.value }
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.5f))
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+    )
+}
+
 @Composable
 private fun PlayIcon(modifier: Modifier) {
     Box(
@@ -1426,8 +1711,8 @@ private fun TopBar(
 }
 
 @Composable
-/** Alttaki ilerleme çubuğu; parmakla sürükleyince video o noktaya sarılır */
-private fun VideoProgress(progress: () -> Float, durationMs: Long, onSeek: (Float) -> Unit, modifier: Modifier) {
+/** Alttaki ilerleme çubuğu; parmakla sürükleyince o andaki kare görünür, bırakınca video oraya sarılır */
+private fun VideoProgress(progress: () -> Float, durationMs: Long, uri: android.net.Uri, onSeek: (Float) -> Unit, modifier: Modifier) {
     val read by rememberUpdatedState(progress)
     val seek by rememberUpdatedState(onSeek)
     var value by remember { mutableFloatStateOf(0f) }
@@ -1441,11 +1726,24 @@ private fun VideoProgress(progress: () -> Float, durationMs: Long, onSeek: (Floa
     }
     val shown = if (dragging) dragValue else value
 
+    val context = LocalContext.current
+    val preview = remember(uri) { SeekPreview(context, uri) }
+    var previewFrame by remember(uri) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    DisposableEffect(preview) { onDispose { preview.release() } }
+    LaunchedEffect(dragging, preview) {
+        if (!dragging || durationMs <= 0) return@LaunchedEffect
+        // Yarım saniyelik adımlarla; parmak hızlı giderken eski kare istekleri iptal edilir
+        androidx.compose.runtime.snapshotFlow { (durationMs * dragValue).toLong() / 500 }
+            .distinctUntilChanged()
+            .collectLatest { step -> preview.frameAt(step * 500)?.let { previewFrame = it } }
+    }
+    LaunchedEffect(dragging) { if (!dragging) previewFrame = null }
+
     // Çizgi ince ama dokunma alanı geniş
     Box(
         modifier
             .fillMaxWidth()
-            .height(if (dragging) 120.dp else 24.dp)
+            .height(if (dragging) 220.dp else 24.dp)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
@@ -1467,14 +1765,27 @@ private fun VideoProgress(progress: () -> Float, durationMs: Long, onSeek: (Floa
         contentAlignment = Alignment.BottomStart,
     ) {
         if (dragging && durationMs > 0) {
-            Text(
-                "${formatDuration((durationMs * dragValue).toLong())} / ${formatDuration(durationMs)}",
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                style = textShadow,
-                modifier = Modifier.align(Alignment.Center),
-            )
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                previewFrame?.let { frame ->
+                    Image(
+                        bitmap = frame.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                Text(
+                    "${formatDuration((durationMs * dragValue).toLong())} / ${formatDuration(durationMs)}",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = textShadow,
+                )
+            }
         }
         Box(
             Modifier

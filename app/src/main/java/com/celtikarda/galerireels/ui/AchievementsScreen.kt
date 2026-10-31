@@ -52,8 +52,8 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
         vm.stats.historyRevision,
         vm.folderCount,
     ) { vm.achievementInput() }
-    val currentStreak = remember(vm.stats.historyRevision) { vm.stats.currentStreak() }
-    val unlocked = vm.stats.unlocked
+    // Eski sürümlerde açılıp sonradan çıkarılan başarımlar sayılmaz
+    val unlocked = vm.stats.unlocked.filterKeys { id -> achievements.any { it.id == id } }
     // Açılanlar önce (en yeni en üstte), sonra kalanlar listedeki sırasıyla
     val sorted = achievements.sortedWith(
         compareBy<Achievement> { it.id !in unlocked }.thenByDescending { unlocked[it.id] ?: 0L },
@@ -81,9 +81,8 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
-                val streakNote = if (currentStreak > 0) " · 🔥 $currentStreak günlük seri" else ""
                 Text(
-                    "İzledikçe, temizledikçe ve uygulamayı her gün açtıkça yenileri açılır$streakNote",
+                    "Farklı videolar izledikçe, beğendikçe ve yer açtıkça yenileri açılır",
                     color = appColors.textSecondary,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(start = 12.dp, top = 2.dp),

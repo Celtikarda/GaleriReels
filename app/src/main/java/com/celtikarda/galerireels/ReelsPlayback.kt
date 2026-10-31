@@ -509,6 +509,8 @@ class ReelsPlayback(
         private var videoFormat: Format? = null
         private var enhancer: LoudnessEnhancer? = null
         private var enhancerSessionId = C.AUDIO_SESSION_ID_UNSET
+        /** Çözücüsü elinden alınınca yeniden hazırlama denemesi (bkz. [onPlayerError]) */
+        private var reclaimRetries = 0
 
         /** Videonun kare hızı; başlıkta yazmıyorsa 0 */
         val frameRate: Float get() = videoFormat?.frameRate ?: 0f
@@ -520,6 +522,7 @@ class ReelsPlayback(
         fun load(item: VideoItem) {
             itemId = item.id
             this.item = item
+            reclaimRetries = 0
             active = false
             decoderName = null
             videoFormat = null
@@ -633,6 +636,7 @@ class ReelsPlayback(
 
         override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
             val id = ownId(eventTime) ?: return
+            reclaimRetries = 0
             renderedIds = renderedIds + id
             if (id == current?.id) OpenTimer.firstFrame(id, "exo")
         }
@@ -645,6 +649,18 @@ class ReelsPlayback(
         }
 
         override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
+            // Telefon donanım çözücüyü başka bir işe verdi (ör. sarma önizlemesi ya da kare kaydetme
+            // için kare çıkarılırken). Video bozuk değil; VLC'ye geçmek yerine biraz sonra kaldığı
+            // yerden yeniden hazırlanır.
+            if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED && reclaimRetries < 5) {
+                val id = ownId(eventTime) ?: return
+                reclaimRetries++
+                scope.launch {
+                    delay(400)
+                    if (!released && itemId == id) player.prepare()
+                }
+                return
+            }
             switchToVlc(eventTime)
         }
 

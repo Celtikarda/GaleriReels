@@ -120,7 +120,7 @@ import com.celtikarda.galerireels.VlcEngine
 import com.celtikarda.galerireels.frameSaveSupported
 import com.celtikarda.galerireels.saveFrameAsPhoto
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -1732,10 +1732,12 @@ private fun VideoProgress(progress: () -> Float, durationMs: Long, uri: android.
     DisposableEffect(preview) { onDispose { preview.release() } }
     LaunchedEffect(dragging, preview) {
         if (!dragging || durationMs <= 0) return@LaunchedEffect
-        // Yarım saniyelik adımlarla; parmak hızlı giderken eski kare istekleri iptal edilir
+        // Yarım saniyelik adımlarla. Kare çıkarılırken parmak ilerlerse aradaki konumlar atlanır,
+        // sıradaki kare en son konumdan alınır (iptal edilseydi parmak hareket ettikçe hiç kare yetişmiyordu)
         androidx.compose.runtime.snapshotFlow { (durationMs * dragValue).toLong() / 500 }
             .distinctUntilChanged()
-            .collectLatest { step -> preview.frameAt(step * 500)?.let { previewFrame = it } }
+            .conflate()
+            .collect { step -> preview.frameAt(step * 500)?.let { previewFrame = it } }
     }
     LaunchedEffect(dragging) { if (!dragging) previewFrame = null }
 

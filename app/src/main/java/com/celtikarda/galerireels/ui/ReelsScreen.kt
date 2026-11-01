@@ -2,6 +2,20 @@ package com.celtikarda.galerireels.ui
 
 import android.Manifest
 import android.app.Activity
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.graphics.drawable.Icon as SystemIcon
+import android.media.AudioManager
+import android.os.SystemClock
+import android.provider.Settings
+import android.util.Rational
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.core.app.PictureInPictureModeChangedInfo
+import androidx.core.util.Consumer
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -25,12 +39,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,6 +60,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -69,6 +88,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -87,6 +107,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -123,6 +144,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val textShadow = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.85f), offset = Offset(0f, 1.5f), blurRadius = 8f))
@@ -152,6 +174,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
         } else {
             insetsController.show(WindowInsetsCompat.Type.systemBars())
+            resetBrightness(act)
         }
     }
 
@@ -163,6 +186,24 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var fastForward by remember { mutableStateOf(false) }
     var rewind by remember { mutableStateOf(false) }
     var clearView by remember { mutableStateOf(false) }
+    /** Yatay tam ekranda ekran kilidi: dokunuşlar videoya gitmez (yatarken / cepteyken izlemek için) */
+    var locked by remember { mutableStateOf(false) }
+    var lockHintTick by remember { mutableIntStateOf(0) }
+    /** Tam ekranda iki parmakla büyütünce video ekranı doldurur (kenarları kırpılır) */
+    var fill by rememberSaveable { mutableStateOf(false) }
+    /** Uyku zamanlayıcısının dolacağı an (SystemClock.elapsedRealtime); kapalıysa 0 */
+    var sleepAt by rememberSaveable { mutableLongStateOf(0L) }
+    /** Küçük pencerede (resim içinde resim) oynuyor */
+    var inPip by remember { mutableStateOf(false) }
+    /** Küçük pencereye geçildi, uygulama henüz tekrar açılmadı: pencere kapanınca video durur */
+    var pipEntered by remember { mutableStateOf(false) }
+    // Tam ekranda sol kenarda yukarı/aşağı kaydırma: parlaklık, sağ kenarda: ses
+    var adjustKind by remember { mutableIntStateOf(0) } // -1 parlaklık, 1 ses, 0 gösterge kapalı
+    var adjustLevel by remember { mutableFloatStateOf(0f) }
+    var adjusting by remember { mutableStateOf(false) }
+    var volumeLevel by remember { mutableFloatStateOf(-1f) }
+    val audioManager = remember { context.getSystemService(AudioManager::class.java) }
+    LaunchedEffect(fullscreen) { if (!fullscreen) locked = false }
 
     // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
     var chipText by remember { mutableStateOf("") }
@@ -194,6 +235,10 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     DisposableEffect(playback) {
         onDispose {
             activity?.let { act ->
+                resetBrightness(act)
+                if (Build.VERSION.SDK_INT >= 31) {
+                    runCatching { act.setPictureInPictureParams(PictureInPictureParams.Builder().setAutoEnterEnabled(false).build()) }
+                }
                 act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 act.window?.let { win ->
                     WindowCompat.getInsetsController(win, win.decorView)
@@ -257,6 +302,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     // Tam ekrandayken geri tuşu önce dikey görünüme döndürür; işaretli video varken çıkmadan önce sorar
     val leave = {
         when {
+            locked -> lockHintTick += 1
             fullscreen -> fullscreen = false
             cleanup && vm.cleanupMarked.isNotEmpty() -> askBeforeLeaving = true
             else -> onBack()
@@ -264,6 +310,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     }
     BackHandler(enabled = cleanup && vm.cleanupMarked.isNotEmpty()) { askBeforeLeaving = true }
     BackHandler(enabled = fullscreen) { fullscreen = false }
+    // Kilitliyken geri tuşu da çalışmaz; kilit simgesi gösterilir
+    BackHandler(enabled = locked) { lockHintTick++ }
     LaunchedEffect(cleanup) {
         if (cleanup) {
             chipText = "Silmek istediğin videoyu sola kaydır"
@@ -288,6 +336,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     }
     LaunchedEffect(muted) { playback.setMuted(muted) }
     LaunchedEffect(boosted) { playback.setBoosted(boosted) }
+    LaunchedEffect(vm.stats.normalizeAudio) { playback.setNormalize(vm.stats.normalizeAudio) }
     LaunchedEffect(fastForward, speed) { playback.setSpeed(if (fastForward) 2f else speed) }
     LaunchedEffect(vm.stats.autoAdvance) { playback.setAutoAdvance(vm.stats.autoAdvance) }
     LaunchedEffect(rewind) { playback.setRewinding(rewind) }
@@ -336,6 +385,11 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        // Küçük pencereye geçerken uygulama duraklar ama video oynamaya devam etmeli
+        if (Build.VERSION.SDK_INT >= 26 && activity?.isInPictureInPictureMode == true) {
+            pipEntered = true
+            return@LifecycleEventEffect
+        }
         inBackground = true
         if (vm.stats.backgroundPlay && current != null && !userPaused) {
             updateBackgroundNotification()
@@ -343,16 +397,156 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             playback.onHostPause()
         }
     }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        // Küçük pencere kapatıldı (ya da o sırada ekran kapandı): video durur
+        if (pipEntered) {
+            pipEntered = false
+            inBackground = true
+            userPaused = true
+            playback.setPaused(true)
+        }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        pipEntered = false
         inBackground = false
         BackgroundPlayService.stop(context)
         playback.onHostResume()
+    }
+
+    // ---- Küçük pencere (resim içinde resim)
+    val pipSupported = remember {
+        Build.VERSION.SDK_INT >= 26 && context.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    }
+    val togglePauseFromPip by rememberUpdatedState {
+        if (current != null && !current.isPhoto) {
+            userPaused = !userPaused
+            playback.setPaused(userPaused)
+        }
+    }
+    val nextFromPip by rememberUpdatedState {
+        if (items.size > 1) {
+            scope.launch {
+                pagerState.scrollToPage((pagerState.settledPage + 1) % items.size)
+                userPaused = false
+                playback.setPaused(false)
+            }
+        }
+    }
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                when (intent?.getIntExtra(PIP_EXTRA, 0)) {
+                    PIP_PLAY_PAUSE -> togglePauseFromPip()
+                    PIP_NEXT -> nextFromPip()
+                }
+            }
+        }
+        ContextCompat.registerReceiver(context, receiver, IntentFilter(PIP_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    DisposableEffect(activity) {
+        val act = activity as? ComponentActivity ?: return@DisposableEffect onDispose { }
+        val listener = Consumer<PictureInPictureModeChangedInfo> { info ->
+            inPip = info.isInPictureInPictureMode
+            if (inPip) pipEntered = true
+        }
+        act.addOnPictureInPictureModeChangedListener(listener)
+        onDispose { act.removeOnPictureInPictureModeChangedListener(listener) }
+    }
+    fun pipParams(): PictureInPictureParams? {
+        if (!pipSupported || Build.VERSION.SDK_INT < 26) return null
+        val item = current
+        val ratio = item?.aspectRatio?.takeIf { it > 0f } ?: item?.let { playback.aspectRatios[it.id] } ?: (16f / 9f)
+        val safe = ratio.coerceIn(0.42f, 2.38f) // Android 1:2,39 – 2,39:1 dışını kabul etmiyor
+        val playing = item != null && !item.isPhoto && !userPaused
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational((safe * 1000).roundToInt(), 1000))
+            .setActions(
+                listOf(
+                    pipAction(context, if (playing) R.drawable.ic_pause else R.drawable.ic_play, if (playing) "Durdur" else "Oynat", PIP_PLAY_PAUSE),
+                    pipAction(context, R.drawable.ic_skip_next, "Sonraki", PIP_NEXT),
+                ),
+            )
+        // Android 12+: tam ekranda video oynarken ana ekrana dönünce kendiliğinden küçük pencereye geçer
+        if (Build.VERSION.SDK_INT >= 31) builder.setAutoEnterEnabled(fullscreen && playing && !cleanup)
+        return builder.build()
+    }
+    val pipRatioKey = current?.let { playback.aspectRatios[it.id] }
+    LaunchedEffect(fullscreen, userPaused, current?.id, pipRatioKey) {
+        val act = activity ?: return@LaunchedEffect
+        if (Build.VERSION.SDK_INT >= 26) pipParams()?.let { runCatching { act.setPictureInPictureParams(it) } }
+    }
+    val enterPip: () -> Unit = {
+        val params = pipParams()
+        if (params != null && Build.VERSION.SDK_INT >= 26) {
+            if (userPaused) {
+                userPaused = false
+                playback.setPaused(false)
+            }
+            runCatching { activity?.enterPictureInPictureMode(params) }
+        }
+    }
+
+    // ---- Uyku zamanlayıcısı: süre dolunca video durur (arka planda oynuyorsa da)
+    LaunchedEffect(sleepAt) {
+        if (sleepAt == 0L) return@LaunchedEffect
+        val wait = sleepAt - SystemClock.elapsedRealtime()
+        if (wait > 0) delay(wait)
+        sleepAt = 0L
+        userPaused = true
+        playback.setPaused(true)
+        if (inBackground && vm.stats.backgroundPlay) updateBackgroundNotification()
+        chipText = "Uyku zamanlayıcısı doldu, video durduruldu"
+        chipTick++
+    }
+    val pickSleep: (Int) -> Unit = { minutes ->
+        sleepAt = if (minutes == 0) 0L else SystemClock.elapsedRealtime() + minutes * 60_000L
+        chipText = if (minutes == 0) "Uyku zamanlayıcısı kapatıldı" else "$minutes dakika sonra video duracak"
+        chipTick++
+    }
+
+    // ---- Parlaklık / ses kaydırma (yatay tam ekranda sol / sağ kenar)
+    val adjust: (Int, Float) -> Unit = { side, delta ->
+        adjusting = true
+        if (side < 0) {
+            activity?.window?.let { window ->
+                val attrs = window.attributes
+                val now = if (attrs.screenBrightness >= 0f) attrs.screenBrightness else systemBrightness(context)
+                val next = (now + delta).coerceIn(0.01f, 1f)
+                attrs.screenBrightness = next
+                window.attributes = attrs
+                adjustKind = -1
+                adjustLevel = next
+            }
+        } else {
+            val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            if (volumeLevel < 0f) volumeLevel = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
+            volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
+            val index = (volumeLevel * max).roundToInt()
+            if (index != audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) {
+                runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0) }
+            }
+            if (index > 0 && muted) muted = false
+            adjustKind = 1
+            adjustLevel = volumeLevel
+        }
+    }
+    val adjustEnd: () -> Unit = {
+        adjusting = false
+        volumeLevel = -1f
+    }
+    LaunchedEffect(adjusting) {
+        if (!adjusting && adjustKind != 0) {
+            delay(700)
+            adjustKind = 0
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
+            userScrollEnabled = !locked && !inPip,
             beyondViewportPageCount = 1,
             key = { items[it].id },
         ) { index ->
@@ -370,8 +564,19 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 firstFrameShown = active && item.id in playback.renderedIds,
                 error = playback.error?.takeIf { it.first == item.id }?.second,
                 paused = active && userPaused,
-                clearView = active && clearView,
+                clearView = active && (clearView || inPip || locked),
                 fullscreen = fullscreen,
+                fill = fullscreen && fill,
+                gesturesEnabled = fullscreen && !locked && !inPip,
+                onAdjust = adjust,
+                onAdjustEnd = adjustEnd,
+                onPinch = { zoomIn ->
+                    if (fill != zoomIn) {
+                        fill = zoomIn
+                        chipText = if (zoomIn) "Ekranı doldur" else "Videonun tamamı"
+                        chipTick++
+                    }
+                },
                 leftHoldAction = vm.stats.leftHoldAction,
                 rightHoldAction = vm.stats.rightHoldAction,
                 liked = vm.isLikedNow(item),
@@ -383,6 +588,9 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 backgroundPlay = vm.stats.backgroundPlay,
                 speed = speed,
                 autoAdvance = vm.stats.autoAdvance,
+                normalize = vm.stats.normalizeAudio,
+                sleepAt = sleepAt,
+                pipSupported = pipSupported,
                 abLoop = playback.abLoop.takeIf { active },
                 albumName = vm.albumNameOf(item),
                 avatar = vm.coverOf(item.albumId) ?: item,
@@ -463,6 +671,14 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     chipText = if (next) "Video bitince sıradakine geçilecek" else "Video bitince başa sarılacak"
                     chipTick++
                 },
+                onToggleNormalize = {
+                    val next = !vm.stats.normalizeAudio
+                    vm.stats.updateNormalizeAudio(next)
+                    chipText = if (next) "Ses dengeleme açık" else "Ses dengeleme kapalı"
+                    chipTick++
+                },
+                onPickSleep = pickSleep,
+                onPip = enterPip,
                 onAbLoop = {
                     if (active) {
                         playback.cycleAbLoop(item)
@@ -510,7 +726,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
 
         AnimatedVisibility(
-            visible = !clearView,
+            visible = !clearView && !inPip && !locked,
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
@@ -527,10 +743,35 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     scope.launch { pagerState.scrollToPage(index) }
                 },
                 onToggleFullscreen = { fullscreen = !fullscreen },
+                onLock = {
+                    locked = true
+                    clearView = false
+                    lockHintTick++
+                },
             )
         }
 
-        if (cleanup && vm.cleanupMarked.isNotEmpty() && !clearView) {
+        if (locked && !inPip) {
+            LockOverlay(
+                hintTick = lockHintTick,
+                onUnlock = {
+                    locked = false
+                    chipText = "Kilit açıldı"
+                    chipTick++
+                },
+                onShowHint = { lockHintTick++ },
+            )
+        }
+
+        if (adjustKind != 0 && !inPip) {
+            AdjustIndicator(
+                brightness = adjustKind < 0,
+                level = adjustLevel,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+
+        if (cleanup && vm.cleanupMarked.isNotEmpty() && !clearView && !inPip) {
             CleanupBar(
                 count = vm.cleanupMarked.size,
                 bytes = vm.cleanupMarked.sumOf { it.sizeBytes },
@@ -555,7 +796,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
 
         AnimatedVisibility(
-            visible = fastForward || rewind || chipVisible,
+            visible = !inPip && (fastForward || rewind || chipVisible),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -666,6 +907,13 @@ private fun ReelPage(
     paused: Boolean,
     clearView: Boolean,
     fullscreen: Boolean,
+    /** Video ekranı doldurur (kenarları kırpılır) */
+    fill: Boolean,
+    /** Parlaklık / ses kaydırma ve iki parmakla doldur / sığdır */
+    gesturesEnabled: Boolean,
+    onAdjust: (side: Int, delta: Float) -> Unit,
+    onAdjustEnd: () -> Unit,
+    onPinch: (zoomIn: Boolean) -> Unit,
     leftHoldAction: EdgeHoldAction,
     rightHoldAction: EdgeHoldAction,
     /** Bu açılışta beğenildi mi (kalp dolu) */
@@ -682,6 +930,10 @@ private fun ReelPage(
     /** Menüden seçilen oynatma hızı */
     speed: Float,
     autoAdvance: Boolean,
+    normalize: Boolean,
+    /** Uyku zamanlayıcısının dolacağı an; kapalıysa 0 */
+    sleepAt: Long,
+    pipSupported: Boolean,
     /** Ekrandaki videonun A-B tekrarı (A, B); yoksa null */
     abLoop: Pair<Long, Long?>?,
     albumName: String,
@@ -707,6 +959,9 @@ private fun ReelPage(
     onStepFrame: (forward: Boolean) -> Unit,
     onPickSpeed: (Float) -> Unit,
     onToggleAutoAdvance: () -> Unit,
+    onToggleNormalize: () -> Unit,
+    onPickSleep: (minutes: Int) -> Unit,
+    onPip: () -> Unit,
     onAbLoop: () -> Unit,
     onSaveFrame: () -> Unit,
     /** Temizlik modunda: videoyu silinecekler listesine ekler (sola kaydırma ya da çöp kutusu) */
@@ -761,10 +1016,19 @@ private fun ReelPage(
         )
     }
 
-    Box(Modifier.fillMaxSize().then(swipe)) {
+    val adjustBy by rememberUpdatedState(onAdjust)
+    val adjustEnd by rememberUpdatedState(onAdjustEnd)
+    val pinch by rememberUpdatedState(onPinch)
+    val gestures = if (!gesturesEnabled) Modifier else Modifier.fullscreenGestures(
+        onAdjust = { side, delta -> adjustBy(side, delta) },
+        onAdjustEnd = { adjustEnd() },
+        onPinch = { pinch(it) },
+    )
+
+    Box(Modifier.fillMaxSize().then(swipe).then(gestures)) {
         if (swipeX.value < 0f) DeleteBackdrop()
         Box(Modifier.fillMaxSize().offset { IntOffset(swipeX.value.roundToInt(), 0) }) {
-            VideoSurface(item, player, vlc, aspectRatio, firstFrameShown)
+            VideoSurface(item, player, vlc, aspectRatio, firstFrameShown, fill)
 
             // Tek dokunma: durdur/oynat · Çift dokunma: beğen (yatay tam ekranda sol / sağ kenarda ∓10 sn)
             // Sağ/sol kenara (%25) basılı tutma: Ayarlar'da seçilen işlem · Ortaya basılı tutma: net görünüm (butonları gizle)
@@ -900,6 +1164,9 @@ private fun ReelPage(
                     backgroundPlay = backgroundPlay,
                     speed = speed,
                     autoAdvance = autoAdvance,
+                    normalize = normalize,
+                    sleepAt = sleepAt,
+                    pipSupported = pipSupported,
                     abLoop = abLoop,
                     onLike = onToggleLike,
                     onRemoveOneLike = onRemoveOneLike,
@@ -913,6 +1180,9 @@ private fun ReelPage(
                     onInfo = onInfo,
                     onPickSpeed = onPickSpeed,
                     onToggleAutoAdvance = onToggleAutoAdvance,
+                    onToggleNormalize = onToggleNormalize,
+                    onPickSleep = onPickSleep,
+                    onPip = onPip,
                     onAbLoop = onAbLoop,
                     onSaveFrame = onSaveFrame,
                     onDelete = onDelete,
@@ -985,7 +1255,7 @@ private fun CleanupBar(count: Int, bytes: Long, onUndo: () -> Unit, onDelete: ()
  * boyutunu söyleyene kadar tam ekran kalıp sonra küçülmez.
  */
 @Composable
-private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, aspectRatio: Float, firstFrameShown: Boolean) {
+private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, aspectRatio: Float, firstFrameShown: Boolean, fill: Boolean = false) {
     if (item.isPhoto) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             AsyncImage(
@@ -1001,8 +1271,18 @@ private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, a
     var vlcAspect by remember(item.id) { mutableFloatStateOf(0f) }
     val ratio = if (aspectRatio > 0f) aspectRatio else vlcAspect
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Box(if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val videoBox = when {
+            ratio <= 0f -> Modifier.fillMaxSize()
+            // Doldur: kısa kenar ekrana oturur, taşan kısım ekran dışında kalır
+            fill && maxHeight.value > 0f -> if (ratio > maxWidth / maxHeight) {
+                Modifier.requiredSize(maxHeight * ratio, maxHeight)
+            } else {
+                Modifier.requiredSize(maxWidth, maxWidth / ratio)
+            }
+            else -> Modifier.aspectRatio(ratio)
+        }
+        Box(videoBox) {
             when {
                 vlc != null -> VlcSurface(vlc, onAspectRatio = { vlcAspect = it })
                 // Oynatıcı başka videoya geçerse yüzey de yenilenir
@@ -1188,6 +1468,9 @@ private fun ActionRail(
     backgroundPlay: Boolean,
     speed: Float,
     autoAdvance: Boolean,
+    normalize: Boolean,
+    sleepAt: Long,
+    pipSupported: Boolean,
     abLoop: Pair<Long, Long?>?,
     onLike: () -> Unit,
     onRemoveOneLike: () -> Unit,
@@ -1201,6 +1484,9 @@ private fun ActionRail(
     onInfo: () -> Unit,
     onPickSpeed: (Float) -> Unit,
     onToggleAutoAdvance: () -> Unit,
+    onToggleNormalize: () -> Unit,
+    onPickSleep: (minutes: Int) -> Unit,
+    onPip: () -> Unit,
     onAbLoop: () -> Unit,
     onSaveFrame: () -> Unit,
     onDelete: (() -> Unit)?,
@@ -1208,6 +1494,7 @@ private fun ActionRail(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var speedMenuOpen by remember { mutableStateOf(false) }
+    var sleepMenuOpen by remember { mutableStateOf(false) }
     var likeMenuOpen by remember { mutableStateOf(false) }
 
     // Beğenince kalp hafifçe zıplar
@@ -1352,6 +1639,49 @@ private fun ActionRail(
                         },
                     )
                     DropdownMenuItem(
+                        text = { Text(if (normalize) "Ses dengeleme: Açık" else "Ses dengeleme: Kapalı") },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_equalizer),
+                                contentDescription = null,
+                                tint = if (normalize) CleanupGreen else appColors.textPrimary,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onToggleNormalize()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            val left = ((sleepAt - SystemClock.elapsedRealtime()) / 60_000L + 1).coerceAtLeast(1)
+                            Text(if (sleepAt > 0L) "Uyku zamanlayıcısı: $left dk kaldı" else "Uyku zamanlayıcısı")
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_timer),
+                                contentDescription = null,
+                                tint = if (sleepAt > 0L) FavoriteYellow else appColors.textPrimary,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            sleepMenuOpen = true
+                        },
+                    )
+                    if (pipSupported) {
+                        DropdownMenuItem(
+                            text = { Text("Küçük pencerede oynat") },
+                            leadingIcon = {
+                                Icon(painterResource(R.drawable.ic_pip), contentDescription = null, tint = appColors.textPrimary)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onPip()
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
                         text = { Text(if (autoAdvance) "Bitince: Sıradakine geç" else "Bitince: Başa sar") },
                         leadingIcon = {
                             Icon(
@@ -1429,6 +1759,29 @@ private fun ActionRail(
                         onClick = {
                             speedMenuOpen = false
                             onPickSpeed(option)
+                        },
+                    )
+                }
+            }
+            DropdownMenu(expanded = sleepMenuOpen, onDismissRequest = { sleepMenuOpen = false }) {
+                Text(
+                    "Video şu kadar sonra dursun",
+                    color = appColors.textSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+                sleepOptions.forEach { minutes ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (minutes == 0) "Kapalı" else "$minutes dakika",
+                                color = if (minutes == 0 && sleepAt == 0L) FavoriteYellow else appColors.textPrimary,
+                            )
+                        },
+                        onClick = {
+                            sleepMenuOpen = false
+                            onPickSleep(minutes)
                         },
                     )
                 }
@@ -1582,6 +1935,200 @@ private fun HeartBurst(position: Offset) {
 
 private val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 
+private val sleepOptions = listOf(0, 15, 30, 45, 60, 90)
+
+private const val PIP_ACTION = "com.celtikarda.galerireels.PIP"
+private const val PIP_EXTRA = "pip"
+private const val PIP_PLAY_PAUSE = 1
+private const val PIP_NEXT = 2
+
+/** Küçük penceredeki düğme (oynat / durdur, sonraki); basılınca ReelsScreen'deki alıcıya gider */
+@androidx.annotation.RequiresApi(26)
+private fun pipAction(context: Context, icon: Int, title: String, code: Int): RemoteAction {
+    val intent = Intent(PIP_ACTION).setPackage(context.packageName).putExtra(PIP_EXTRA, code)
+    val pending = PendingIntent.getBroadcast(context, code, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    return RemoteAction(SystemIcon.createWithResource(context, icon), title, title, pending)
+}
+
+/** Sistemin şu anki parlaklığı (0..1), uygulama kendi parlaklığını henüz ayarlamadıysa */
+private fun systemBrightness(context: Context): Float {
+    val value = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) }.getOrDefault(128)
+    return (value / 255f).coerceIn(0.01f, 1f)
+}
+
+/** Kaydırarak ayarlanan parlaklığı bırakır; ekran sistemin parlaklığına döner */
+private fun resetBrightness(activity: Activity) {
+    val window = activity.window ?: return
+    val attrs = window.attributes
+    if (attrs.screenBrightness != WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) {
+        attrs.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        window.attributes = attrs
+    }
+}
+
+/**
+ * Yatay tam ekran hareketleri:
+ * - Sol %40'ta yukarı / aşağı kaydırma: parlaklık, sağ %40'ta: ses ([onAdjust] side -1 / 1,
+ *   delta: ekran yüksekliğinin kesri, yukarı artı)
+ * - İki parmakla açma: ekranı doldur, kapatma: videonun tamamı ([onPinch])
+ * Ortada dikey kaydırma eskisi gibi sonraki videoya geçer; yatay kaydırmalar (ilerleme çubuğu,
+ * temizlikte silme) dokunulmadan bırakılır.
+ */
+private fun Modifier.fullscreenGestures(
+    onAdjust: (side: Int, delta: Float) -> Unit,
+    onAdjustEnd: () -> Unit,
+    onPinch: (zoomIn: Boolean) -> Unit,
+): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val side = when {
+            down.position.x < size.width * 0.4f -> -1
+            down.position.x > size.width * 0.6f -> 1
+            else -> 0
+        }
+        // 0: henüz belli değil, 1: parlaklık / ses, 2: iki parmak, -1: başka bir hareket
+        var mode = 0
+        var moved = Offset.Zero
+        var zoom = 1f
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.changes.none { it.pressed }) break
+            val fingers = event.changes.count { it.pressed }
+            if (fingers >= 2 && (mode == 0 || mode == 2)) {
+                mode = 2
+                zoom *= event.calculateZoom()
+                event.changes.forEach { it.consume() }
+                continue
+            }
+            if (mode == 2) {
+                event.changes.forEach { it.consume() }
+                continue
+            }
+            if (mode == -1) continue
+            val change = event.changes.firstOrNull { it.id == down.id } ?: continue
+            val delta = change.positionChange()
+            if (mode == 0) {
+                // Alttaki bir öğe (ör. ilerleme çubuğu) hareketi aldıysa karışma
+                if (change.isConsumed) {
+                    mode = -1
+                    continue
+                }
+                moved += delta
+                if (moved.getDistance() > viewConfiguration.touchSlop) {
+                    mode = if (side != 0 && abs(moved.y) > abs(moved.x) * 1.5f) 1 else -1
+                }
+            }
+            if (mode == 1) {
+                change.consume()
+                if (delta.y != 0f) onAdjust(side, -delta.y / (size.height * 0.8f))
+            }
+        }
+        when (mode) {
+            1 -> onAdjustEnd()
+            2 -> when {
+                zoom > 1.12f -> onPinch(true)
+                zoom < 0.89f -> onPinch(false)
+            }
+        }
+    }
+}
+
+/** Parlaklık / ses ayarlanırken ekranın ortasında simge, çubuk ve yüzde */
+@Composable
+private fun AdjustIndicator(brightness: Boolean, level: Float, modifier: Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.65f))
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painterResource(
+                when {
+                    brightness -> R.drawable.ic_brightness
+                    level <= 0f -> R.drawable.ic_volume_off
+                    else -> R.drawable.ic_volume_on
+                }
+            ),
+            contentDescription = if (brightness) "Parlaklık" else "Ses",
+            tint = Color.White,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Box(
+            Modifier
+                .width(140.dp)
+                .height(4.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.White.copy(alpha = 0.25f))
+        ) {
+            Box(Modifier.fillMaxWidth(level.coerceIn(0f, 1f)).fillMaxHeight().background(Color.White))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            "%${(level * 100).roundToInt()}",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.width(44.dp),
+        )
+    }
+}
+
+/**
+ * Ekran kilidi: bütün dokunuşları yutar. Dokununca (ya da geri tuşunda) kilit düğmesi birkaç
+ * saniye görünür; ona dokununca kilit açılır.
+ */
+@Composable
+private fun LockOverlay(hintTick: Int, onUnlock: () -> Unit, onShowHint: () -> Unit) {
+    var visible by remember { mutableStateOf(true) }
+    LaunchedEffect(hintTick) {
+        visible = true
+        delay(2500)
+        visible = false
+    }
+    val showHint by rememberUpdatedState(onShowHint)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false).consume()
+                    showHint()
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                        if (event.changes.none { it.pressed }) break
+                    }
+                }
+            }
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(16.dp),
+        ) {
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable(onClick = onUnlock)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(painterResource(R.drawable.ic_lock_open), contentDescription = "Kilidi aç", tint = Color.White, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Kilidi açmak için dokun", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
 /** "1x", "1,5x", "0,75x" */
 private fun formatSpeed(speed: Float): String =
     if (speed % 1f == 0f) "${speed.toInt()}x" else "${speed.toString().trimEnd('0').replace('.', ',')}x"
@@ -1669,6 +2216,7 @@ private fun TopBar(
     onBack: () -> Unit,
     onToggleShuffle: () -> Unit,
     onToggleFullscreen: () -> Unit,
+    onLock: () -> Unit,
 ) {
     Row(
         Modifier
@@ -1698,6 +2246,11 @@ private fun TopBar(
                     contentDescription = if (shuffled) "Karışık sıra" else "Yeniden eskiye",
                     tint = if (shuffled) Color.White else Color.White.copy(alpha = 0.4f),
                 )
+            }
+        }
+        if (fullscreen) {
+            IconButton(onClick = onLock) {
+                Icon(painterResource(R.drawable.ic_lock), contentDescription = "Ekranı kilitle", tint = Color.White)
             }
         }
         IconButton(onClick = onToggleFullscreen) {

@@ -297,7 +297,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
         Card {
             val hidden = vm.hiddenFolders
             Text(
-                "Ana ekranda bir klasöre basılı tutarak gizleyebilirsin. Gizlenen klasörler " +
+                "Ana ekranda bir klasöre basılı tutup «Klasörü gizle»yi seçerek gizleyebilirsin. Gizlenen klasörler " +
                     "Tüm videolar, Tarihte bugün ve Temizlik önerilerine girmez.",
                 color = appColors.textSecondary,
                 fontSize = 14.sp,

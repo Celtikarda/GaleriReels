@@ -219,6 +219,9 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     /** Video bitince başa sarmak yerine sıradaki videoya geçilsin mi */
     var autoAdvance by mutableStateOf(prefs.getBoolean(KEY_AUTO_ADVANCE, false))
         private set
+    /** Ses dengeleme: kısık sesleri yükseltip patlayan sesleri bastırır (videolar arası seviye eşitlenir) */
+    var normalizeAudio by mutableStateOf(prefs.getBoolean(KEY_NORMALIZE, false))
+        private set
     /** Gösterilecek içerik türü: Videolar, Fotoğraflar ya da Tümü */
     var mediaMode by mutableStateOf(
         MediaMode.entries.firstOrNull { it.name == prefs.getString(KEY_MEDIA_MODE, null) } ?: MediaMode.VIDEOS,
@@ -380,6 +383,11 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         prefs.edit { putBoolean(KEY_AUTO_ADVANCE, enabled) }
     }
 
+    fun updateNormalizeAudio(enabled: Boolean) {
+        normalizeAudio = enabled
+        prefs.edit { putBoolean(KEY_NORMALIZE, enabled) }
+    }
+
     fun updateMediaMode(mode: MediaMode) {
         mediaMode = mode
         mediaModeAsked = true
@@ -533,6 +541,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_LAST_SAVE = "last_folder_save"
         const val KEY_BG_PLAY = "background_play"
         const val KEY_AUTO_ADVANCE = "auto_advance"
+        const val KEY_NORMALIZE = "normalize_audio"
         const val KEY_MEDIA_MODE = "media_mode"
         const val KEY_MEDIA_MODE_ASKED = "media_mode_asked"
         const val KEY_THEME_MODE = "theme_mode"

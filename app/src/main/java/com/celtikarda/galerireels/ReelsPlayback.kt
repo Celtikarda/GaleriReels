@@ -2,7 +2,9 @@ package com.celtikarda.galerireels
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.LoudnessEnhancer
+import android.os.Build
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +105,8 @@ class ReelsPlayback(
     private var muted = false
     /** Kısık sesli videolar için %200 ses yükseltme */
     private var boosted = false
+    /** Ses dengeleme (bkz. [PlayerSlot.updateNormalize]) */
+    private var normalize = false
     /** Oynatma hızı: menüden seçilen hız ya da uzun basılı tutunca 2x */
     private var speed = 1f
     /** Video bitince başa sarmak yerine sıradakine geçilir */
@@ -166,6 +170,7 @@ class ReelsPlayback(
         slots.forEach {
             it.player.volume = if (muted) 0f else 1f
             it.updateBoost()
+            it.updateNormalize()
         }
         vlc?.setMuted(muted)
     }
@@ -174,6 +179,12 @@ class ReelsPlayback(
         this.boosted = boosted
         slots.forEach { it.updateBoost() }
         vlc?.setBoosted(boosted)
+    }
+
+    fun setNormalize(normalize: Boolean) {
+        this.normalize = normalize
+        slots.forEach { it.updateNormalize() }
+        vlc?.setNormalize(normalize)
     }
 
     fun setSpeed(speed: Float) {
@@ -429,6 +440,7 @@ class ReelsPlayback(
                 } else {
                     engine.setMuted(muted)
                     engine.setBoosted(boosted)
+                    engine.setNormalize(normalize)
                     engine.setSpeed(speed)
                     engine.setScrubbing(rewinding)
                     vlc = engine
@@ -525,6 +537,8 @@ class ReelsPlayback(
         private var videoFormat: Format? = null
         private var enhancer: LoudnessEnhancer? = null
         private var enhancerSessionId = C.AUDIO_SESSION_ID_UNSET
+        private var dynamics: DynamicsProcessing? = null
+        private var dynamicsSessionId = C.AUDIO_SESSION_ID_UNSET
         /** Çözücüsü elinden alınınca yeniden hazırlama denemesi (bkz. [onPlayerError]) */
         private var reclaimRetries = 0
 
@@ -551,6 +565,7 @@ class ReelsPlayback(
             player.setMediaItem(MediaItem.Builder().setUri(item.uri).setMediaId(item.id.toString()).build())
             player.prepare()
             updateBoost()
+            updateNormalize()
         }
 
         fun clear() {
@@ -562,6 +577,7 @@ class ReelsPlayback(
             updateScrubbing()
             updateRepeat()
             updateBoost()
+            updateNormalize()
             player.stop()
             player.clearMediaItems()
             player.clearVideoSurface()
@@ -575,6 +591,7 @@ class ReelsPlayback(
             updateScrubbing()
             updateRepeat()
             updateBoost()
+            updateNormalize()
         }
 
         /** Uzun video ekrana gelince kaldığı yerden başlar */
@@ -592,6 +609,7 @@ class ReelsPlayback(
             updateScrubbing()
             updateRepeat()
             updateBoost()
+            updateNormalize()
             player.playWhenReady = false
             // Geri dönülünce baştan başlasın; beklerken de ilk karesi görünsün
             player.seekTo(0)
@@ -636,10 +654,36 @@ class ReelsPlayback(
             }
         }
 
+        /**
+         * Ses dengeleme (Android 9+): sıkıştırıcı kısık sesleri ~+10 dB yükseltir, eşiğin
+         * üstündekileri 4'te 1'e bastırır; sınırlayıcı patlamayı (cızırtıyı) önler. Böylece
+         * fısıltılı ve bağırışlı videolar aşağı yukarı aynı seviyede duyulur.
+         */
+        fun updateNormalize() {
+            if (Build.VERSION.SDK_INT < 28) return
+            val session = player.audioSessionId
+            val shouldRun = active && normalize && !muted && session != C.AUDIO_SESSION_ID_UNSET
+            if (!shouldRun) {
+                runCatching { dynamics?.enabled = false }
+                return
+            }
+            runCatching {
+                if (dynamics == null || dynamicsSessionId != session) {
+                    dynamics?.release()
+                    dynamics = createNormalizer(session)
+                    dynamicsSessionId = session
+                }
+                dynamics?.enabled = true
+            }
+        }
+
         fun releaseEnhancer() {
             runCatching { enhancer?.release() }
             enhancer = null
             enhancerSessionId = C.AUDIO_SESSION_ID_UNSET
+            runCatching { dynamics?.release() }
+            dynamics = null
+            dynamicsSessionId = C.AUDIO_SESSION_ID_UNSET
         }
 
         override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
@@ -648,6 +692,7 @@ class ReelsPlayback(
 
         override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
             updateBoost()
+            updateNormalize()
         }
 
         override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
@@ -730,6 +775,32 @@ class ReelsPlayback(
             val id = eventTime.timeline.getWindow(eventTime.windowIndex, Timeline.Window()).mediaItem.mediaId.toLongOrNull()
             return id?.takeIf { it == itemId }
         }
+    }
+}
+
+/** Ses dengeleyici: tek bantlı sıkıştırıcı + sınırlayıcı (bkz. PlayerSlot.updateNormalize) */
+@androidx.annotation.RequiresApi(28)
+private fun createNormalizer(session: Int): DynamicsProcessing {
+    val config = DynamicsProcessing.Config.Builder(
+        DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+        2, // kanal
+        false, 0, // ön EQ yok
+        true, 1, // tek bantlı sıkıştırıcı
+        false, 0, // son EQ yok
+        true, // sınırlayıcı
+    ).build()
+    return DynamicsProcessing(0, session, config).apply {
+        setMbcBandAllChannelsTo(
+            0,
+            DynamicsProcessing.MbcBand(
+                true, 20_000f, // bütün frekanslar
+                10f, 250f, // atak / bırakma (ms)
+                4f, -30f, 8f, // oran, eşik (dB), diz genişliği
+                -70f, 1f, // gürültü kapısı kapalı sayılır
+                0f, 10f, // ön / son kazanç (dB)
+            ),
+        )
+        setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 10f, -2f, 0f))
     }
 }
 

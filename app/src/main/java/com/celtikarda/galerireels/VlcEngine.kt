@@ -40,6 +40,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var pendingStart = false
     private var muted = false
     private var boosted = false
+    private var normalize = false
     private var speed = 1f
     /** Geri sarılıyor: ses kısılır (video ileri-geri atlarken cızırtı olmasın) */
     private var scrubbing = false
@@ -123,6 +124,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
         pendingStart = waitForView || !vout.areViewsAttached()
         val startNow = !pendingStart
         val volume = targetVolume()
+        val normalizeNow = normalize
 
         onControl {
             stopPlayer()
@@ -137,6 +139,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
                 // Buraya sadece donanımın açamadığı videolar gelir; doğrudan FFmpeg / dav1d ile çöz
                 setHWDecoderEnabled(false, false)
                 addOption(":input-repeat=65535") // başa sar
+                if (normalizeNow) addOption(":audio-filter=normvol")
             }
             player.media = media
             media.release()
@@ -245,6 +248,14 @@ class VlcEngine private constructor(private val appContext: Context, private val
     fun setBoosted(boosted: Boolean) {
         this.boosted = boosted
         if (hasMedia) applyVolume()
+    }
+
+    /**
+     * Ses dengeleme: VLC'nin "normvol" süzgeci. Süzgeç video açılırken eklendiği için açıp
+     * kapatmak bir sonraki VLC videosunda etkili olur.
+     */
+    fun setNormalize(normalize: Boolean) {
+        this.normalize = normalize
     }
 
     fun setSpeed(speed: Float) {

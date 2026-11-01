@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -236,8 +238,9 @@ fun AlbumsScreen(
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
+            // Gizleme bir klasöre basılı tutunca açılan menüde; gizlenenler varsa başlığın ⋮ menüsünden açılır
             Row(
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(start = 2.dp, top = 6.dp),
             ) {
                 Text(
@@ -248,19 +251,28 @@ fun AlbumsScreen(
                     modifier = Modifier.weight(1f),
                 )
                 if (hiddenCount > 0) {
-                    Text(
-                        "${formatCount(hiddenCount)} gizli · Göster",
-                        color = InstaBlue,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable(onClick = onOpenSettings),
-                    )
-                } else {
-                    Text(
-                        "Gizlemek için basılı tut",
-                        color = appColors.textMuted,
-                        fontSize = 12.sp,
-                    )
+                    var headerMenuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { headerMenuOpen = true }, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                painterResource(R.drawable.ic_more_vert),
+                                contentDescription = "Klasör seçenekleri",
+                                tint = appColors.textSecondary,
+                            )
+                        }
+                        DropdownMenu(expanded = headerMenuOpen, onDismissRequest = { headerMenuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Gizlenen klasörler (${formatCount(hiddenCount)})") },
+                                leadingIcon = {
+                                    Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = appColors.textPrimary)
+                                },
+                                onClick = {
+                                    headerMenuOpen = false
+                                    onOpenSettings()
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -270,10 +282,7 @@ fun AlbumsScreen(
                 album = album,
                 itemWord = mode.itemWord,
                 onClick = { vm.open(album) },
-                onLongClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    pendingHide = album
-                },
+                onHide = { pendingHide = album },
             )
         }
 
@@ -549,13 +558,38 @@ private fun RecentTile(video: VideoItem, views: Int, onClick: () -> Unit) {
 /** Telefonun galerisindeki gibi: kare kapak, altında klasör adı ve içerik sayısı */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> Unit, onHide: (() -> Unit)? = null) {
+    // Basılı tutunca klasörün menüsü (şimdilik: Klasörü gizle)
+    var menuOpen by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onHide?.let {
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menuOpen = true
+                    }
+                },
+            )
     ) {
+        if (onHide != null) {
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Klasörü gizle") },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = appColors.textPrimary)
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onHide()
+                    },
+                )
+            }
+        }
         Box(
             Modifier
                 .fillMaxWidth()

@@ -135,6 +135,19 @@ kolaylaştırmak.
     giderildi: video yüzeyi artık VLC durduktan sonra kaldırılıyor, art arda iki VLC videosunda da beklemiyor.
   - Uygulama derlenirken kod küçültülüp optimize ediliyor (R8): ekranlar daha akıcı, APK 35,7 MB'tan 26 MB'a indi.
 
+- [x] **1.5 Yatay ekran ve uyku**
+  - **Parlaklık / ses kaydırma:** Yatay tam ekranda sol kenarda yukarı-aşağı kaydırınca parlaklık, sağ
+    kenarda ses değişir. Ortadan kaydırmak yine sıradaki videoya geçer.
+  - **Doldur / sığdır:** Tam ekranda iki parmakla açınca video ekranı doldurur, kapatınca tamamı görünür.
+  - **Ekran kilidi:** Tam ekranda üstteki kilit simgesi dokunuşları ve geri tuşunu kilitler; dokununca
+    çıkan "Kilidi açmak için dokun" ile açılır.
+  - **Küçük pencere (resim içinde resim):** Üç nokta menüsünden, ya da tam ekranda video oynarken ana
+    ekrana dönünce kendiliğinden. Oynat/durdur ve sonraki düğmeleri var; pencere kapanınca video durur.
+  - **Uyku zamanlayıcısı:** 15–90 dakika sonra video durur (arka planda oynuyorsa da).
+  - **Ses dengeleme:** Kısık sesleri yükseltir, bağırışları bastırır; videolar aşağı yukarı aynı seviyede duyulur.
+  - **Klasör gizleme yeni yerinde:** Klasöre basılı tutunca açılan menüde "Klasörü gizle"; gizlenenler
+    "Klasörler" başlığının yanındaki ⋮ menüsünde.
+
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki
   platforma göre yeniden düzenlenmesi gerekiyor. Android sürümü olgunlaşınca karar verilecek.

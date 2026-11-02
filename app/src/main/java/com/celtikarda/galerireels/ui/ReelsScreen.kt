@@ -141,6 +141,7 @@ import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
 import com.celtikarda.galerireels.VlcEngine
 import com.celtikarda.galerireels.frameSaveSupported
+import com.celtikarda.galerireels.videoEditSupported
 import com.celtikarda.galerireels.saveFrameAsPhoto
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
@@ -273,6 +274,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
     }
     var infoItem by remember { mutableStateOf<VideoItem?>(null) }
+    // Kırp / sıkıştır ekranı açık olan video
+    var trimTarget by remember { mutableStateOf<VideoItem?>(null) }
     // Tüm beğenileri kaldırmadan önce onay
     var pendingClearLikes by remember { mutableStateOf<VideoItem?>(null) }
     val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -722,6 +725,14 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                         chipTick++
                     }
                 },
+                onTrim = {
+                    if (active) {
+                        trimTarget = item
+                        // Kırparken video durur (kodlayıcı ile oynatıcı aynı anda yorulmasın)
+                        userPaused = true
+                        playback.setPaused(true)
+                    }
+                },
                 onSaveFrame = {
                     val position = playback.positionOf(item)
                     if (active && position != null) {
@@ -915,6 +926,19 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             )
         }
 
+        trimTarget?.let { item ->
+            TrimDialog(
+                item = item,
+                onSaved = {
+                    trimTarget = null
+                    chipText = "Yeni video Filmler/GaleriReels'e kaydedildi"
+                    chipTick++
+                    vm.reloadVideos()
+                },
+                onDismiss = { trimTarget = null },
+            )
+        }
+
         infoItem?.let { item ->
             VideoInfoDialog(
                 item = item,
@@ -999,6 +1023,7 @@ private fun ReelPage(
     onPip: () -> Unit,
     onAbLoop: () -> Unit,
     onSaveFrame: () -> Unit,
+    onTrim: () -> Unit,
     /** Temizlik modunda: videoyu silinecekler listesine ekler (sola kaydırma ya da çöp kutusu) */
     onDelete: (() -> Unit)?,
 ) {
@@ -1220,6 +1245,7 @@ private fun ReelPage(
                     onPip = onPip,
                     onAbLoop = onAbLoop,
                     onSaveFrame = onSaveFrame,
+                    onTrim = onTrim,
                     onDelete = onDelete,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -1536,6 +1562,7 @@ private fun ActionRail(
     onPip: () -> Unit,
     onAbLoop: () -> Unit,
     onSaveFrame: () -> Unit,
+    onTrim: () -> Unit,
     onDelete: (() -> Unit)?,
     modifier: Modifier,
 ) {
@@ -1764,6 +1791,18 @@ private fun ActionRail(
                             onAbLoop()
                         },
                     )
+                    if (videoEditSupported) {
+                        DropdownMenuItem(
+                            text = { Text("Kırp / sıkıştır") },
+                            leadingIcon = {
+                                Icon(painterResource(R.drawable.ic_cut), contentDescription = null, tint = appColors.textPrimary)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onTrim()
+                            },
+                        )
+                    }
                     if (frameSaveSupported) {
                         DropdownMenuItem(
                             text = { Text("Bu kareyi fotoğraf olarak kaydet") },

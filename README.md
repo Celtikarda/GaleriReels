@@ -148,6 +148,17 @@ kolaylaştırmak.
   - **Klasör gizleme yeni yerinde:** Klasöre basılı tutunca açılan menüde "Klasörü gizle"; gizlenenler
     "Klasörler" başlığının yanındaki ⋮ menüsünde.
 
+- [x] **1.6 PIN'li gizli klasörler ve kırpma**
+  - **PIN kilidi:** Ayarlar › Gizlenen klasörler'den 4 haneli PIN koy; gizlenen klasörleri görmek ve
+    geri açmak için PIN ya da telefonunun kilidi (parmak izi) sorulur. Uygulamadan çıkınca tekrar
+    kilitlenir, 5 yanlış denemeden sonra 30 saniye beklenir. PIN'in kendisi saklanmaz.
+  - **Kırp / sıkıştır:** Üç nokta menüsünden; videonun istediğin parçasını kes, istersen 720p / 480p'ye
+    küçült. Yeni video Filmler/GaleriReels klasörüne kaydedilir, orijinali silinmez (Android 10+).
+  - **Sade görünüm:** Yatay tam ekranda üstteki göz simgesi bütün düğmeleri ve yazıları gizler;
+    geri tuşu ya da ortaya basılı tutmak geri getirir.
+  - Doldur modunda video kaydırırken komşu videonun üstüne taşmıyor; parlaklık kaydırması ilk
+    hareketten itibaren hissediliyor.
+
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki
   platforma göre yeniden düzenlenmesi gerekiyor. Android sürümü olgunlaşınca karar verilecek.

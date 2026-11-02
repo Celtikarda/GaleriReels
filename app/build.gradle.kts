@@ -19,8 +19,8 @@ android {
         applicationId = "com.celtikarda.galerireels"
         minSdk = 26
         targetSdk = 37
-        versionCode = 18
-        versionName = "1.5"
+        versionCode = 19
+        versionName = "1.6"
 
         // libVLC her işlemci mimarisi için ~25 MB; sadece telefonlardaki 64-bit ARM
         ndk { abiFilters += "arm64-v8a" }

@@ -118,6 +118,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -145,6 +147,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 private val textShadow = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.85f), offset = Offset(0f, 1.5f), blurRadius = 8f))
@@ -186,6 +189,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var fastForward by remember { mutableStateOf(false) }
     var rewind by remember { mutableStateOf(false) }
     var clearView by remember { mutableStateOf(false) }
+    // Sade tam ekran: yatay tam ekranda bütün düğmeler / yazılar gizli, sadece video
+    var hideUi by rememberSaveable { mutableStateOf(false) }
     /** Yatay tam ekranda ekran kilidi: dokunuşlar videoya gitmez (yatarken / cepteyken izlemek için) */
     var locked by remember { mutableStateOf(false) }
     var lockHintTick by remember { mutableIntStateOf(0) }
@@ -202,8 +207,14 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var adjustLevel by remember { mutableFloatStateOf(0f) }
     var adjusting by remember { mutableStateOf(false) }
     var volumeLevel by remember { mutableFloatStateOf(-1f) }
+    var brightLevel by remember { mutableFloatStateOf(-1f) }
     val audioManager = remember { context.getSystemService(AudioManager::class.java) }
-    LaunchedEffect(fullscreen) { if (!fullscreen) locked = false }
+    LaunchedEffect(fullscreen) {
+        if (!fullscreen) {
+            locked = false
+            hideUi = false
+        }
+    }
 
     // "Karışık sıra" / "Yeniden eskiye" bilgi baloncuğu
     var chipText by remember { mutableStateOf("") }
@@ -303,6 +314,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val leave = {
         when {
             locked -> lockHintTick += 1
+            hideUi -> hideUi = false
             fullscreen -> fullscreen = false
             cleanup && vm.cleanupMarked.isNotEmpty() -> askBeforeLeaving = true
             else -> onBack()
@@ -310,6 +322,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     }
     BackHandler(enabled = cleanup && vm.cleanupMarked.isNotEmpty()) { askBeforeLeaving = true }
     BackHandler(enabled = fullscreen) { fullscreen = false }
+    // Sade tam ekranda geri tuşu önce düğmeleri geri getirir
+    BackHandler(enabled = hideUi && !locked) { hideUi = false }
     // Kilitliyken geri tuşu da çalışmaz; kilit simgesi gösterilir
     BackHandler(enabled = locked) { lockHintTick++ }
     LaunchedEffect(cleanup) {
@@ -510,13 +524,23 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         adjusting = true
         if (side < 0) {
             activity?.window?.let { window ->
+                // Göz parlaklığı doğrusal algılamaz: düz ölçekte üst yarıda kaydırınca ekran
+                // neredeyse değişmiyor, azaltma gecikiyormuş gibi geliyordu. Parmak algısal
+                // seviyeyi değiştirir, ekrana bunun ~2.2 kuvveti verilir.
+                if (brightLevel < 0f) {
+                    val attrs = window.attributes
+                    val now = if (attrs.screenBrightness >= 0f) attrs.screenBrightness else systemBrightness(context)
+                    brightLevel = now.coerceIn(0f, 1f).pow(1f / 2.2f)
+                }
+                brightLevel = (brightLevel + delta).coerceIn(0.05f, 1f)
+                val target = brightLevel.pow(2.2f)
                 val attrs = window.attributes
-                val now = if (attrs.screenBrightness >= 0f) attrs.screenBrightness else systemBrightness(context)
-                val next = (now + delta).coerceIn(0.01f, 1f)
-                attrs.screenBrightness = next
-                window.attributes = attrs
+                if (abs(attrs.screenBrightness - target) > 0.002f) {
+                    attrs.screenBrightness = target
+                    window.attributes = attrs
+                }
                 adjustKind = -1
-                adjustLevel = next
+                adjustLevel = brightLevel
             }
         } else {
             val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
@@ -534,6 +558,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val adjustEnd: () -> Unit = {
         adjusting = false
         volumeLevel = -1f
+        brightLevel = -1f
     }
     LaunchedEffect(adjusting) {
         if (!adjusting && adjustKind != 0) {
@@ -564,7 +589,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 firstFrameShown = active && item.id in playback.renderedIds,
                 error = playback.error?.takeIf { it.first == item.id }?.second,
                 paused = active && userPaused,
-                clearView = active && (clearView || inPip || locked),
+                clearView = active && (clearView || inPip || locked || hideUi),
                 fullscreen = fullscreen,
                 fill = fullscreen && fill,
                 gesturesEnabled = fullscreen && !locked && !inPip,
@@ -620,7 +645,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 },
                 onClearHold = { holding ->
                     if (active) {
-                        clearView = holding
+                        if (hideUi) {
+                            // Sade tam ekranda ortaya basılı tutmak düğmeleri geri getirir
+                            if (holding) hideUi = false
+                        } else {
+                            clearView = holding
+                        }
                     }
                 },
                 onDoubleTapLike = { vm.like(item) },
@@ -726,7 +756,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
 
         AnimatedVisibility(
-            visible = !clearView && !inPip && !locked,
+            visible = !clearView && !inPip && !locked && !hideUi,
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
@@ -747,6 +777,11 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                     locked = true
                     clearView = false
                     lockHintTick++
+                },
+                onHideUi = {
+                    hideUi = true
+                    chipText = "Sade görünüm · geri tuşu ya da ortaya basılı tut: düğmeler"
+                    chipTick++
                 },
             )
         }
@@ -771,7 +806,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             )
         }
 
-        if (cleanup && vm.cleanupMarked.isNotEmpty() && !clearView && !inPip) {
+        if (cleanup && vm.cleanupMarked.isNotEmpty() && !clearView && !inPip && !hideUi) {
             CleanupBar(
                 count = vm.cleanupMarked.size,
                 bytes = vm.cleanupMarked.sumOf { it.sizeBytes },
@@ -1271,22 +1306,32 @@ private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, a
     var vlcAspect by remember(item.id) { mutableFloatStateOf(0f) }
     val ratio = if (aspectRatio > 0f) aspectRatio else vlcAspect
 
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
+        // Doldur: kısa kenar ekrana oturur, taşan kısım ekran dışında kalır
+        val fillSize = if (fill && ratio > 0f && maxHeight.value > 0f) {
+            if (ratio > maxWidth / maxHeight) DpSize(maxHeight * ratio, maxHeight)
+            else DpSize(maxWidth, maxWidth / ratio)
+        } else null
         val videoBox = when {
             ratio <= 0f -> Modifier.fillMaxSize()
-            // Doldur: kısa kenar ekrana oturur, taşan kısım ekran dışında kalır
-            fill && maxHeight.value > 0f -> if (ratio > maxWidth / maxHeight) {
-                Modifier.requiredSize(maxHeight * ratio, maxHeight)
-            } else {
-                Modifier.requiredSize(maxWidth, maxWidth / ratio)
-            }
+            fillSize != null -> Modifier.requiredSize(fillSize)
             else -> Modifier.aspectRatio(ratio)
+        }
+        // SurfaceView, Compose'un kırpmasını dinlemez: taşan kısım kaydırırken komşu sayfanın
+        // üstünde görünüyordu. Yüzeyi sayfanın sınırına kendimiz kırparız (Android 13+).
+        val density = LocalDensity.current
+        val surfaceClip = fillSize?.let {
+            with(density) {
+                val left = ((it.width - maxWidth) / 2).roundToPx().coerceAtLeast(0)
+                val top = ((it.height - maxHeight) / 2).roundToPx().coerceAtLeast(0)
+                android.graphics.Rect(left, top, left + maxWidth.roundToPx(), top + maxHeight.roundToPx())
+            }
         }
         Box(videoBox) {
             when {
-                vlc != null -> VlcSurface(vlc, onAspectRatio = { vlcAspect = it })
+                vlc != null -> VlcSurface(vlc, surfaceClip, onAspectRatio = { vlcAspect = it })
                 // Oynatıcı başka videoya geçerse yüzey de yenilenir
-                player != null -> key(player) { ExoSurface(player) }
+                player != null -> key(player) { ExoSurface(player, surfaceClip) }
             }
 
             // İlk kare gelene kadar küçük resim videonun yerinde durur, sonra hızlıca kaybolur
@@ -1310,7 +1355,7 @@ private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, a
 }
 
 @Composable
-private fun ExoSurface(player: ExoPlayer) {
+private fun ExoSurface(player: ExoPlayer, clip: android.graphics.Rect?) {
     AndroidView(
         factory = { ctx ->
             SurfaceView(ctx).apply {
@@ -1318,6 +1363,7 @@ private fun ExoSurface(player: ExoPlayer) {
                 player.setVideoSurfaceView(this)
             }
         },
+        update = { if (it.clipBounds != clip) it.clipBounds = clip },
         onRelease = { player.clearVideoSurfaceView(it) },
         modifier = Modifier.fillMaxSize(),
     )
@@ -1325,7 +1371,7 @@ private fun ExoSurface(player: ExoPlayer) {
 
 /** VLC görüntüyü yüzeyin tamamına gerer; yüzeyi videonun oranında tutmak çağıranın işi. */
 @Composable
-private fun VlcSurface(vlc: VlcEngine, onAspectRatio: (Float) -> Unit) {
+private fun VlcSurface(vlc: VlcEngine, clip: android.graphics.Rect?, onAspectRatio: (Float) -> Unit) {
     AndroidView(
         factory = { ctx ->
             SurfaceView(ctx).apply {
@@ -1344,6 +1390,7 @@ private fun VlcSurface(vlc: VlcEngine, onAspectRatio: (Float) -> Unit) {
                 })
             }
         },
+        update = { if (it.clipBounds != clip) it.clipBounds = clip },
         onRelease = { vlc.detach() },
         modifier = Modifier.fillMaxSize(),
     )
@@ -2217,6 +2264,7 @@ private fun TopBar(
     onToggleShuffle: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onLock: () -> Unit,
+    onHideUi: () -> Unit,
 ) {
     Row(
         Modifier
@@ -2249,6 +2297,9 @@ private fun TopBar(
             }
         }
         if (fullscreen) {
+            IconButton(onClick = onHideUi) {
+                Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = "Sade görünüm (düğmeleri gizle)", tint = Color.White)
+            }
             IconButton(onClick = onLock) {
                 Icon(painterResource(R.drawable.ic_lock), contentDescription = "Ekranı kilitle", tint = Color.White)
             }

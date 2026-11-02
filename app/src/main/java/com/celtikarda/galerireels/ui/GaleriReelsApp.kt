@@ -141,6 +141,9 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
         if (vm.loaded) vm.updates.check()
     }
 
+    // Uygulama arka plana gidince gizlenen klasörler tekrar kilitlenir
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.hiddenLock.lock() }
+
     val openAlbum = vm.openAlbum
     BackHandler(enabled = openAlbum != null) { vm.close() }
     BackHandler(enabled = openAlbum == null && showSettings) { showSettings = false }

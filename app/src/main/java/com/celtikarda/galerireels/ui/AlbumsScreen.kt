@@ -262,7 +262,8 @@ fun AlbumsScreen(
                         }
                         DropdownMenu(expanded = headerMenuOpen, onDismissRequest = { headerMenuOpen = false }) {
                             DropdownMenuItem(
-                                text = { Text("Gizlenen klasörler (${formatCount(hiddenCount)})") },
+                                // PIN varken kaç klasör gizlendiği de görünmez
+                                text = { Text(if (vm.hiddenLock.hasPin) "Gizlenen klasörler" else "Gizlenen klasörler (${formatCount(hiddenCount)})") },
                                 leadingIcon = {
                                     Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = appColors.textPrimary)
                                 },

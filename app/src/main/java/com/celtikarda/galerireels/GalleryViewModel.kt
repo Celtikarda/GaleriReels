@@ -18,6 +18,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     val stats = StatsStore(app, viewModelScope).also { it.load() }
     /** GitHub'da yeni sürüm çıktı mı */
     val updates = UpdateChecker(app)
+    /** Gizlenen klasörlerin PIN kilidi */
+    val hiddenLock = HiddenLock(app)
     // Temizlikte silinince değişir; ekranlar yenilensin diye gözlenebilir
     private var allVideos by mutableStateOf<List<VideoItem>>(emptyList())
     private var allPhotos by mutableStateOf<List<VideoItem>>(emptyList())

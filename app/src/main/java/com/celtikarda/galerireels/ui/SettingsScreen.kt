@@ -296,6 +296,19 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
         SectionTitle("Gizlenen klasörler", R.drawable.ic_folder)
         Card {
             val hidden = vm.hiddenFolders
+            val lock = vm.hiddenLock
+            var pinMode by remember { mutableStateOf<PinMode?>(null) }
+            pinMode?.let { mode ->
+                PinDialog(
+                    lock = lock,
+                    mode = mode,
+                    onDone = {
+                        pinMode = null
+                        if (mode == PinMode.SET) Toast.makeText(context, "PIN kaydedildi", Toast.LENGTH_SHORT).show()
+                    },
+                    onDismiss = { pinMode = null },
+                )
+            }
             Text(
                 "Ana ekranda bir klasöre basılı tutup «Klasörü gizle»yi seçerek gizleyebilirsin. Gizlenen klasörler " +
                     "Tüm videolar, Tarihte bugün ve Temizlik önerilerine girmez.",
@@ -303,7 +316,16 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
-            if (hidden.isEmpty()) {
+            if (lock.hasPin && !lock.unlocked) {
+                // Kilitliyken ne kaç klasör olduğu ne de adları görünür
+                Text("PIN ile kilitli.", color = appColors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { pinMode = PinMode.UNLOCK }) {
+                    Icon(painterResource(R.drawable.ic_lock_open), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Kilidi aç")
+                }
+            } else if (hidden.isEmpty()) {
                 Text("Gizlenmiş klasör yok.", color = appColors.textSecondary, fontSize = 14.sp)
             } else {
                 hidden.forEach { album ->
@@ -331,6 +353,34 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = { vm.unhideAllAlbums() }) {
                         Text("Tümünü göster (${hidden.size})")
+                    }
+                }
+            }
+            if (!lock.hasPin || lock.unlocked) {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    if (lock.hasPin) {
+                        "PIN açık: bu liste PIN ya da telefonunun kilidiyle (parmak izi) açılır. Uygulamadan çıkınca tekrar kilitlenir."
+                    } else {
+                        "PIN koyarsan bu listeyi görmek ve klasörleri geri açmak için PIN sorulur."
+                    },
+                    color = appColors.textSecondary,
+                    fontSize = 13.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                if (lock.hasPin) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { pinMode = PinMode.SET }) { Text("PIN'i değiştir") }
+                        OutlinedButton(onClick = {
+                            lock.removePin()
+                            Toast.makeText(context, "PIN kaldırıldı", Toast.LENGTH_SHORT).show()
+                        }) { Text("PIN'i kaldır") }
+                    }
+                } else {
+                    OutlinedButton(onClick = { pinMode = PinMode.SET }) {
+                        Icon(painterResource(R.drawable.ic_lock), contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("PIN koy")
                     }
                 }
             }

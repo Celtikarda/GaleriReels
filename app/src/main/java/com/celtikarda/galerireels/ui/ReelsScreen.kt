@@ -24,6 +24,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.TextureView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -60,7 +61,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -118,7 +118,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -148,6 +147,8 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -157,6 +158,8 @@ private val textShadow = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.85
 fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val items = vm.items
     val pagerState = rememberPagerState { vm.items.size }
+    // Video bitince sıradaki, kaydırma bitmesini beklemeden hemen oynamaya başlar
+    var advancingTo by remember { mutableStateOf<Int?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -195,8 +198,9 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     /** Yatay tam ekranda ekran kilidi: dokunuşlar videoya gitmez (yatarken / cepteyken izlemek için) */
     var locked by remember { mutableStateOf(false) }
     var lockHintTick by remember { mutableIntStateOf(0) }
-    /** Tam ekranda iki parmakla büyütünce video ekranı doldurur (kenarları kırpılır) */
-    var fill by rememberSaveable { mutableStateOf(false) }
+    /** Tam ekranda iki parmakla yakınlaştırma: 0 videonun tamamı, 1 ekranı doldurur (kenarları kırpılır) */
+    var videoZoom by rememberSaveable { mutableFloatStateOf(0f) }
+    var lastZoomEnd by rememberSaveable { mutableFloatStateOf(0f) }
     /** Uyku zamanlayıcısının dolacağı an (SystemClock.elapsedRealtime); kapalıysa 0 */
     var sleepAt by rememberSaveable { mutableLongStateOf(0L) }
     /** Küçük pencerede (resim içinde resim) oynuyor */
@@ -235,8 +239,20 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             onEnded = {
                 val nextIndex = pagerState.settledPage + 1
                 if (nextIndex < vm.items.size) {
-                    // Arka planda kare çizilmediği için kaydırma animasyonu ilerlemez
-                    scope.launch { if (inBackground) pagerState.scrollToPage(nextIndex) else pagerState.animateScrollToPage(nextIndex) }
+                    advancingTo = nextIndex
+                    scope.launch {
+                        try {
+                            // Arka planda kare çizilmediği için kaydırma animasyonu ilerlemez
+                            if (inBackground) {
+                                pagerState.scrollToPage(nextIndex)
+                            } else {
+                                pagerState.animateScrollToPage(nextIndex, animationSpec = tween(AUTO_ADVANCE_SLIDE_MS))
+                            }
+                        } finally {
+                            // Kullanıcı kaydırmayı keserse oturduğu sayfa geçerli olur
+                            advancingTo = null
+                        }
+                    }
                     true
                 } else {
                     false
@@ -336,7 +352,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
     }
 
-    val page = pagerState.settledPage
+    val page = advancingTo ?: pagerState.settledPage
     val current = items.getOrNull(page)
     val previous = items.getOrNull(page - 1)
     val next = items.getOrNull(page + 1)
@@ -579,7 +595,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             key = { items[it].id },
         ) { index ->
             val item = items[index]
-            val active = index == pagerState.settledPage
+            val active = index == page
 
             ReelPage(
                 item = item,
@@ -594,16 +610,18 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 paused = active && userPaused,
                 clearView = active && (clearView || inPip || locked || hideUi),
                 fullscreen = fullscreen,
-                fill = fullscreen && fill,
+                zoom = { if (fullscreen) videoZoom else 0f },
                 gesturesEnabled = fullscreen && !locked && !inPip,
                 onAdjust = adjust,
                 onAdjustEnd = adjustEnd,
-                onPinch = { zoomIn ->
-                    if (fill != zoomIn) {
-                        fill = zoomIn
-                        chipText = if (zoomIn) "Ekranı doldur" else "Videonun tamamı"
+                onZoomBy = { delta -> videoZoom = (videoZoom + delta).coerceIn(0f, 1f) },
+                onZoomEnd = {
+                    videoZoom = snapZoom(videoZoom)
+                    if ((videoZoom == 0f || videoZoom == 1f) && videoZoom != lastZoomEnd) {
+                        chipText = if (videoZoom == 1f) "Ekranı doldur" else "Videonun tamamı"
                         chipTick++
                     }
+                    lastZoomEnd = videoZoom
                 },
                 leftHoldAction = vm.stats.leftHoldAction,
                 rightHoldAction = vm.stats.rightHoldAction,
@@ -967,12 +985,14 @@ private fun ReelPage(
     clearView: Boolean,
     fullscreen: Boolean,
     /** Video ekranı doldurur (kenarları kırpılır) */
-    fill: Boolean,
-    /** Parlaklık / ses kaydırma ve iki parmakla doldur / sığdır */
+    /** Okuma yeniden çizimle olur, yeniden yerleşim olmaz: parmakları gecikmesiz takip eder */
+    zoom: () -> Float,
+    /** Parlaklık / ses kaydırma ve iki parmakla kademeli yakınlaştırma */
     gesturesEnabled: Boolean,
     onAdjust: (side: Int, delta: Float) -> Unit,
     onAdjustEnd: () -> Unit,
-    onPinch: (zoomIn: Boolean) -> Unit,
+    onZoomBy: (delta: Float) -> Unit,
+    onZoomEnd: () -> Unit,
     leftHoldAction: EdgeHoldAction,
     rightHoldAction: EdgeHoldAction,
     /** Bu açılışta beğenildi mi (kalp dolu) */
@@ -1078,17 +1098,20 @@ private fun ReelPage(
 
     val adjustBy by rememberUpdatedState(onAdjust)
     val adjustEnd by rememberUpdatedState(onAdjustEnd)
-    val pinch by rememberUpdatedState(onPinch)
+    val zoomBy by rememberUpdatedState(onZoomBy)
+    val zoomEnd by rememberUpdatedState(onZoomEnd)
+    val videoRatio by rememberUpdatedState(aspectRatio)
     val gestures = if (!gesturesEnabled) Modifier else Modifier.fullscreenGestures(
         onAdjust = { side, delta -> adjustBy(side, delta) },
         onAdjustEnd = { adjustEnd() },
-        onPinch = { pinch(it) },
+        onPinch = { factor, width, height -> zoomBy(zoomDelta(factor, videoRatio, width, height)) },
+        onPinchEnd = { zoomEnd() },
     )
 
     Box(Modifier.fillMaxSize().then(swipe).then(gestures)) {
         if (swipeX.value < 0f) DeleteBackdrop()
         Box(Modifier.fillMaxSize().offset { IntOffset(swipeX.value.roundToInt(), 0) }) {
-            VideoSurface(item, player, vlc, aspectRatio, firstFrameShown, fill)
+            VideoSurface(item, player, vlc, aspectRatio, firstFrameShown, fullscreen, zoom)
 
             // Tek dokunma: durdur/oynat · Çift dokunma: beğen (yatay tam ekranda sol / sağ kenarda ∓10 sn)
             // Sağ/sol kenara (%25) basılı tutma: Ayarlar'da seçilen işlem · Ortaya basılı tutma: net görünüm (butonları gizle)
@@ -1205,9 +1228,10 @@ private fun ReelPage(
                 // Sağdaki butonların arkasında hafif karartma: parlak videolarda simge ve sayılar okunsun
                 Box(
                     Modifier
-                        .align(Alignment.BottomEnd)
+                        .align(Alignment.CenterEnd)
                         .width(96.dp)
-                        .fillMaxHeight(if (fullscreen) 0.85f else 0.65f)
+                        // Tam boy: kısa olunca üst kenarı videonun üstünde dikdörtgen gibi görünüyordu
+                        .fillMaxHeight()
                         .graphicsLayer { alpha = uiAlpha }
                         .background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f))))
                 )
@@ -1311,12 +1335,47 @@ private fun CleanupBar(count: Int, bytes: Long, onUndo: () -> Unit, onDelete: ()
     }
 }
 
+/** Video bitince sıradakine geçiş animasyonu; video bu sırada zaten oynuyor */
+private const val AUTO_ADVANCE_SLIDE_MS = 220
+
+/** Videonun sayfayı doldurması için gereken ölçek; oran bilinmiyorsa ya da zaten doluyorsa 1 */
+internal fun fillScale(ratio: Float, pageWidth: Float, pageHeight: Float): Float {
+    if (ratio <= 0f || pageWidth <= 0f || pageHeight <= 0f) return 1f
+    val pageRatio = pageWidth / pageHeight
+    return maxOf(ratio / pageRatio, pageRatio / ratio)
+}
+
+/**
+ * Parmakların [factor] kadar açılması yakınlaştırmayı ne kadar değiştirir: ölçek `fillScale ^ zoom`
+ * olduğu için görüntü parmaklarla birebir büyür. Oran bilinmiyorsa ya da video sayfayı zaten
+ * dolduruyorsa değişmez.
+ */
+internal fun zoomDelta(factor: Float, ratio: Float, pageWidth: Float, pageHeight: Float): Float {
+    val maxScale = fillScale(ratio, pageWidth, pageHeight)
+    return if (maxScale < 1.01f || factor <= 0f) 0f else ln(factor) / ln(maxScale)
+}
+
+/** Parmak kalkınca uçlara çok yakınsa tam uca oturur */
+internal fun snapZoom(zoom: Float): Float = when {
+    zoom < 0.04f -> 0f
+    zoom > 0.96f -> 1f
+    else -> zoom
+}
+
 /**
  * Video alanı en baştan videonun oranında açılır (boyutu galeri biliyor); oynatıcı videonun
  * boyutunu söyleyene kadar tam ekran kalıp sonra küçülmez.
  */
 @Composable
-private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, aspectRatio: Float, firstFrameShown: Boolean, fill: Boolean = false) {
+private fun VideoSurface(
+    item: VideoItem,
+    player: ExoPlayer?,
+    vlc: VlcEngine?,
+    aspectRatio: Float,
+    firstFrameShown: Boolean,
+    fullscreen: Boolean,
+    zoom: () -> Float,
+) {
     if (item.isPhoto) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             AsyncImage(
@@ -1333,31 +1392,37 @@ private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, a
     val ratio = if (aspectRatio > 0f) aspectRatio else vlcAspect
 
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
-        // Doldur: kısa kenar ekrana oturur, taşan kısım ekran dışında kalır
-        val fillSize = if (fill && ratio > 0f && maxHeight.value > 0f) {
-            if (ratio > maxWidth / maxHeight) DpSize(maxHeight * ratio, maxHeight)
-            else DpSize(maxWidth, maxWidth / ratio)
-        } else null
-        val videoBox = when {
-            ratio <= 0f -> Modifier.fillMaxSize()
-            fillSize != null -> Modifier.requiredSize(fillSize)
-            else -> Modifier.aspectRatio(ratio)
-        }
-        // SurfaceView, Compose'un kırpmasını dinlemez: taşan kısım kaydırırken komşu sayfanın
-        // üstünde görünüyordu. Yüzeyi sayfanın sınırına kendimiz kırparız (Android 13+).
+        val videoBox = if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.fillMaxSize()
+        // Yakınlaştırma yalnızca ölçektir: yerleşim ve yüzey değişmez, parmakları gecikmesiz izler
+        val maxScale = fillScale(ratio, maxWidth.value, maxHeight.value)
+        // VLC yüzeyi taşan kısmıyla kaydırırken komşu sayfanın üstünde görünmesin (Android 13+)
         val density = LocalDensity.current
-        val surfaceClip = fillSize?.let {
-            with(density) {
-                val left = ((it.width - maxWidth) / 2).roundToPx().coerceAtLeast(0)
-                val top = ((it.height - maxHeight) / 2).roundToPx().coerceAtLeast(0)
-                android.graphics.Rect(left, top, left + maxWidth.roundToPx(), top + maxHeight.roundToPx())
+        val surfaceClip = if (vlc == null || ratio <= 0f) null else {
+            val scale = maxScale.pow(zoom())
+            if (scale <= 1.001f) null else with(density) {
+                val pageRatio = maxWidth / maxHeight
+                val fitWidth = if (ratio > pageRatio) maxWidth else maxHeight * ratio
+                val fitHeight = if (ratio > pageRatio) maxWidth / ratio else maxHeight
+                val visibleWidth = minOf(fitWidth, maxWidth / scale)
+                val visibleHeight = minOf(fitHeight, maxHeight / scale)
+                val left = ((fitWidth - visibleWidth) / 2).roundToPx()
+                val top = ((fitHeight - visibleHeight) / 2).roundToPx()
+                android.graphics.Rect(left, top, left + visibleWidth.roundToPx(), top + visibleHeight.roundToPx())
             }
         }
-        Box(videoBox) {
+        Box(
+            videoBox.graphicsLayer {
+                val scale = maxScale.pow(zoom())
+                scaleX = scale
+                scaleY = scale
+            },
+        ) {
             when {
                 vlc != null -> VlcSurface(vlc, surfaceClip, onAspectRatio = { vlcAspect = it })
                 // Oynatıcı başka videoya geçerse yüzey de yenilenir
-                player != null -> key(player) { ExoSurface(player, surfaceClip) }
+                player != null -> key(player, fullscreen) {
+                    if (fullscreen) ExoTexture(player) else ExoSurface(player)
+                }
             }
 
             // İlk kare gelene kadar küçük resim videonun yerinde durur, sonra hızlıca kaybolur
@@ -1381,7 +1446,7 @@ private fun VideoSurface(item: VideoItem, player: ExoPlayer?, vlc: VlcEngine?, a
 }
 
 @Composable
-private fun ExoSurface(player: ExoPlayer, clip: android.graphics.Rect?) {
+private fun ExoSurface(player: ExoPlayer) {
     AndroidView(
         factory = { ctx ->
             SurfaceView(ctx).apply {
@@ -1389,8 +1454,27 @@ private fun ExoSurface(player: ExoPlayer, clip: android.graphics.Rect?) {
                 player.setVideoSurfaceView(this)
             }
         },
-        update = { if (it.clipBounds != clip) it.clipBounds = clip },
         onRelease = { player.clearVideoSurfaceView(it) },
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+/**
+ * Tam ekranda yakınlaştırılan video sayfadan taşar. SurfaceView pencerenin altında durduğu için
+ * hiçbir kırpma onu kesmez (clipBounds yalnızca penceredeki deliği küçültür): komşu sayfanın taşan
+ * kısmı ekrandaki videonun üstüne biniyordu. TextureView pencerenin içinde çizilir, Compose'un
+ * kırpmasına uyar. Tam ekrana girerken bir kez bağlanır; yakınlaştırırken yüzey değişmez.
+ */
+@Composable
+private fun ExoTexture(player: ExoPlayer) {
+    AndroidView(
+        factory = { ctx ->
+            TextureView(ctx).apply {
+                keepScreenOn = true
+                player.setVideoTextureView(this)
+            }
+        },
+        onRelease = { player.clearVideoTextureView(it) },
         modifier = Modifier.fillMaxSize(),
     )
 }
@@ -2054,35 +2138,39 @@ private fun resetBrightness(activity: Activity) {
 
 /**
  * Yatay tam ekran hareketleri:
- * - Sol %40'ta yukarı / aşağı kaydırma: parlaklık, sağ %40'ta: ses ([onAdjust] side -1 / 1,
+ * - Sol %20'de yukarı / aşağı kaydırma: parlaklık, sağ %20'de: ses ([onAdjust] side -1 / 1,
  *   delta: ekran yüksekliğinin kesri, yukarı artı)
- * - İki parmakla açma: ekranı doldur, kapatma: videonun tamamı ([onPinch])
- * Ortada dikey kaydırma eskisi gibi sonraki videoya geçer; yatay kaydırmalar (ilerleme çubuğu,
+ * - İki parmak: parmakları izleyerek kademeli yakınlaşır / uzaklaşır ([onPinch] son olaydan beri
+ *   açılma oranı ve sayfa boyutu, parmaklar kalkınca [onPinchEnd])
+ * Ortadaki geniş alanda dikey kaydırma sonraki videoya geçer; yatay kaydırmalar (ilerleme çubuğu,
  * temizlikte silme) dokunulmadan bırakılır.
  */
 private fun Modifier.fullscreenGestures(
     onAdjust: (side: Int, delta: Float) -> Unit,
     onAdjustEnd: () -> Unit,
-    onPinch: (zoomIn: Boolean) -> Unit,
+    onPinch: (factor: Float, pageWidth: Float, pageHeight: Float) -> Unit,
+    onPinchEnd: () -> Unit,
 ): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         val side = when {
-            down.position.x < size.width * 0.4f -> -1
-            down.position.x > size.width * 0.6f -> 1
+            down.position.x < size.width * ADJUST_EDGE_FRACTION -> -1
+            down.position.x > size.width * (1f - ADJUST_EDGE_FRACTION) -> 1
             else -> 0
         }
         // 0: henüz belli değil, 1: parlaklık / ses, 2: iki parmak, -1: başka bir hareket
         var mode = 0
         var moved = Offset.Zero
-        var zoom = 1f
         while (true) {
             val event = awaitPointerEvent()
             if (event.changes.none { it.pressed }) break
             val fingers = event.changes.count { it.pressed }
-            if (fingers >= 2 && (mode == 0 || mode == 2)) {
+            // İlk parmak biraz kaymış olsa da ikinci parmak gelince yakınlaştırmaya geçilir
+            if (fingers >= 2 && mode != -1) {
+                if (mode == 1) onAdjustEnd()
                 mode = 2
-                zoom *= event.calculateZoom()
+                val factor = event.calculateZoom()
+                if (factor != 1f) onPinch(factor, size.width.toFloat(), size.height.toFloat())
                 event.changes.forEach { it.consume() }
                 continue
             }
@@ -2111,13 +2199,13 @@ private fun Modifier.fullscreenGestures(
         }
         when (mode) {
             1 -> onAdjustEnd()
-            2 -> when {
-                zoom > 1.12f -> onPinch(true)
-                zoom < 0.89f -> onPinch(false)
-            }
+            2 -> onPinchEnd()
         }
     }
 }
+
+/** Parlaklık / ses kaydırmasının başladığı kenar alanı: kalan orta kısım sonraki videoya geçer */
+private const val ADJUST_EDGE_FRACTION = 0.2f
 
 /** Parlaklık / ses ayarlanırken ekranın ortasında simge, çubuk ve yüzde */
 @Composable

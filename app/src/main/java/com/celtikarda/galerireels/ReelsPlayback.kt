@@ -541,6 +541,8 @@ class ReelsPlayback(
         private var dynamicsSessionId = C.AUDIO_SESSION_ID_UNSET
         /** Çözücüsü elinden alınınca yeniden hazırlama denemesi (bkz. [onPlayerError]) */
         private var reclaimRetries = 0
+        /** Ekrandan çıkan videonun başa sarılması (bkz. [deactivate]) */
+        private var leaveRewindJob: Job? = null
 
         /** Videonun kare hızı; başlıkta yazmıyorsa 0 */
         val frameRate: Float get() = videoFormat?.frameRate ?: 0f
@@ -550,6 +552,7 @@ class ReelsPlayback(
         }
 
         fun load(item: VideoItem) {
+            leaveRewindJob?.cancel()
             itemId = item.id
             this.item = item
             reclaimRetries = 0
@@ -569,6 +572,7 @@ class ReelsPlayback(
         }
 
         fun clear() {
+            leaveRewindJob?.cancel()
             if (itemId == null) return
             itemId = null
             item = null
@@ -584,6 +588,9 @@ class ReelsPlayback(
         }
 
         fun activate(play: Boolean) {
+            // Kaydırılırken geri dönüldüyse sarma hâlâ bekliyor: hemen yapılır
+            if (leaveRewindJob?.isActive == true) player.seekTo(0)
+            leaveRewindJob?.cancel()
             if (!active) restorePosition()
             active = true
             player.playWhenReady = play
@@ -611,8 +618,13 @@ class ReelsPlayback(
             updateBoost()
             updateNormalize()
             player.playWhenReady = false
-            // Geri dönülünce baştan başlasın; beklerken de ilk karesi görünsün
-            player.seekTo(0)
+            // Geri dönülünce baştan başlasın; beklerken de ilk karesi görünsün. Kaydırma bitmeden
+            // sarmayız: yoksa ekrandan çıkan video son anda ilk karesine atlıyor.
+            leaveRewindJob?.cancel()
+            leaveRewindJob = scope.launch {
+                delay(REWIND_AFTER_LEAVE_MS)
+                if (!released) player.seekTo(0)
+            }
         }
 
         fun updateSpeed() {
@@ -806,6 +818,9 @@ private fun createNormalizer(session: Int): DynamicsProcessing {
 
 /** Bir videonun izlenmiş sayılması için oynaması gereken süre */
 private const val VIEW_AFTER_MS = 5_000L
+
+/** Ekrandan çıkan video, kaydırma bittikten sonra başa sarılır */
+private const val REWIND_AFTER_LEAVE_MS = 300L
 
 private fun isSoftwareDecoder(name: String): Boolean =
     name.startsWith("c2.android.") || name.startsWith("OMX.google.")

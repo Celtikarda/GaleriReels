@@ -138,7 +138,7 @@ kolaylaştırmak.
 - [x] **1.5 Yatay ekran ve uyku**
   - **Parlaklık / ses kaydırma:** Yatay tam ekranda sol kenarda yukarı-aşağı kaydırınca parlaklık, sağ
     kenarda ses değişir. Ortadan kaydırmak yine sıradaki videoya geçer.
-  - **Doldur / sığdır:** Tam ekranda iki parmakla açınca video ekranı doldurur, kapatınca tamamı görünür.
+  - **Kademeli yakınlaştırma:** Tam ekranda iki parmakla video parmakları izleyerek büyür, istediğin seviyede kalır; en fazla ekranı doldurur.
   - **Ekran kilidi:** Tam ekranda üstteki kilit simgesi dokunuşları ve geri tuşunu kilitler; dokununca
     çıkan "Kilidi açmak için dokun" ile açılır.
   - **Küçük pencere (resim içinde resim):** Üç nokta menüsünden, ya da tam ekranda video oynarken ana
@@ -158,6 +158,11 @@ kolaylaştırmak.
     geri tuşu ya da ortaya basılı tutmak geri getirir.
   - Doldur modunda video kaydırırken komşu videonun üstüne taşmıyor; parlaklık kaydırması ilk
     hareketten itibaren hissediliyor.
+
+- [x] **1.6.1 Daha akıcı geçişler ve kademeli yakınlaştırma**
+  - Video bitince sıradaki, kaydırma animasyonunu beklemeden hemen başlar.
+  - Yatay tam ekranda iki parmakla kademeli yakınlaştırma; yakınlaştırınca yandaki videonun taşması düzeltildi.
+  - Parlaklık ve ses için yalnızca ekranın kenarları kullanılır, video geçişi için ortada geniş alan kalır.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

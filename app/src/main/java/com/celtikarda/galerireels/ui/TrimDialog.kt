@@ -1,5 +1,7 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.str
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -113,13 +115,13 @@ fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
-            Text("Kırp / sıkıştır", color = appColors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(str(R.string.trim_compress), color = appColors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(item.name, color = appColors.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(14.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FramePreview("Başlangıç", startFrame, formatDuration(startMs), item, Modifier.weight(1f))
-                FramePreview("Bitiş", endFrame, formatDuration(endMs), item, Modifier.weight(1f))
+                FramePreview(str(R.string.start_point), startFrame, formatDuration(startMs), item, Modifier.weight(1f))
+                FramePreview(str(R.string.end_point), endFrame, formatDuration(endMs), item, Modifier.weight(1f))
             }
             Spacer(Modifier.height(10.dp))
 
@@ -133,7 +135,7 @@ fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
                 NudgeButtons(enabled = !exporting, onNudge = { nudge(true, it) })
                 Spacer(Modifier.weight(1f))
                 Text(
-                    "Süre: ${formatDuration(endMs - startMs)}",
+                    str(R.string.duration_x, formatDuration(endMs - startMs)),
                     color = appColors.textPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -143,31 +145,31 @@ fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
             }
             Spacer(Modifier.height(14.dp))
 
-            Text("Kalite", color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.quality), color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 qualities.forEach { q ->
                     FilterChip(
                         selected = quality == q,
                         onClick = { if (!exporting) quality = q },
-                        label = { Text(q.title) },
+                        label = { Text(if (q == EditQuality.ORIGINAL) str(R.string.quality_original) else q.title) },
                     )
                 }
             }
             Text(
-                "Tahmini boyut: ~${formatSize(quality.estimateBytes(item, endMs - startMs))} (orijinal: ${formatSize(item.sizeBytes)})",
+                str(R.string.estimated_size, formatSize(quality.estimateBytes(item, endMs - startMs)), formatSize(item.sizeBytes)),
                 color = appColors.textSecondary,
                 fontSize = 13.sp,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Yeni video Filmler/GaleriReels klasörüne kaydedilir; orijinal video silinmez.",
+                str(R.string.trim_save_note),
                 color = appColors.textSecondary,
                 fontSize = 12.sp,
             )
 
             error?.let {
                 Spacer(Modifier.height(8.dp))
-                Text("Kaydedilemedi: $it", color = Color(0xFFED4956), fontSize = 13.sp)
+                Text(str(R.string.save_failed, it), color = Color(0xFFED4956), fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(16.dp))
@@ -176,7 +178,7 @@ fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Kaydediliyor… %${(progress * 100).toInt()}",
+                        str(R.string.saving_pct, (progress * 100).toInt()),
                         color = appColors.textPrimary,
                         fontSize = 14.sp,
                         modifier = Modifier.weight(1f),
@@ -185,11 +187,11 @@ fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
                         job?.cancel()
                         job = null
                         progress = 0f
-                    }) { Text("Durdur") }
+                    }) { Text(str(R.string.stop)) }
                 }
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Vazgeç") }
+                    TextButton(onClick = onDismiss) { Text(str(R.string.dismiss)) }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = {
                         error = null
@@ -202,7 +204,7 @@ fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
                                 is EditResult.Failed -> error = result.reason
                             }
                         }
-                    }) { Text("Kaydet") }
+                    }) { Text(str(R.string.save)) }
                 }
             }
         }

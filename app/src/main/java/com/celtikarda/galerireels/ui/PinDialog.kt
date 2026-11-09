@@ -1,5 +1,6 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.str
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
@@ -99,7 +100,7 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
                     onDone()
                 } else {
                     first = null
-                    message = "PIN'ler aynı değil, baştan gir"
+                    message = str(R.string.pin_mismatch)
                     shakeTick++
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
@@ -109,7 +110,7 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
                     onDone()
                 } else {
                     wait = lock.waitSeconds()
-                    message = if (wait > 0) null else "Yanlış PIN"
+                    message = if (wait > 0) null else str(R.string.pin_wrong)
                     shakeTick++
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
@@ -131,9 +132,9 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
             Spacer(Modifier.height(10.dp))
             Text(
                 when {
-                    mode == PinMode.UNLOCK -> "Gizlenen klasörler"
-                    first == null -> "Yeni PIN (${HiddenLock.PIN_LENGTH} hane)"
-                    else -> "PIN'i tekrar gir"
+                    mode == PinMode.UNLOCK -> str(R.string.hidden_folders)
+                    first == null -> str(R.string.pin_new, HiddenLock.PIN_LENGTH)
+                    else -> str(R.string.pin_again)
                 },
                 color = appColors.textPrimary,
                 fontSize = 18.sp,
@@ -142,10 +143,10 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
             Spacer(Modifier.height(4.dp))
             Text(
                 when {
-                    wait > 0 -> "Çok fazla yanlış deneme. $wait sn bekle"
+                    wait > 0 -> str(R.string.pin_wait, wait)
                     message != null -> message!!
-                    mode == PinMode.UNLOCK -> "Görmek için PIN'i gir"
-                    else -> "Gizlenen klasörleri görmek için sorulacak"
+                    mode == PinMode.UNLOCK -> str(R.string.pin_enter_to_view)
+                    else -> str(R.string.pin_will_ask)
                 },
                 color = if (wait > 0 || message != null) Color(0xFFED4956) else appColors.textSecondary,
                 fontSize = 13.sp,
@@ -162,13 +163,13 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
                         when (key) {
                             "bio" -> if (mode == PinMode.UNLOCK && deviceUnlock != null) {
                                 KeyButton(onClick = deviceUnlock) {
-                                    Icon(painterResource(R.drawable.ic_fingerprint), contentDescription = "Telefonun kilidiyle aç", tint = appColors.textPrimary)
+                                    Icon(painterResource(R.drawable.ic_fingerprint), contentDescription = str(R.string.unlock_with_device), tint = appColors.textPrimary)
                                 }
                             } else {
                                 Spacer(Modifier.size(64.dp))
                             }
                             "del" -> KeyButton(onClick = { entered = entered.dropLast(1) }) {
-                                Icon(painterResource(R.drawable.ic_backspace), contentDescription = "Sil", tint = appColors.textPrimary)
+                                Icon(painterResource(R.drawable.ic_backspace), contentDescription = str(R.string.delete), tint = appColors.textPrimary)
                             }
                             else -> KeyButton(onClick = {
                                 if (wait == 0 && entered.length < HiddenLock.PIN_LENGTH) {
@@ -183,7 +184,7 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
                 }
             }
             Spacer(Modifier.height(6.dp))
-            TextButton(onClick = onDismiss) { Text("Vazgeç") }
+            TextButton(onClick = onDismiss) { Text(str(R.string.dismiss)) }
         }
     }
 }
@@ -242,8 +243,8 @@ private fun rememberDeviceUnlock(context: Context, onSuccess: () -> Unit): (() -
     return {
         if (Build.VERSION.SDK_INT >= 30) {
             val prompt = BiometricPrompt.Builder(activity)
-                .setTitle("Gizlenen klasörler")
-                .setSubtitle("Telefonunun kilidiyle doğrula")
+                .setTitle(str(R.string.hidden_folders))
+                .setSubtitle(str(R.string.verify_device))
                 .setAllowedAuthenticators(
                     BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
                 )
@@ -257,7 +258,7 @@ private fun rememberDeviceUnlock(context: Context, onSuccess: () -> Unit): (() -
             )
         } else {
             @Suppress("DEPRECATION")
-            keyguard.createConfirmDeviceCredentialIntent("Gizlenen klasörler", "Telefonunun kilidiyle doğrula")
+            keyguard.createConfirmDeviceCredentialIntent(str(R.string.hidden_folders), str(R.string.verify_device))
                 ?.let { legacyLauncher.launch(it) }
         }
     }

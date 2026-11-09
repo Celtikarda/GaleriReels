@@ -493,7 +493,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             prefs.edit { putLong(KEY_LAST_SAVE, lastFolderSave) }
             folderError = null
         }?.onFailure {
-            folderError = "Seçtiğin klasöre yazılamadı. Klasör silinmiş ya da izni kaldırılmış olabilir; Ayarlar'dan yeniden seç."
+            folderError = str(R.string.err_folder_write)
         }
     }
 

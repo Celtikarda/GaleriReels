@@ -1,5 +1,8 @@
 package com.celtikarda.galerireels
 
+import com.celtikarda.galerireels.ui.formatCount
+import androidx.annotation.StringRes
+import androidx.annotation.PluralsRes
 import android.net.Uri
 
 data class VideoItem(
@@ -33,25 +36,34 @@ data class VideoItem(
 }
 
 /** Uygulamada hangi medya türünün gösterileceği */
-enum class MediaMode(val title: String, val itemWord: String, val pluralWord: String) {
-    VIDEOS("Videolar", "video", "videolar"),
-    PHOTOS("Fotoğraflar", "fotoğraf", "fotoğraflar"),
-    ALL("Tümü", "içerik", "içerikler"),
+enum class MediaMode(@StringRes private val titleRes: Int, @PluralsRes private val countRes: Int) {
+    VIDEOS(R.string.mode_videos, R.plurals.n_videos),
+    PHOTOS(R.string.mode_photos, R.plurals.n_photos),
+    ALL(R.string.mode_all, R.plurals.n_items);
+
+    val title: String get() = str(titleRes)
+
+    /** "12 video" / "12 videos", "3 fotoğraf" / "3 photos" */
+    fun count(n: Int): String = plural(countRes, n, formatCount(n))
 }
 
 /** Uygulama arayüzünün renk teması (Reels oynatıcı ekranı her zaman sinema siyahı kalır) */
-enum class ThemeMode(val title: String) {
-    DARK("Gece"),
-    LIGHT("Aydınlık"),
-    SYSTEM("Sistem"),
+enum class ThemeMode(@StringRes private val titleRes: Int) {
+    DARK(R.string.theme_dark),
+    LIGHT(R.string.theme_light),
+    SYSTEM(R.string.theme_system);
+
+    val title: String get() = str(titleRes)
 }
 
 /** Reels ekranında sol veya sağ kenara (%25) basılı tutulunca yapılacak işlem */
-enum class EdgeHoldAction(val title: String) {
-    FAST_FORWARD("2x İleri"),
-    REWIND("2x Geri"),
-    CLEAR_VIEW("Net görünüm"),
-    NONE("Kapalı"),
+enum class EdgeHoldAction(@StringRes private val titleRes: Int) {
+    FAST_FORWARD(R.string.edge_ff),
+    REWIND(R.string.edge_rew),
+    CLEAR_VIEW(R.string.edge_clear),
+    NONE(R.string.off);
+
+    val title: String get() = str(titleRes)
 }
 
 data class Album(

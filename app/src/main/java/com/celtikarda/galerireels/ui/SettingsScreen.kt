@@ -1,5 +1,8 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.AppLanguage
+import com.celtikarda.galerireels.plural
+import com.celtikarda.galerireels.str
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -121,23 +124,21 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)) {
             IconButton(onClick = onBack) {
-                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = appColors.textPrimary)
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = str(R.string.back), tint = appColors.textPrimary)
             }
-            Text("Ayarlar", color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(str(R.string.settings), color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         }
 
-        SectionTitle("Görünüm", if (appColors.isDark) R.drawable.ic_dark_mode else R.drawable.ic_light_mode)
+        SectionTitle(str(R.string.appearance), if (appColors.isDark) R.drawable.ic_dark_mode else R.drawable.ic_light_mode)
         Card {
             val currentTheme = stats.themeMode
             Text(
-                "Ana ekran, ayarlar, başarımlar ve aylık özet sayfalarında gece (koyu), aydınlık (açık) ya da " +
-                    "telefonunun sistem temasını kullanabilirsin. Reels oynatıcı ekranı videoların net görünmesi " +
-                    "için her zaman sinema siyahı kalır.",
+                str(R.string.theme_explain),
                 color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
-            InfoLine("Seçili tema", currentTheme.title)
+            InfoLine(str(R.string.selected_theme), currentTheme.title)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ThemeMode.entries.forEach { entry ->
@@ -150,20 +151,26 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             }
         }
 
-        SectionTitle("Medya modu", R.drawable.ic_play)
+        SectionTitle(str(R.string.language), R.drawable.ic_language)
+        Card {
+            Text(str(R.string.language_explain), color = appColors.textSecondary, fontSize = 14.sp)
+            Spacer(Modifier.height(12.dp))
+            LanguageSelector()
+        }
+
+        SectionTitle(str(R.string.media_mode), R.drawable.ic_play)
         Card {
             val currentMode = stats.mediaMode
             Text(
-                "Uygulamada sadece videoları, sadece fotoğrafları ya da ikisini birden Reels gibi " +
-                    "dikey kaydırarak gezebilir ve sola kaydırarak temizleyebilirsin.",
+                str(R.string.media_mode_explain),
                 color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
-            InfoLine("Seçili mod", currentMode.title)
+            InfoLine(str(R.string.selected_mode), currentMode.title)
             InfoLine(
-                "Galeride",
-                "${formatCount(vm.allVideosCount)} video · ${formatCount(vm.allPhotosCount)} fotoğraf",
+                str(R.string.in_gallery),
+                MediaMode.VIDEOS.count(vm.allVideosCount) + " · " + MediaMode.PHOTOS.count(vm.allPhotosCount),
             )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -177,7 +184,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             }
         }
 
-        SectionTitle("Beğeniler ve izlenmeler", R.drawable.ic_eye)
+        SectionTitle(str(R.string.likes_and_views), R.drawable.ic_eye)
         Card {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -188,9 +195,9 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Kayıt klasörü", color = appColors.textSecondary, fontSize = 13.sp)
+                    Text(str(R.string.save_folder), color = appColors.textSecondary, fontSize = 13.sp)
                     Text(
-                        folder?.displayPath ?: "Seçilmedi",
+                        folder?.displayPath ?: str(R.string.not_selected),
                         color = appColors.textPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -199,22 +206,22 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             }
             Spacer(Modifier.height(12.dp))
             if (folder != null) {
-                if (stats.lastFolderSave > 0) InfoLine("Son kayıt", formatDateTime(stats.lastFolderSave))
-                InfoLine("Dosyalar", "${DataFolder.DATA_FILE}, BENİ OKU.txt")
+                if (stats.lastFolderSave > 0) InfoLine(str(R.string.last_saved), formatDateTime(stats.lastFolderSave))
+                InfoLine(str(R.string.files), "${DataFolder.DATA_FILE}, BENİ OKU.txt")
             }
             InfoLine(
-                "Kayıtlı",
-                "${formatCount(stats.totalLikes)} beğeni · ${formatCount(stats.totalViews)} izlenme " +
-                    "(${formatCount(stats.watchedVideos)} video)",
+                str(R.string.saved_label),
+                plural(R.plurals.n_likes, stats.totalLikes, formatCount(stats.totalLikes)) + " · " + plural(R.plurals.n_views, stats.totalViews, formatCount(stats.totalViews)) +
+                    " (" + plural(R.plurals.n_videos, stats.watchedVideos, formatCount(stats.watchedVideos)) + ")",
             )
             val currentStreak = stats.currentStreak()
             val bestStreak = stats.bestStreak()
             if (bestStreak > 0) {
-                InfoLine("Seri", "$currentStreak gün üst üste (en uzun $bestStreak gün)")
+                InfoLine(str(R.string.streak), str(R.string.streak_value, currentStreak, bestStreak))
             }
 
             val warning = stats.folderError
-                ?: if (folder == null) "Klasör seçilmedi: uygulamayı silersen beğenilerin ve izlenmelerin kaybolur." else null
+                ?: if (folder == null) str(R.string.no_folder_warning) else null
             if (warning != null) {
                 Spacer(Modifier.height(10.dp))
                 Text(warning, color = WarningOrange, fontSize = 14.sp)
@@ -222,78 +229,73 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
 
             Spacer(Modifier.height(14.dp))
             if (folder == null) {
-                Button(onClick = onPickFolder) { Text("Klasör seç") }
+                Button(onClick = onPickFolder) { Text(str(R.string.choose_folder)) }
             } else {
-                OutlinedButton(onClick = onPickFolder) { Text("Klasörü değiştir") }
+                OutlinedButton(onClick = onPickFolder) { Text(str(R.string.change_folder)) }
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "Uygulamayı silip yeniden kurarsan aynı klasörü (Documents › GaleriReels) seçmen " +
-                    "yeterli; beğenilerin ve izlenmelerin geri gelir.",
+                str(R.string.reinstall_hint),
                 color = appColors.textMuted,
                 fontSize = 13.sp,
             )
         }
 
         if (MediaActions.trashSupported) {
-            SectionTitle("Temizlik", R.drawable.ic_delete_sweep)
+            SectionTitle(str(R.string.cleanup), R.drawable.ic_delete_sweep)
             Card {
-                InfoLine("Bugün", formatSize(stats.cleanedToday))
-                InfoLine("Toplam", formatSize(stats.cleanedTotal))
+                InfoLine(str(R.string.today), formatSize(stats.cleanedToday))
+                InfoLine(str(R.string.total), formatSize(stats.cleanedTotal))
                 Spacer(Modifier.height(10.dp))
                 val trash = stats.trashed.toList()
                 if (trash.isEmpty()) {
-                    Text("Çöp kutusunda uygulamanın sildiği içerik yok.", color = appColors.textSecondary, fontSize = 14.sp)
+                    Text(str(R.string.trash_empty), color = appColors.textSecondary, fontSize = 14.sp)
                 } else {
                     Text(
-                        "Çöp kutusunda ${formatCount(trash.size)} öğe (${formatSize(trash.sumOf { it.bytes })}). " +
-                            "Telefon bunları silindikten 30 gün sonra kendiliğinden siler; o zamana kadar geri getirebilirsin. " +
-                            "Yerin hemen açılması için kalıcı olarak silebilirsin.",
+                        str(R.string.trash_info, plural(R.plurals.n_items, trash.size, formatCount(trash.size)), formatSize(trash.sumOf { it.bytes })),
                         color = appColors.textPrimary,
                         fontSize = 14.sp,
                     )
                     Spacer(Modifier.height(12.dp))
                     Row {
-                        OutlinedButton(onClick = { trashAction(trash, true) }) { Text("Geri getir") }
+                        OutlinedButton(onClick = { trashAction(trash, true) }) { Text(str(R.string.restore)) }
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = { trashAction(trash, false) },
                             colors = ButtonDefaults.buttonColors(containerColor = DeleteRed, contentColor = Color.White),
-                        ) { Text("Kalıcı olarak sil") }
+                        ) { Text(str(R.string.delete_permanently)) }
                     }
                 }
             }
         }
 
         if (MediaActions.favoritesSupported) {
-            SectionTitle("Favoriler", R.drawable.ic_star)
+            SectionTitle(str(R.string.favorites), R.drawable.ic_star)
             Card {
                 val canManage = remember(resumeTick) { MediaActions.canManageMedia(context) }
                 Text(
-                    "Favoriler telefonunun galerisindeki favorilerle aynı listedir; burada eklediğin " +
-                        "galeride de favori olur.",
+                    str(R.string.favorites_explain),
                     color = appColors.textSecondary,
                     fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(10.dp))
                 if (canManage) {
-                    InfoLine("Onay", "Sorulmuyor (Medya yönetimi izni var)")
+                    InfoLine(str(R.string.confirmation), str(R.string.not_asked_media_mgmt))
                 } else {
                     Text(
-                        "Videoları çöp kutusuna taşırken (ve bazı telefonlarda favori eklerken) telefon " +
-                            "her seferinde onay sorar. \"Medya yönetimi\" izni verirsen sormaz.",
+                        str(R.string.media_mgmt_explain),
                         color = appColors.textPrimary,
                         fontSize = 14.sp,
                     )
                     MediaActions.manageMediaSettings(context)?.let { intent ->
                         Spacer(Modifier.height(10.dp))
-                        OutlinedButton(onClick = { context.startActivity(intent) }) { Text("İzni aç") }
+                        OutlinedButton(onClick = { context.startActivity(intent) }) { Text(str(R.string.grant_permission)) }
                     }
                 }
             }
         }
 
-        SectionTitle("Gizlenen klasörler", R.drawable.ic_folder)
+        SectionTitle(str(R.string.hidden_folders), R.drawable.ic_folder)
         Card {
             val hidden = vm.hiddenFolders
             val lock = vm.hiddenLock
@@ -304,29 +306,28 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     mode = mode,
                     onDone = {
                         pinMode = null
-                        if (mode == PinMode.SET) Toast.makeText(context, "PIN kaydedildi", Toast.LENGTH_SHORT).show()
+                        if (mode == PinMode.SET) Toast.makeText(context, str(R.string.pin_saved), Toast.LENGTH_SHORT).show()
                     },
                     onDismiss = { pinMode = null },
                 )
             }
             Text(
-                "Ana ekranda bir klasöre basılı tutup «Klasörü gizle»yi seçerek gizleyebilirsin. Gizlenen klasörler " +
-                    "Tüm videolar, Tarihte bugün ve Temizlik önerilerine girmez.",
+                str(R.string.hidden_explain),
                 color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
             if (lock.hasPin && !lock.unlocked) {
                 // Kilitliyken ne kaç klasör olduğu ne de adları görünür
-                Text("PIN ile kilitli.", color = appColors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(str(R.string.pin_locked), color = appColors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = { pinMode = PinMode.UNLOCK }) {
                     Icon(painterResource(R.drawable.ic_lock_open), contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Kilidi aç")
+                    Text(str(R.string.unlock))
                 }
             } else if (hidden.isEmpty()) {
-                Text("Gizlenmiş klasör yok.", color = appColors.textSecondary, fontSize = 14.sp)
+                Text(str(R.string.no_hidden), color = appColors.textSecondary, fontSize = 14.sp)
             } else {
                 hidden.forEach { album ->
                     Row(
@@ -341,18 +342,18 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                                 .clickable { vm.open(album) }
                         ) {
                             Text(album.name, color = appColors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text("${formatCount(album.count)} video · İzlemek için dokun", color = appColors.textSecondary, fontSize = 12.sp)
+                            Text(str(R.string.hidden_album_line, plural(R.plurals.n_videos, album.count, formatCount(album.count))), color = appColors.textSecondary, fontSize = 12.sp)
                         }
                         Spacer(Modifier.width(8.dp))
                         OutlinedButton(onClick = { vm.unhideAlbum(album.id) }) {
-                            Text("Göster")
+                            Text(str(R.string.show))
                         }
                     }
                 }
                 if (hidden.size > 1) {
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = { vm.unhideAllAlbums() }) {
-                        Text("Tümünü göster (${hidden.size})")
+                        Text(str(R.string.show_all_n, hidden.size))
                     }
                 }
             }
@@ -360,9 +361,9 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Spacer(Modifier.height(14.dp))
                 Text(
                     if (lock.hasPin) {
-                        "PIN açık: bu liste PIN ya da telefonunun kilidiyle (parmak izi) açılır. Uygulamadan çıkınca tekrar kilitlenir."
+                        str(R.string.pin_on_explain)
                     } else {
-                        "PIN koyarsan bu listeyi görmek ve klasörleri geri açmak için PIN sorulur."
+                        str(R.string.pin_off_explain)
                     },
                     color = appColors.textSecondary,
                     fontSize = 13.sp,
@@ -370,61 +371,59 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Spacer(Modifier.height(8.dp))
                 if (lock.hasPin) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { pinMode = PinMode.SET }) { Text("PIN'i değiştir") }
+                        OutlinedButton(onClick = { pinMode = PinMode.SET }) { Text(str(R.string.change_pin)) }
                         OutlinedButton(onClick = {
                             lock.removePin()
-                            Toast.makeText(context, "PIN kaldırıldı", Toast.LENGTH_SHORT).show()
-                        }) { Text("PIN'i kaldır") }
+                            Toast.makeText(context, str(R.string.pin_removed), Toast.LENGTH_SHORT).show()
+                        }) { Text(str(R.string.remove_pin)) }
                     }
                 } else {
                     OutlinedButton(onClick = { pinMode = PinMode.SET }) {
                         Icon(painterResource(R.drawable.ic_lock), contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("PIN koy")
+                        Text(str(R.string.set_pin))
                     }
                 }
             }
         }
 
-        SectionTitle("Oynatma", R.drawable.ic_play)
+        SectionTitle(str(R.string.playback), R.drawable.ic_play)
         Card {
             val bgPlay = stats.backgroundPlay
             Text(
-                "Arka planda oynatma açıkken uygulamadan çıksan ya da ekranı kapatsan bile videonun " +
-                    "sesi devam eder ve bildirim çubuğunda oynatıcı görünür.",
+                str(R.string.bg_play_explain),
                 color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
-            InfoLine("Durum", if (bgPlay) "Açık" else "Kapalı")
+            InfoLine(str(R.string.status), str(if (bgPlay) R.string.on else R.string.off))
             Spacer(Modifier.height(10.dp))
             if (bgPlay) {
-                OutlinedButton(onClick = { stats.updateBackgroundPlay(false) }) { Text("Kapat") }
+                OutlinedButton(onClick = { stats.updateBackgroundPlay(false) }) { Text(str(R.string.turn_off)) }
             } else {
-                Button(onClick = { stats.updateBackgroundPlay(true) }) { Text("Aç") }
+                Button(onClick = { stats.updateBackgroundPlay(true) }) { Text(str(R.string.turn_on)) }
             }
         }
         Spacer(Modifier.height(10.dp))
         Card {
             val leftAction = stats.leftHoldAction
             val rightAction = stats.rightHoldAction
-            Text("Kenarlara basılı tutma", color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.edge_hold), color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Videoları izlerken ekranın sol veya sağ kenarına (%25) basılı tuttuğunda yapılacak işlemi " +
-                    "seçebilirsin. Ekranın ortasına basılı tutmak her zaman arayüzü gizler (Net görünüm).",
+                str(R.string.edge_hold_explain),
                 color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(12.dp))
-            Text("Sol kenara basılı tutunca", color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.hold_left), color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             EdgeActionSelector(
                 selected = leftAction,
                 onSelect = { stats.updateLeftHoldAction(it) },
             )
             Spacer(Modifier.height(12.dp))
-            Text("Sağ kenara basılı tutunca", color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.hold_right), color = appColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             EdgeActionSelector(
                 selected = rightAction,
@@ -432,9 +431,9 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             )
         }
 
-        SectionTitle("Uygulama", R.drawable.ic_info)
+        SectionTitle(str(R.string.app_section), R.drawable.ic_info)
         Card {
-            InfoLine("Sürüm", version ?: "")
+            InfoLine(str(R.string.version_label), version ?: "")
             Row(
                 Modifier
                     .clickable {
@@ -442,7 +441,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     }
                     .padding(vertical = 3.dp)
             ) {
-                Text("Kaynak kodu", color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text(str(R.string.source_code), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
                 Text("github.com/Celtikarda/GaleriReels", color = InstaBlue, fontSize = 14.sp)
             }
             Row(
@@ -450,12 +449,12 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     .clickable { openIssueReport(context) }
                     .padding(vertical = 3.dp)
             ) {
-                Text("Geri bildirim", color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
-                Text("Sorun bildir / Öneri gönder", color = InstaBlue, fontSize = 14.sp)
+                Text(str(R.string.feedback), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text(str(R.string.report_or_suggest), color = InstaBlue, fontSize = 14.sp)
             }
             Spacer(Modifier.height(10.dp))
             OutlinedButton(onClick = { openIssueReport(context) }) {
-                Text("Sorun bildir")
+                Text(str(R.string.report_problem))
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -464,32 +463,31 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             val update = updates.available
             val scope = rememberCoroutineScope()
             var showDialog by remember { mutableStateOf(false) }
-            Text("Güncellemeler", color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.updates), color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Açıkken uygulama yeni sürüm çıkınca haber verir. Bunun için sadece GitHub'daki son sürüm " +
-                    "numarasına bakar; telefonundan hiçbir bilgi göndermez.",
+                str(R.string.updates_explain),
                 color = appColors.textSecondary,
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(10.dp))
-            InfoLine("Bildirim", if (updates.enabled) "Açık" else "Kapalı")
+            InfoLine(str(R.string.notification), str(if (updates.enabled) R.string.on else R.string.off))
             if (update != null) {
                 Row(
                     Modifier
                         .clickable { showDialog = true }
                         .padding(vertical = 3.dp)
                 ) {
-                    Text("Yeni sürüm", color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
-                    Text("${update.version} hazır, indir", color = InstaBlue, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(str(R.string.new_version_label), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                    Text(str(R.string.version_ready, update.version), color = InstaBlue, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (updates.enabled) {
-                    OutlinedButton(onClick = { updates.updateEnabled(false) }) { Text("Kapat") }
+                    OutlinedButton(onClick = { updates.updateEnabled(false) }) { Text(str(R.string.turn_off)) }
                 } else {
-                    Button(onClick = { updates.updateEnabled(true) }) { Text("Aç") }
+                    Button(onClick = { updates.updateEnabled(true) }) { Text(str(R.string.turn_on)) }
                 }
                 OutlinedButton(
                     enabled = !updates.checking,
@@ -497,15 +495,15 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                         scope.launch {
                             val text = when (updates.check(force = true)) {
                                 true -> null
-                                false -> "En son sürümü kullanıyorsun ($version)"
-                                null -> "Bağlanılamadı, internet bağlantını kontrol et"
+                                false -> str(R.string.up_to_date, "$version")
+                                null -> str(R.string.no_connection)
                             }
                             if (text == null) showDialog = true
                             else Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
                         }
                     },
                 ) {
-                    Text(if (updates.checking) "Bakılıyor…" else "Şimdi kontrol et")
+                    Text(str(if (updates.checking) R.string.checking else R.string.check_now))
                 }
             }
             if (showDialog && update != null) {
@@ -523,41 +521,68 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
 fun openIssueReport(context: Context, item: VideoItem? = null, errorText: String? = null) {
     val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—"
     val title = when {
-        item != null && item.isPhoto -> "Fotoğraf görüntüleme sorunu (${item.width}x${item.height})"
-        item != null -> "Video oynatma sorunu (${item.width}x${item.height})"
-        else -> "Sorun bildirimi / Öneri"
+        item != null && item.isPhoto -> str(R.string.issue_photo, "${item.width}x${item.height}")
+        item != null -> str(R.string.issue_video, "${item.width}x${item.height}")
+        else -> str(R.string.issue_general)
     }
     val body = buildString {
-        appendLine("### Açıklama")
+        appendLine("### ${str(R.string.issue_description)}")
         if (errorText != null) {
-            appendLine("Karşılaşılan hata: $errorText")
+            appendLine(str(R.string.issue_error, "$errorText"))
         } else {
-            appendLine("(Yaşadığın sorunu ya da önerini buraya yazabilirsin)")
+            appendLine(str(R.string.issue_placeholder))
         }
         appendLine()
-        appendLine("### Cihaz ve Uygulama Bilgisi")
-        appendLine("- **Uygulama sürümü:** $version")
-        appendLine("- **Telefon:** ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("### ${str(R.string.issue_device_info)}")
+        appendLine("- **${str(R.string.issue_app_version)}:** $version")
+        appendLine("- **${str(R.string.issue_phone)}:** ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("- **Android:** ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
         if (item != null) {
             appendLine("- **Format:** ${item.mimeType ?: "—"}")
-            appendLine("- **Çözünürlük:** ${item.width} × ${item.height}")
+            appendLine("- **${str(R.string.resolution)}:** ${item.width} × ${item.height}")
             if (item.isPhoto) {
-                appendLine("- **Boyut:** ${formatSize(item.sizeBytes)}")
+                appendLine("- **${str(R.string.size)}:** ${formatSize(item.sizeBytes)}")
             } else {
                 val engine = when (DecoderCheck.decision(item.id)) {
-                    true -> "VLC (yazılım)"
-                    false -> "ExoPlayer (donanım)"
+                    true -> str(R.string.vlc_software)
+                    false -> str(R.string.exo_hardware)
                     null -> "—"
                 }
-                appendLine("- **Boyut / Süre:** ${formatSize(item.sizeBytes)} · ${formatDuration(item.durationMs)}")
-                appendLine("- **Oynatıcı:** $engine")
+                appendLine("- **${str(R.string.size_duration)}:** ${formatSize(item.sizeBytes)} · ${formatDuration(item.durationMs)}")
+                appendLine("- **${str(R.string.player)}:** $engine")
             }
         }
     }
     val url = "https://github.com/Celtikarda/GaleriReels/issues/new?title=${Uri.encode(title)}&body=${Uri.encode(body)}"
     runCatching {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+}
+
+/** Telefonun dili / Türkçe / English; seçince Activity yeniden oluşur ve her şey o dilde açılır */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LanguageSelector() {
+    val context = LocalContext.current
+    val current = remember { AppLanguage.current(context) }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        AppLanguage.options.forEach { tag ->
+            // Dil adları her dilde kendi dilinde yazılır ki yanlış dilde kalan kullanıcı da bulabilsin
+            val label = when (tag) {
+                "tr" -> "Türkçe"
+                "en" -> "English"
+                else -> str(R.string.language_system)
+            }
+            val onClick = { (context as? Activity)?.let { AppLanguage.set(it, tag) }; Unit }
+            if (tag == current) {
+                Button(onClick = onClick) { Text(label) }
+            } else {
+                OutlinedButton(onClick = onClick) { Text(label) }
+            }
+        }
     }
 }
 

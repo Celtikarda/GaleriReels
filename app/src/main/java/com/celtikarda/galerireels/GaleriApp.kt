@@ -9,8 +9,13 @@ import kotlin.concurrent.thread
 
 class GaleriApp : Application(), SingletonImageLoader.Factory {
 
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(AppLanguage.wrap(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
+        Strings.use(resources)
         // Çözücü listesini ilk okumak ~250 ms sürüyor; ilk video açılırken beklemesin
         thread(name = "decoder-warmup") { DecoderCheck.warmUp() }
     }

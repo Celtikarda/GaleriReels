@@ -35,7 +35,7 @@ class DataFolder(
 
     /** Klasörün ne olduğunu anlatan not; zaten varsa dokunulmaz. */
     fun writeReadmeIfMissing(context: Context) {
-        if (findChild(context, README_FILE) == null) write(context, README_FILE, "text/plain", README)
+        if (findChild(context, README_FILE) == null) write(context, README_FILE, "text/plain", str(R.string.data_readme))
     }
 
     private fun write(context: Context, name: String, mime: String, text: String) {
@@ -78,7 +78,7 @@ class DataFolder(
                     }
                     val resolver = context.contentResolver
                     resolver.insert(MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)?.let { uri ->
-                        resolver.openOutputStream(uri)?.use { it.write(README.toByteArray(Charsets.UTF_8)) }
+                        resolver.openOutputStream(uri)?.use { it.write(str(R.string.data_readme).toByteArray(Charsets.UTF_8)) }
                     }
                 }
             }
@@ -136,20 +136,8 @@ class DataFolder(
         private fun readablePath(docId: String): String {
             val volume = docId.substringBefore(':', "")
             val path = docId.substringAfter(':')
-            val root = if (volume == "primary") "Telefon hafızası" else "SD kart"
+            val root = str(if (volume == "primary") R.string.storage_internal else R.string.storage_sd)
             return (listOf(root) + path.split('/').filter { it.isNotEmpty() }).joinToString(" › ")
         }
-
-        private val README = """
-            |Bu klasör Galeri Reels uygulamasının verilerini tutar:
-            |hangi videoları beğendiğin ve her videoyu kaç kez izlediğin (galerireels-veri.json).
-            |
-            |Uygulamayı silip yeniden kursan bile bu bilgiler burada kalır. Yeniden kurduğunda
-            |uygulama klasör sorunca bu klasörü (Documents › GaleriReels) seçmen yeterli;
-            |her şey geri gelir.
-            |
-            |Bu klasörü ve içindeki dosyaları silme, taşıma ya da adını değiştirme.
-            |Yedeklemek istersen klasörü olduğu gibi kopyalayabilirsin.
-            |""".trimMargin()
     }
 }

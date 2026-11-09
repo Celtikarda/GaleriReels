@@ -1,5 +1,7 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.plural
+import com.celtikarda.galerireels.str
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -112,22 +114,22 @@ fun AlbumsScreen(
                     IconButton(onClick = { vm.toggleDarkLight(isDark) }, modifier = Modifier.size(42.dp)) {
                         Icon(
                             painterResource(if (isDark) R.drawable.ic_light_mode else R.drawable.ic_dark_mode),
-                            contentDescription = if (isDark) "Aydınlık moda geç" else "Gece moduna geç",
+                            contentDescription = str(if (isDark) R.string.switch_light else R.string.switch_dark),
                             tint = appColors.textPrimary,
                         )
                     }
                     IconButton(onClick = onOpenRecap, modifier = Modifier.size(42.dp)) {
-                        Icon(painterResource(R.drawable.ic_recap), contentDescription = "Aylık özet", tint = InstaBlue)
+                        Icon(painterResource(R.drawable.ic_recap), contentDescription = str(R.string.monthly_recap), tint = InstaBlue)
                     }
                     IconButton(onClick = onOpenAchievements, modifier = Modifier.size(42.dp)) {
-                        Icon(painterResource(R.drawable.ic_trophy), contentDescription = "Başarımlar", tint = appColors.accentGold)
+                        Icon(painterResource(R.drawable.ic_trophy), contentDescription = str(R.string.achievements), tint = appColors.accentGold)
                     }
                     IconButton(onClick = onOpenSettings, modifier = Modifier.size(42.dp)) {
-                        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Ayarlar", tint = appColors.textPrimary)
+                        Icon(painterResource(R.drawable.ic_settings), contentDescription = str(R.string.settings), tint = appColors.textPrimary)
                     }
                 }
                 Text(
-                    "${formatCount(vm.videoCount)} ${mode.itemWord} · ${formatCount(vm.folderCount)} klasör",
+                    "${mode.count(vm.videoCount)} · ${plural(R.plurals.n_folders, vm.folderCount, formatCount(vm.folderCount))}",
                     color = appColors.textSecondary,
                     fontSize = 14.sp,
                 )
@@ -136,7 +138,7 @@ fun AlbumsScreen(
                 if (partialAccess) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Sınırlı erişim · Daha fazla video seç",
+                        str(R.string.limited_access),
                         color = InstaBlue,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -146,7 +148,7 @@ fun AlbumsScreen(
                 if (vm.stats.loaded && vm.stats.folder == null) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Beğeni ve izlenmelerin yedeklenmiyor · Klasör seç",
+                        str(R.string.not_backed_up),
                         color = InstaBlue,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -187,7 +189,7 @@ fun AlbumsScreen(
                         modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
                     ) {
                         Text(
-                            "Tarihte bugün",
+                            str(R.string.memories),
                             color = appColors.textPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
@@ -218,7 +220,7 @@ fun AlbumsScreen(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
                     Text(
-                        "Son izlediklerin",
+                        str(R.string.recent),
                         color = appColors.textPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -234,7 +236,7 @@ fun AlbumsScreen(
         }
 
         items(collections, key = { it.id }) { album ->
-            AlbumTile(album, itemWord = mode.itemWord, onClick = { vm.open(album) })
+            AlbumTile(album, mode = mode, onClick = { vm.open(album) })
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -244,7 +246,7 @@ fun AlbumsScreen(
                 modifier = Modifier.padding(start = 2.dp, top = 6.dp),
             ) {
                 Text(
-                    "Klasörler",
+                    str(R.string.folders),
                     color = appColors.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
@@ -256,14 +258,14 @@ fun AlbumsScreen(
                         IconButton(onClick = { headerMenuOpen = true }, modifier = Modifier.size(32.dp)) {
                             Icon(
                                 painterResource(R.drawable.ic_more_vert),
-                                contentDescription = "Klasör seçenekleri",
+                                contentDescription = str(R.string.folder_options),
                                 tint = appColors.textSecondary,
                             )
                         }
                         DropdownMenu(expanded = headerMenuOpen, onDismissRequest = { headerMenuOpen = false }) {
                             DropdownMenuItem(
                                 // PIN varken kaç klasör gizlendiği de görünmez
-                                text = { Text(if (vm.hiddenLock.hasPin) "Gizlenen klasörler" else "Gizlenen klasörler (${formatCount(hiddenCount)})") },
+                                text = { Text(if (vm.hiddenLock.hasPin) str(R.string.hidden_folders) else str(R.string.hidden_folders_count, formatCount(hiddenCount))) },
                                 leadingIcon = {
                                     Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = appColors.textPrimary)
                                 },
@@ -281,7 +283,7 @@ fun AlbumsScreen(
         items(folders, key = { it.id }) { album ->
             AlbumTile(
                 album = album,
-                itemWord = mode.itemWord,
+                mode = mode,
                 onClick = { vm.open(album) },
                 onHide = { pendingHide = album },
             )
@@ -304,17 +306,15 @@ fun AlbumsScreen(
             containerColor = appColors.card,
             titleContentColor = appColors.textPrimary,
             textContentColor = appColors.textSecondary,
-            title = { Text("«${folder.name}» gizlensin mi?", fontWeight = FontWeight.Bold) },
+            title = { Text(str(R.string.hide_folder_q, folder.name), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Bu klasördeki ${formatCount(folder.count)} video ana ekranda, Tüm videolar'da, " +
-                        "Tarihte bugün'de ve Temizlik önerilerinde gösterilmez.\n\n" +
-                        "İstediğin zaman Ayarlar › Gizlenen klasörler kısmından geri açabilirsin."
+                    str(R.string.hide_folder_body, plural(R.plurals.n_videos, folder.count, formatCount(folder.count)))
                 )
             },
             dismissButton = {
                 TextButton(onClick = { pendingHide = null }) {
-                    Text("İptal", color = appColors.textSecondary)
+                    Text(str(R.string.cancel), color = appColors.textSecondary)
                 }
             },
             confirmButton = {
@@ -324,7 +324,7 @@ fun AlbumsScreen(
                         pendingHide = null
                     }
                 ) {
-                    Text("Gizle", color = InstaBlue, fontWeight = FontWeight.Bold)
+                    Text(str(R.string.hide), color = InstaBlue, fontWeight = FontWeight.Bold)
                 }
             },
         )
@@ -387,11 +387,11 @@ private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("${formatMonth(recap.month)} özeti", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.month_recap, formatMonth(recap.month)), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             val details = buildList {
-                if (recap.totalViews > 0) add("${formatCount(recap.totalViews)} izlenme")
-                recap.topAlbum?.let { add("En çok: ${it.name}") }
-                if (recap.cleanedBytes > 0 && recap.topAlbum == null) add("${formatSize(recap.cleanedBytes)} temizlendi")
+                if (recap.totalViews > 0) add(plural(R.plurals.n_views, recap.totalViews, formatCount(recap.totalViews)))
+                recap.topAlbum?.let { add(str(R.string.top_folder, it.name)) }
+                if (recap.cleanedBytes > 0 && recap.topAlbum == null) add(str(R.string.size_cleaned, formatSize(recap.cleanedBytes)))
             }.joinToString(" · ")
             if (details.isNotEmpty()) {
                 Text(
@@ -404,7 +404,7 @@ private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
             }
         }
         Spacer(Modifier.width(8.dp))
-        Text("Özeti gör", color = FavoriteYellow, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(str(R.string.see_recap), color = FavoriteYellow, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -420,7 +420,7 @@ private fun CleanupCard(
     onStart: () -> Unit,
     onStartDuplicates: () -> Unit,
 ) {
-    val actionWord = if (mode == MediaMode.PHOTOS) "bakmadığın" else "izlemediğin"
+    val unwatchedRes = if (mode == MediaMode.PHOTOS) R.string.cleanup_unviewed else R.string.cleanup_unwatched
     Column(
         Modifier
             .fillMaxWidth()
@@ -445,19 +445,19 @@ private fun CleanupCard(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Temizlik", color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(str(R.string.cleanup), color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (unwatchedCount > 0) {
-                        "Hiç $actionWord ${formatCount(unwatchedCount)} ${mode.itemWord} ${formatSize(unwatchedBytes)} yer kaplıyor"
+                        str(unwatchedRes, mode.count(unwatchedCount), formatSize(unwatchedBytes))
                     } else {
-                        "Artık istemediğin içerikleri sil, yer aç"
+                        str(R.string.cleanup_hint)
                     },
                     color = appColors.textSecondary,
                     fontSize = 13.sp,
                 )
                 if (cleanedToday > 0) {
                     Text(
-                        "Bugün ${formatSize(cleanedToday)} temizledin",
+                        str(R.string.cleaned_today, formatSize(cleanedToday)),
                         color = CleanupGreen,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -465,7 +465,7 @@ private fun CleanupCard(
                 }
             }
             Spacer(Modifier.width(8.dp))
-            Text("Başla", color = InstaBlue, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.start), color = InstaBlue, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
         if (duplicateCount > 0) {
             Row(
@@ -477,14 +477,14 @@ private fun CleanupCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Benzer / kopya ${formatCount(duplicateCount)} ${mode.itemWord} (${formatSize(duplicateBytes)}) bulundu",
+                    str(R.string.duplicates_found, mode.count(duplicateCount), formatSize(duplicateBytes)),
                     color = appColors.accentGold,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(12.dp))
-                Text("Kopyaları incele", color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(str(R.string.review_duplicates), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -514,7 +514,7 @@ private fun MemoryTile(video: VideoItem, yearsAgo: Int, onClick: () -> Unit) {
                 .background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f)))
         )
         Text(
-            "$yearsAgo yıl önce",
+            plural(R.plurals.n_years_ago, yearsAgo, yearsAgo),
             color = FavoriteYellow,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -559,7 +559,7 @@ private fun RecentTile(video: VideoItem, views: Int, onClick: () -> Unit) {
 /** Telefonun galerisindeki gibi: kare kapak, altında klasör adı ve içerik sayısı */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> Unit, onHide: (() -> Unit)? = null) {
+private fun AlbumTile(album: Album, mode: MediaMode = MediaMode.VIDEOS, onClick: () -> Unit, onHide: (() -> Unit)? = null) {
     // Basılı tutunca klasörün menüsü (şimdilik: Klasörü gizle)
     var menuOpen by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
@@ -580,7 +580,7 @@ private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> U
         if (onHide != null) {
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("Klasörü gizle") },
+                    text = { Text(str(R.string.hide_folder)) },
                     leadingIcon = {
                         Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = appColors.textPrimary)
                     },
@@ -618,7 +618,7 @@ private fun AlbumTile(album: Album, itemWord: String = "video", onClick: () -> U
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text("${formatCount(album.count)} $itemWord", color = appColors.textSecondary, fontSize = 12.sp)
+        Text(mode.count(album.count), color = appColors.textSecondary, fontSize = 12.sp)
     }
 }
 

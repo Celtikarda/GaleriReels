@@ -1,5 +1,7 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.str
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -96,10 +98,10 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
         scope.launch {
             vm.useFolder(tree)
                 .onSuccess { restored ->
-                    val text = if (restored > 0) "Eski verilerin geri geldi ($restored video)" else "Veriler artık bu klasöre kaydediliyor"
+                    val text = if (restored > 0) str(R.string.data_restored, restored) else str(R.string.data_saving_here)
                     Toast.makeText(context, text, Toast.LENGTH_LONG).show()
                 }
-                .onFailure { Toast.makeText(context, "Bu klasör kullanılamadı, başka bir klasör seç", Toast.LENGTH_LONG).show() }
+                .onFailure { Toast.makeText(context, str(R.string.folder_unusable), Toast.LENGTH_LONG).show() }
         }
     }
     val pickFolder: () -> Unit = {
@@ -199,15 +201,15 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                         val mode = vm.stats.mediaMode
                         val hasOther = vm.totalAnyMediaCount > 0
                         MessageScreen(
-                            title = "${mode.title} bulunamadı",
+                            title = str(when (mode) { MediaMode.VIDEOS -> R.string.no_videos_found; MediaMode.PHOTOS -> R.string.no_photos_found; MediaMode.ALL -> R.string.no_media_found }),
                             body = when {
-                                access == MediaAccess.PARTIAL -> "Sadece seçtiğin içerikleri görebiliyorum."
-                                hasOther -> "Galeride hiç ${mode.itemWord} yok ama diğer modda içerik var."
-                                else -> "Galeride hiç fotoğraf ya da video yok gibi görünüyor."
+                                access == MediaAccess.PARTIAL -> str(R.string.only_selected)
+                                hasOther -> str(if (mode == MediaMode.PHOTOS) R.string.no_photos_other_mode else R.string.no_videos_other_mode)
+                                else -> str(R.string.gallery_empty)
                             },
                             buttonText = when {
-                                access == MediaAccess.PARTIAL -> "Medya seç"
-                                hasOther -> "Tüm medyayı göster"
+                                access == MediaAccess.PARTIAL -> str(R.string.select_media)
+                                hasOther -> str(R.string.show_all_media)
                                 else -> null
                             },
                             onButton = {
@@ -288,7 +290,7 @@ private fun LoadingScreen() {
         Spacer(Modifier.height(18.dp))
         Text("Galeri Reels", color = appColors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
-        Text("Videoların hazırlanıyor…", color = appColors.textSecondary, fontSize = 15.sp)
+        Text(str(R.string.preparing), color = appColors.textSecondary, fontSize = 15.sp)
         Spacer(Modifier.height(24.dp))
         CircularProgressIndicator(color = appColors.textSecondary, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
     }
@@ -297,15 +299,15 @@ private fun LoadingScreen() {
 @Composable
 private fun PermissionScreen(deniedBefore: Boolean, onRequest: () -> Unit, onOpenSettings: () -> Unit) {
     MessageScreen(
-        title = "Videoların, reels gibi",
+        title = str(R.string.onboarding_title),
         body = if (deniedBefore) {
-            "İzin verilmedi. Pencere tekrar açılmazsa izni Ayarlar > İzinler > Fotoğraflar ve videolar kısmından açabilirsin."
+            str(R.string.perm_denied)
         } else {
-            "Telefonundaki videoları dikey kaydırarak izlemek için galeri erişimi gerekiyor. Videoların ve verilerin telefonundan hiçbir yere gönderilmez."
+            str(R.string.perm_explain)
         },
-        buttonText = "Galeriye izin ver",
+        buttonText = str(R.string.allow_gallery),
         onButton = onRequest,
-        secondaryText = if (deniedBefore) "Ayarları aç" else null,
+        secondaryText = if (deniedBefore) str(R.string.open_settings) else null,
         onSecondary = onOpenSettings,
     )
 }
@@ -314,14 +316,11 @@ private fun PermissionScreen(deniedBefore: Boolean, onRequest: () -> Unit, onOpe
 @Composable
 private fun FolderSetupScreen(onPick: () -> Unit, onLater: () -> Unit) {
     MessageScreen(
-        title = "Verilerini koruyalım",
-        body = "Beğenilerin ve izlenme sayıların telefonunda bir klasörde saklanacak; uygulamayı silip " +
-            "yeniden kursan bile kaybolmazlar.\n\nAçılan pencerede Documents › GaleriReels klasörü açık " +
-            "olacak: \"Bu klasörü kullan\" ve ardından \"İzin ver\"e bas. Uygulama sadece bu klasörü görür. " +
-            "Daha önce kurduysan da aynısını yap, eski verilerin geri gelir.",
-        buttonText = "Klasör seç",
+        title = str(R.string.protect_data_title),
+        body = str(R.string.protect_data_body),
+        buttonText = str(R.string.choose_folder),
         onButton = onPick,
-        secondaryText = "Şimdi değil",
+        secondaryText = str(R.string.not_now),
         onSecondary = onLater,
     )
 }
@@ -336,26 +335,25 @@ private fun MediaModeSetupScreen(videoCount: Int, photoCount: Int, onSelect: (Me
     ) {
         AppLogo(size = 72.dp)
         Spacer(Modifier.height(20.dp))
-        Text("Ne gezmek istersin?", color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(str(R.string.what_browse), color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         Text(
-            "Fotoğraflarını da tıpkı videolar gibi Reels olarak dikey kaydırabilir ve sola kaydırarak " +
-                "temizleyebilirsin. İstediğin zaman ana ekrandan veya Ayarlar'dan değiştirebilirsin.",
+            str(R.string.mode_explain),
             color = appColors.textSecondary,
             fontSize = 15.sp,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(28.dp))
         Button(onClick = { onSelect(MediaMode.VIDEOS) }) {
-            Text("Sadece videolar (${formatCount(videoCount)})")
+            Text(str(R.string.only_videos_n, formatCount(videoCount)))
         }
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = { onSelect(MediaMode.PHOTOS) }) {
-            Text("Sadece fotoğraflar (${formatCount(photoCount)})")
+            Text(str(R.string.only_photos_n, formatCount(photoCount)))
         }
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = { onSelect(MediaMode.ALL) }) {
-            Text("Tümü · Fotoğraf + Video (${formatCount(videoCount + photoCount)})")
+            Text(str(R.string.all_n, formatCount(videoCount + photoCount)))
         }
     }
 }
@@ -399,7 +397,7 @@ fun UpdateDialog(update: AppUpdate, onDismiss: () -> Unit) {
         containerColor = appColors.card,
         titleContentColor = appColors.textPrimary,
         textContentColor = appColors.textSecondary,
-        title = { Text("Yeni sürüm: ${update.version}", fontWeight = FontWeight.Bold) },
+        title = { Text(str(R.string.new_version, update.version), fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                 Text(update.title, color = appColors.textPrimary, fontWeight = FontWeight.SemiBold)
@@ -409,13 +407,13 @@ fun UpdateDialog(update: AppUpdate, onDismiss: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "İndirince APK'yı aç ve kur. Eski sürümün üstüne kurulur, beğenilerin ve izlenmelerin silinmez.",
+                    str(R.string.update_install_hint),
                     fontSize = 13.sp,
                 )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Sonra", color = appColors.textSecondary) }
+            TextButton(onClick = onDismiss) { Text(str(R.string.later), color = appColors.textSecondary) }
         },
         confirmButton = {
             TextButton(
@@ -424,7 +422,7 @@ fun UpdateDialog(update: AppUpdate, onDismiss: () -> Unit) {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl)))
                 }
             ) {
-                Text("İndir", color = InstaBlue, fontWeight = FontWeight.Bold)
+                Text(str(R.string.download), color = InstaBlue, fontWeight = FontWeight.Bold)
             }
         },
     )

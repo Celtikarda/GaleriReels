@@ -111,13 +111,13 @@ class BackgroundPlayService : Service() {
 
         val toggleAction = Notification.Action.Builder(
             if (currentPaused) R.drawable.ic_play else R.drawable.ic_pause,
-            if (currentPaused) "Oynat" else "Duraklat",
+            getString(if (currentPaused) R.string.play else R.string.pause),
             servicePendingIntent(ACTION_TOGGLE_PAUSE, 1),
         ).build()
 
         val nextAction = Notification.Action.Builder(
             R.drawable.ic_skip_next,
-            "Sonraki",
+            getString(R.string.next),
             servicePendingIntent(ACTION_NEXT, 2),
         ).build()
 
@@ -151,15 +151,18 @@ class BackgroundPlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(AppLanguage.wrap(base))
+    }
+
     private fun ensureChannel() {
         val nm = getSystemService(NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Arka planda oynatma",
+            getString(R.string.bg_channel),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Ekran kapalıyken ya da uygulamadan çıkınca oynatma kontrolleri"
+            description = getString(R.string.bg_channel_desc)
             setShowBadge(false)
         }
         nm.createNotificationChannel(channel)

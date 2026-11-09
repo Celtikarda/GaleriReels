@@ -1,29 +1,29 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.Strings
+import com.celtikarda.galerireels.plural
+import com.celtikarda.galerireels.str
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
-private val tr: Locale = Locale.forLanguageTag("tr-TR")
-private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", tr)
-private val monthFormat = DateTimeFormatter.ofPattern("MMMM yyyy", tr)
+// Biçimler seçili dile göre: "9 Kasım 2026" / "November 9, 2026", "1.234" / "1,234", "14,8 MB" / "14.8 MB"
+private fun formatter(patternRes: Int) = DateTimeFormatter.ofPattern(str(patternRes), Strings.locale)
 
 fun localDate(millis: Long): LocalDate =
     Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
 
-fun formatDate(millis: Long): String = dateFormat.format(localDate(millis))
+fun formatDate(millis: Long): String = formatter(R.string.pattern_date).format(localDate(millis))
 
 fun formatMonth(month: YearMonth): String =
-    monthFormat.format(month).replaceFirstChar { it.titlecase(tr) }
-
-private val dateTimeFormat = DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", tr)
+    formatter(R.string.pattern_month).format(month).replaceFirstChar { it.titlecase(Strings.locale) }
 
 fun formatDateTime(millis: Long): String =
-    dateTimeFormat.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
+    formatter(R.string.pattern_date_time).format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
 
 /** "dün", "3 ay önce", "tam 5 yıl önce bugün" gibi */
 fun relativeDate(millis: Long, today: LocalDate = LocalDate.now()): String {
@@ -31,12 +31,12 @@ fun relativeDate(millis: Long, today: LocalDate = LocalDate.now()): String {
     if (date.isAfter(today)) return ""
     val p = Period.between(date, today)
     return when {
-        p.years > 0 && p.months == 0 && p.days == 0 -> "tam ${p.years} yıl önce bugün"
-        p.years > 0 -> "${p.years} yıl önce"
-        p.months > 0 -> "${p.months} ay önce"
-        p.days > 1 -> "${p.days} gün önce"
-        p.days == 1 -> "dün"
-        else -> "bugün"
+        p.years > 0 && p.months == 0 && p.days == 0 -> plural(R.plurals.rel_exact_years, p.years, p.years)
+        p.years > 0 -> plural(R.plurals.rel_years, p.years, p.years)
+        p.months > 0 -> plural(R.plurals.rel_months, p.months, p.months)
+        p.days > 1 -> plural(R.plurals.rel_days, p.days, p.days)
+        p.days == 1 -> str(R.string.yesterday)
+        else -> str(R.string.today_lower)
     }
 }
 
@@ -55,17 +55,17 @@ fun formatWatchTime(ms: Long): String {
     val m = (totalSec % 3600) / 60
     val s = totalSec % 60
     return when {
-        h > 0 && m > 0 -> "$h sa $m dk"
-        h > 0 -> "$h saat"
-        m > 0 -> "$m dk"
-        else -> "$s sn"
+        h > 0 && m > 0 -> str(R.string.time_h_m, h, m)
+        h > 0 -> str(R.string.time_h, h)
+        m > 0 -> str(R.string.time_m, m)
+        else -> str(R.string.time_s, s)
     }
 }
 
-fun formatCount(n: Int): String = String.format(tr, "%,d", n)
+fun formatCount(n: Int): String = String.format(Strings.locale, "%,d", n)
 
 /** 15492676 → "14,8 MB" */
 fun formatSize(bytes: Long): String {
     val mb = bytes / (1024.0 * 1024.0)
-    return if (mb >= 1024) String.format(tr, "%.1f GB", mb / 1024) else String.format(tr, "%.1f MB", mb)
+    return if (mb >= 1024) String.format(Strings.locale, "%.1f GB", mb / 1024) else String.format(Strings.locale, "%.1f MB", mb)
 }

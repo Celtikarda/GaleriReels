@@ -12,6 +12,10 @@ import androidx.compose.material3.darkColorScheme
 import com.celtikarda.galerireels.ui.GaleriReelsApp
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Siyah arka plan üstünde açık renkli durum çubuğu simgeleri
         enableEdgeToEdge(
@@ -19,6 +23,8 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        // Ekrandaki metinler bu Activity'nin (seçili dildeki) kaynaklarından okunur
+        Strings.use(resources)
 
         // Sadece debug sürümde: adb ile belirli bir videoyu doğrudan açıp test etmek için
         // adb shell am start -S -n com.celtikarda.galerireels/.MainActivity --el open_video_id <id>

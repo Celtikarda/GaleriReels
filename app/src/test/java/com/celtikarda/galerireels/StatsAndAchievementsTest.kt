@@ -9,12 +9,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 
 class StatsAndAchievementsTest {
+
+    @Before
+    fun turkce() = TestStrings.use("tr")
 
     @Test
     fun `merge en yuksek izlenmeyi ve en son degisen begeniyi korur`() {
@@ -180,6 +184,32 @@ class StatsAndAchievementsTest {
         val today = LocalDate.of(2026, 10, 24)
         val fiveYearsAgo = today.minusYears(5).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
         assertEquals("tam 5 yıl önce bugün", relativeDate(fiveYearsAgo, today))
+    }
+
+    @Test
+    fun `ingilizce metinler ve cogullar dogru`() {
+        TestStrings.use("en")
+        assertEquals("45 s", formatWatchTime(45_000L))
+        assertEquals("2 h 15 min", formatWatchTime((2 * 3600 + 15 * 60) * 1000L))
+        assertEquals("October 2026", formatMonth(YearMonth.of(2026, 10)))
+        assertEquals("1 video", MediaMode.VIDEOS.count(1))
+        assertEquals("1,234 videos", MediaMode.VIDEOS.count(1234))
+        assertEquals("2 photos", MediaMode.PHOTOS.count(2))
+        assertEquals("Explorer", achievements.first().title)
+
+        val today = LocalDate.of(2026, 10, 24)
+        fun millisOf(y: Int, m: Int, d: Int) =
+            LocalDate.of(y, m, d).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals("exactly 1 year ago today", relativeDate(millisOf(2025, 10, 24), today))
+        assertEquals("3 months ago", relativeDate(millisOf(2026, 7, 20), today))
+        val one = sampleVideo(1L, "a.mp4", 10_000L, "cam", "Camera").copy(dateMillis = millisOf(2025, 10, 24))
+        assertEquals("1 year ago today · 1 video", Memories.summaryText(listOf(one), today))
+        val three = sampleVideo(2L, "b.mp4", 10_000L, "cam", "Camera").copy(dateMillis = millisOf(2023, 10, 22))
+        assertEquals("1 and 3 years ago this week · 2 videos", Memories.summaryText(listOf(one, three), today))
+
+        TestStrings.use("tr")
+        assertEquals("1.234 video", MediaMode.VIDEOS.count(1234))
+        assertEquals("Kaşif", achievements.first().title)
     }
 
     @Test

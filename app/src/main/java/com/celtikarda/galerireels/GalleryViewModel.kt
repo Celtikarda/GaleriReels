@@ -142,14 +142,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         val liked = visible.filter { isLiked(it) }
         val favorites = visible.filter { isFavorite(it) }
         val allTitle = when (stats.mediaMode) {
-            MediaMode.VIDEOS -> "Tüm videolar"
-            MediaMode.PHOTOS -> "Tüm fotoğraflar"
-            MediaMode.ALL -> "Tüm medya"
+            MediaMode.VIDEOS -> str(R.string.all_videos)
+            MediaMode.PHOTOS -> str(R.string.all_photos)
+            MediaMode.ALL -> str(R.string.all_media)
         }
         return buildList {
             add(Album(Album.ALL, allTitle, visible.size, visible.first()))
-            if (favorites.isNotEmpty()) add(Album(Album.FAVORITES, "Favoriler", favorites.size, favorites.first()))
-            if (liked.isNotEmpty()) add(Album(Album.LIKED, "Beğendiklerin", liked.size, liked.first()))
+            if (favorites.isNotEmpty()) add(Album(Album.FAVORITES, str(R.string.favorites), favorites.size, favorites.first()))
+            if (liked.isNotEmpty()) add(Album(Album.LIKED, str(R.string.liked), liked.size, liked.first()))
             addAll(visibleFolders)
         }
     }
@@ -214,9 +214,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         items = copies
         cleanupMarked = emptyList()
         val title = when (stats.mediaMode) {
-            MediaMode.VIDEOS -> "Kopya videolar"
-            MediaMode.PHOTOS -> "Kopya fotoğraflar"
-            MediaMode.ALL -> "Kopya medya"
+            MediaMode.VIDEOS -> str(R.string.dup_videos)
+            MediaMode.PHOTOS -> str(R.string.dup_photos)
+            MediaMode.ALL -> str(R.string.dup_media)
         }
         openAlbum = Album(Album.CLEANUP, title, copies.size, copies.first())
     }
@@ -235,7 +235,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (source.isEmpty()) return
         items = source
         cleanupMarked = emptyList()
-        openAlbum = Album(Album.CLEANUP, "Temizlik", source.size, source.first())
+        openAlbum = Album(Album.CLEANUP, str(R.string.cleanup), source.size, source.first())
     }
 
     /** Sola kaydırıldı: silinecekler listesine girer, sıradaki video gelir */
@@ -297,7 +297,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (recent.isEmpty()) return
         source = recent
         items = listOf(first) + recent.filter { it.id != first.id }
-        openAlbum = Album(Album.RECENT, "Son izlediklerin", recent.size, first)
+        openAlbum = Album(Album.RECENT, str(R.string.recent), recent.size, first)
     }
 
     // --- Tarihte bugün (Anılar)
@@ -311,7 +311,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (list.isEmpty()) return
         source = list
         items = listOf(first) + list.filter { it.id != first.id }
-        openAlbum = Album(Album.MEMORIES, "Tarihte bugün", list.size, first)
+        openAlbum = Album(Album.MEMORIES, str(R.string.memories), list.size, first)
     }
 
     // --- Aylık özet
@@ -387,7 +387,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun coverOf(albumId: String): VideoItem? = folders.firstOrNull { it.id == albumId }?.cover
 
-    fun albumNameOf(item: VideoItem): String = folders.firstOrNull { it.id == item.albumId }?.name ?: item.albumName ?: if (item.isPhoto) "Fotoğraf" else "Video"
+    fun albumNameOf(item: VideoItem): String = folders.firstOrNull { it.id == item.albumId }?.name ?: item.albumName ?: str(if (item.isPhoto) R.string.photo else R.string.video)
 
     fun open(album: Album) {
         val visible = visibleVideos
@@ -415,7 +415,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         val target = all.firstOrNull { it.id == id } ?: return
         source = all
         items = listOf(target) + all.filter { it.id != id }
-        openAlbum = Album(Album.ALL, "Tüm videolar", all.size, all.first())
+        openAlbum = Album(Album.ALL, str(R.string.all_videos), all.size, all.first())
     }
 
     /** Sırayı değiştirir; o an bakılan video yerinde kalsın diye yeni indeksini döndürür. */
@@ -492,7 +492,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         // videolar yeniden eskiye sıralı, yani her grubun ilki en yenisi
         val groups = videos.groupBy { it.albumId }.map { (id, list) ->
             val first = list.first()
-            Album(id, first.albumName ?: first.albumPath.substringAfterLast('/').ifEmpty { "Adsız" }, list.size, first)
+            Album(id, first.albumName ?: first.albumPath.substringAfterLast('/').ifEmpty { str(R.string.untitled) }, list.size, first)
         }
         // "Video" gibi aynı adlı klasörler varsa üst klasörü de yaz: "YTDLnis/Video"
         val duplicates = groups.groupingBy { it.name.lowercase() }.eachCount().filterValues { it > 1 }.keys

@@ -490,7 +490,7 @@ class ReelsPlayback(
     private fun playVlc(item: VideoItem) {
         if (vlcItemId == item.id) return
         if (vlcFailed) {
-            error = item.id to "Bu video telefonun çözücüsüyle açılamıyor ve VLC başlatılamadı."
+            error = item.id to str(R.string.err_vlc_failed)
             return
         }
         // VLC henüz hazır değilse hazır olunca arrange() tekrar çağrılır
@@ -511,7 +511,7 @@ class ReelsPlayback(
                     onResumed(item, ms)
                 }
             },
-            onError = { error = item.id to "Dosya bozuk ya da gerçek bir video değil." },
+            onError = { error = item.id to str(R.string.err_corrupt) },
             waitForView = viewBusy,
         )
     }

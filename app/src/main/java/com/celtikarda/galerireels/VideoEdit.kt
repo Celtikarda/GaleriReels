@@ -79,7 +79,7 @@ suspend fun exportEdited(
     quality: EditQuality,
     onProgress: (Float) -> Unit,
 ): EditResult {
-    if (Build.VERSION.SDK_INT < 29) return EditResult.Failed("Android 10 ve üstü gerekiyor")
+    if (Build.VERSION.SDK_INT < 29) return EditResult.Failed(str(R.string.err_android10))
     val appContext = context.applicationContext
     val temp = File(appContext.cacheDir, "edit_${System.currentTimeMillis()}.mp4")
 
@@ -163,13 +163,13 @@ suspend fun exportEdited(
             }
             val resolver = appContext.contentResolver
             val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-                ?: return@withContext EditResult.Failed("Dosya oluşturulamadı")
+                ?: return@withContext EditResult.Failed(str(R.string.err_file_create))
             val copied = runCatching {
                 resolver.openOutputStream(uri)?.use { out -> temp.inputStream().use { it.copyTo(out) } } != null
             }.getOrDefault(false)
             if (!copied) {
                 runCatching { resolver.delete(uri, null, null) }
-                return@withContext EditResult.Failed("Dosya yazılamadı")
+                return@withContext EditResult.Failed(str(R.string.err_file_write))
             }
             resolver.update(uri, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
             EditResult.Saved(uri)

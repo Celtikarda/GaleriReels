@@ -1,5 +1,6 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.str
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -70,9 +71,9 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
             Column(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = appColors.textPrimary)
+                        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = str(R.string.back), tint = appColors.textPrimary)
                     }
-                    Text("Başarımlar", color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(str(R.string.achievements), color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     Text(
                         "${unlocked.size} / ${achievements.size}",
                         color = appColors.accentGold,
@@ -82,7 +83,7 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                     )
                 }
                 Text(
-                    "Farklı videolar izledikçe, beğendikçe ve yer açtıkça yenileri açılır",
+                    str(R.string.ach_hint),
                     color = appColors.textSecondary,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(start = 12.dp, top = 2.dp),
@@ -122,7 +123,7 @@ private fun AchievementCard(achievement: Achievement, input: AchievementInput, u
         Text(achievement.description, color = appColors.textSecondary, fontSize = 13.sp)
         Spacer(Modifier.height(10.dp))
         if (unlockedAt != null) {
-            Text("Açıldı · ${formatDate(unlockedAt)}", color = appColors.accentGold, fontSize = 12.sp)
+            Text(str(R.string.ach_unlocked_on, formatDate(unlockedAt)), color = appColors.accentGold, fontSize = 12.sp)
         } else {
             ProgressLine(progress.toFloat() / achievement.target)
             val text = achievement.format?.let { f ->
@@ -159,7 +160,7 @@ private fun ProgressLine(fraction: Float) {
 /** Yeni başarım açılınca ekranın üstünde kısa süre görünen bildirim; dokununca başarımlar açılır */
 @Composable
 fun AchievementBanner(unlocked: List<Achievement>, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val title = if (unlocked.size == 1) "Yeni başarım: ${unlocked.first().title}" else "${unlocked.size} yeni başarım açıldı"
+    val title = if (unlocked.size == 1) str(R.string.ach_new_one, unlocked.first().title) else str(R.string.ach_new_many, unlocked.size)
     Row(
         modifier
             .padding(horizontal = 16.dp)

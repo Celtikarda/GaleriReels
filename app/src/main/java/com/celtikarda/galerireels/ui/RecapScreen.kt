@@ -1,5 +1,7 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.plural
+import com.celtikarda.galerireels.str
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -83,7 +85,7 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
             sharing = true
             scope.launch {
                 runCatching { RecapCardShare.share(context, recap, vm::albumNameOf) }
-                    .onFailure { Toast.makeText(context, "Özet kartı hazırlanamadı", Toast.LENGTH_SHORT).show() }
+                    .onFailure { Toast.makeText(context, str(R.string.recap_card_failed), Toast.LENGTH_SHORT).show() }
                 sharing = false
             }
         }
@@ -102,10 +104,10 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
             modifier = Modifier.padding(top = 8.dp, bottom = 6.dp),
         ) {
             IconButton(onClick = onBack) {
-                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = appColors.textPrimary)
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = str(R.string.back), tint = appColors.textPrimary)
             }
             Text(
-                "Aylık özet",
+                str(R.string.monthly_recap),
                 color = appColors.textPrimary,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
@@ -113,7 +115,7 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
             )
             if (recap.hasActivity) {
                 IconButton(onClick = shareCard, enabled = !sharing) {
-                    Icon(painterResource(R.drawable.ic_send), contentDescription = "Özeti paylaş", tint = appColors.accentGold)
+                    Icon(painterResource(R.drawable.ic_send), contentDescription = str(R.string.share_recap), tint = appColors.accentGold)
                 }
             }
         }
@@ -169,11 +171,11 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(10.dp))
-                    Text("Kart hazırlanıyor…", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(str(R.string.card_preparing), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 } else {
                     Icon(painterResource(R.drawable.ic_send), contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Özeti kart olarak paylaş", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(str(R.string.share_as_card), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -203,7 +205,7 @@ private fun RecapCard(
                 .padding(horizontal = 12.dp, vertical = 4.dp)
         ) {
             Text(
-                "GALERİ REELS ÖZETİ",
+                str(R.string.recap_card_header),
                 color = FavoriteYellow,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -220,8 +222,7 @@ private fun RecapCard(
         if (!recap.hasActivity) {
             Spacer(Modifier.height(20.dp))
             Text(
-                "Bu ay henüz video izlemedin ya da temizlik yapmadın. İzledikçe en sevdiğin videolar, " +
-                    "klasörün ve toplam süren burada birikecek.",
+                str(R.string.recap_empty),
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 15.sp,
             )
@@ -234,12 +235,12 @@ private fun RecapCard(
         // 2x2 istatistik kutuları
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             StatBox(
-                label = "TOPLAM İZLENME",
-                value = "${formatCount(recap.totalViews)} kez",
+                label = str(R.string.recap_total_views),
+                value = plural(R.plurals.n_times, recap.totalViews, formatCount(recap.totalViews)),
                 modifier = Modifier.weight(1f),
             )
             StatBox(
-                label = "İZLEME SÜRESİ",
+                label = str(R.string.recap_watch_time),
                 value = formatWatchTime(recap.watchTimeMs),
                 modifier = Modifier.weight(1f),
             )
@@ -247,20 +248,20 @@ private fun RecapCard(
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             StatBox(
-                label = "FARKLI VİDEO",
-                value = "${formatCount(recap.uniqueVideos)} video",
+                label = str(R.string.recap_unique),
+                value = plural(R.plurals.n_videos, recap.uniqueVideos, formatCount(recap.uniqueVideos)),
                 modifier = Modifier.weight(1f),
             )
             if (recap.cleanedBytes > 0) {
                 StatBox(
-                    label = "AÇILAN YER",
+                    label = str(R.string.recap_freed),
                     value = formatSize(recap.cleanedBytes),
                     modifier = Modifier.weight(1f),
                 )
             } else {
                 StatBox(
-                    label = "AKTİF GÜN",
-                    value = "${recap.activeDays} gün",
+                    label = str(R.string.recap_active_days),
+                    value = plural(R.plurals.n_days, recap.activeDays, recap.activeDays),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -269,7 +270,7 @@ private fun RecapCard(
         recap.topAlbum?.let { album ->
             Spacer(Modifier.height(20.dp))
             Text(
-                "EN SEVDİĞİN KLASÖR",
+                str(R.string.recap_top_folder),
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -281,7 +282,7 @@ private fun RecapCard(
         if (recap.topVideos.isNotEmpty()) {
             Spacer(Modifier.height(20.dp))
             Text(
-                "BU AY EN ÇOK İZLEDİKLERİN",
+                str(R.string.recap_top_videos),
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -355,7 +356,7 @@ private fun TopAlbumRow(album: RankedAlbum) {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                "${formatCount(album.views)} izlenme · ${formatCount(album.watchedVideos)} farklı video",
+                plural(R.plurals.n_views, album.views, formatCount(album.views)) + " · " + plural(R.plurals.n_unique_videos, album.watchedVideos, formatCount(album.watchedVideos)),
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 13.sp,
             )
@@ -415,7 +416,7 @@ private fun TopVideoRow(
         }
         Spacer(Modifier.width(8.dp))
         Text(
-            "${formatCount(ranked.views)} kez",
+            plural(R.plurals.n_times, ranked.views, formatCount(ranked.views)),
             color = FavoriteYellow,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,

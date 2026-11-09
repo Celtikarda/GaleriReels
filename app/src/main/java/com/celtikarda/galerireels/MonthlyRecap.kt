@@ -145,7 +145,7 @@ object RecapCardShare {
             clipData = ClipData.newRawUri(null, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(send, "Özeti paylaş"))
+        context.startActivity(Intent.createChooser(send, str(R.string.share_recap)))
     }
 
     private suspend fun render(context: Context, recap: MonthlyRecap, albumNameOf: (VideoItem) -> String): Bitmap {
@@ -176,18 +176,18 @@ object RecapCardShare {
         val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF }
         canvas.drawRoundRect(RectF(72f, 84f, 410f, 144f), 30f, 30f, pillPaint)
         val pillText = textPaint(26f, 0xFFFFC83D.toInt(), bold)
-        canvas.drawText("GALERİ REELS ÖZETİ", 102f, 123f, pillText)
+        canvas.drawText(str(R.string.recap_card_header), 102f, 123f, pillText)
 
         val titlePaint = textPaint(74f, 0xFFFFFFFF.toInt(), bold)
         canvas.drawText(formatMonth(recap.month), 72f, 240f, titlePaint)
 
         // 4'lü istatistik kutuları (2x2)
         val stats = listOf(
-            "TOPLAM İZLENME" to "${formatCount(recap.totalViews)} kez",
-            "İZLEME SÜRESİ" to formatWatchTime(recap.watchTimeMs),
-            "FARKLI VİDEO" to "${formatCount(recap.uniqueVideos)} video",
-            if (recap.cleanedBytes > 0) "AÇILAN YER" to formatSize(recap.cleanedBytes)
-            else "AKTİF GÜN" to "${recap.activeDays} gün",
+            str(R.string.recap_total_views) to plural(R.plurals.n_times, recap.totalViews, formatCount(recap.totalViews)),
+            str(R.string.recap_watch_time) to formatWatchTime(recap.watchTimeMs),
+            str(R.string.recap_unique) to plural(R.plurals.n_videos, recap.uniqueVideos, formatCount(recap.uniqueVideos)),
+            if (recap.cleanedBytes > 0) str(R.string.recap_freed) to formatSize(recap.cleanedBytes)
+            else str(R.string.recap_active_days) to plural(R.plurals.n_days, recap.activeDays, recap.activeDays),
         )
         val boxW = (W - 72 * 2 - 28) / 2f
         val boxH = 176f
@@ -217,7 +217,7 @@ object RecapCardShare {
         // En sevdiğin klasör
         recap.topAlbum?.let { album ->
             val sectionPaint = textPaint(28f, 0xCCFFFFFF.toInt(), bold)
-            canvas.drawText("EN SEVDİĞİN KLASÖR", 72f, y, sectionPaint)
+            canvas.drawText(str(R.string.recap_top_folder), 72f, y, sectionPaint)
             y += 24f
 
             val rect = RectF(72f, y, W - 72f, y + 172f)
@@ -234,7 +234,7 @@ object RecapCardShare {
             val name = TextUtils.ellipsize(album.name, namePaint, maxTextW, TextUtils.TruncateAt.END).toString()
             canvas.drawText(name, 248f, y + 78f, namePaint)
             canvas.drawText(
-                "${formatCount(album.views)} izlenme · ${formatCount(album.watchedVideos)} farklı video",
+                plural(R.plurals.n_views, album.views, formatCount(album.views)) + " · " + plural(R.plurals.n_unique_videos, album.watchedVideos, formatCount(album.watchedVideos)),
                 248f,
                 y + 124f,
                 subPaint,
@@ -245,7 +245,7 @@ object RecapCardShare {
         // En çok izlenen videolar (ilk 4)
         if (recap.topVideos.isNotEmpty()) {
             val sectionPaint = textPaint(28f, 0xCCFFFFFF.toInt(), bold)
-            canvas.drawText("BU AY EN ÇOK İZLEDİKLERİN", 72f, y, sectionPaint)
+            canvas.drawText(str(R.string.recap_top_videos), 72f, y, sectionPaint)
             y += 24f
 
             val shown = recap.topVideos.take(4)
@@ -266,7 +266,7 @@ object RecapCardShare {
                 // Video adı ve klasörü
                 val vNamePaint = textPaint(32f, 0xFFFFFFFF.toInt(), bold)
                 val vSubPaint = textPaint(25f, 0xB3FFFFFF.toInt(), medium)
-                val badgeText = "${formatCount(ranked.views)} kez"
+                val badgeText = plural(R.plurals.n_times, ranked.views, formatCount(ranked.views))
                 val maxW = W - 72f - 320f - 190f
                 val vName = TextUtils.ellipsize(ranked.video.name.substringBeforeLast('.'), vNamePaint, maxW, TextUtils.TruncateAt.END).toString()
                 val folderName = TextUtils.ellipsize(albumNameOf(ranked.video), vSubPaint, maxW, TextUtils.TruncateAt.END).toString()
@@ -284,7 +284,7 @@ object RecapCardShare {
 
         // Alt bilgi
         val footerPaint = textPaint(26f, 0x80FFFFFF.toInt(), medium).apply { textAlign = Paint.Align.CENTER }
-        canvas.drawText("Galeri Reels · Telefonundaki videolar, reels gibi", W / 2f, H - 64f, footerPaint)
+        canvas.drawText(str(R.string.recap_footer), W / 2f, H - 64f, footerPaint)
 
         return bitmap
     }

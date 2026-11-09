@@ -1,5 +1,8 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.Strings
+import com.celtikarda.galerireels.plural
+import com.celtikarda.galerireels.str
 import android.Manifest
 import android.app.Activity
 import android.app.PendingIntent
@@ -233,7 +236,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             scope,
             onViewed = vm::addView,
             onResumed = { _, ms ->
-                chipText = "Kaldığın yerden: ${formatDuration(ms)}"
+                chipText = str(R.string.resumed_from, formatDuration(ms))
                 chipTick++
             },
             onEnded = {
@@ -285,7 +288,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         pendingFavorite = null
         if (result.resultCode == Activity.RESULT_OK) {
             vm.setFavorite(item, favorite)
-            chipText = if (favorite) "Favorilere eklendi" else "Favorilerden çıkarıldı"
+            chipText = str(if (favorite) R.string.fav_added else R.string.fav_removed)
             chipTick++
         }
     }
@@ -303,7 +306,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
-        chipText = if (nextState) "Arka planda oynatma açıldı" else "Arka planda oynatma kapatıldı"
+        chipText = str(if (nextState) R.string.bg_on else R.string.bg_off)
         chipTick++
     }
 
@@ -317,7 +320,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         pendingTrash = emptyList()
         if (result.resultCode == Activity.RESULT_OK && videos.isNotEmpty()) {
             vm.onTrashed(videos)
-            chipText = "${formatSize(videos.sumOf { it.sizeBytes })} temizlendi"
+            chipText = str(R.string.size_cleaned, formatSize(videos.sumOf { it.sizeBytes }))
             chipTick++
             if (leaveAfterTrash) onBack()
         }
@@ -347,7 +350,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     BackHandler(enabled = locked) { lockHintTick++ }
     LaunchedEffect(cleanup) {
         if (cleanup) {
-            chipText = "Silmek istediğin videoyu sola kaydır"
+            chipText = str(R.string.swipe_left_to_delete)
             chipTick++
         }
     }
@@ -496,8 +499,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             .setAspectRatio(Rational((safe * 1000).roundToInt(), 1000))
             .setActions(
                 listOf(
-                    pipAction(context, if (playing) R.drawable.ic_pause else R.drawable.ic_play, if (playing) "Durdur" else "Oynat", PIP_PLAY_PAUSE),
-                    pipAction(context, R.drawable.ic_skip_next, "Sonraki", PIP_NEXT),
+                    pipAction(context, if (playing) R.drawable.ic_pause else R.drawable.ic_play, str(if (playing) R.string.pause else R.string.play), PIP_PLAY_PAUSE),
+                    pipAction(context, R.drawable.ic_skip_next, str(R.string.next), PIP_NEXT),
                 ),
             )
         // Android 12+: tam ekranda video oynarken ana ekrana dönünce kendiliğinden küçük pencereye geçer
@@ -529,12 +532,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         userPaused = true
         playback.setPaused(true)
         if (inBackground && vm.stats.backgroundPlay) updateBackgroundNotification()
-        chipText = "Uyku zamanlayıcısı doldu, video durduruldu"
+        chipText = str(R.string.sleep_done)
         chipTick++
     }
     val pickSleep: (Int) -> Unit = { minutes ->
         sleepAt = if (minutes == 0) 0L else SystemClock.elapsedRealtime() + minutes * 60_000L
-        chipText = if (minutes == 0) "Uyku zamanlayıcısı kapatıldı" else "$minutes dakika sonra video duracak"
+        chipText = if (minutes == 0) str(R.string.sleep_off) else plural(R.plurals.sleep_in, minutes, minutes)
         chipTick++
     }
 
@@ -618,7 +621,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onZoomEnd = {
                     videoZoom = snapZoom(videoZoom)
                     if ((videoZoom == 0f || videoZoom == 1f) && videoZoom != lastZoomEnd) {
-                        chipText = if (videoZoom == 1f) "Ekranı doldur" else "Videonun tamamı"
+                        chipText = str(if (videoZoom == 1f) R.string.zoom_fill else R.string.zoom_fit)
                         chipTick++
                     }
                     lastZoomEnd = videoZoom
@@ -678,16 +681,16 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onToggleLike = { vm.toggleLike(item) },
                 onRemoveOneLike = {
                     vm.removeOneLike(item)
-                    chipText = "Bir beğeni geri alındı"
+                    chipText = str(R.string.like_undone)
                     chipTick++
                 },
                 onClearLikes = { pendingClearLikes = item },
                 onViewsTap = {
                     val views = vm.viewsOf(item)
                     chipText = if (item.isPhoto) {
-                        if (views == 0) "Bu fotoğrafa henüz bakmadın" else "Bu fotoğrafa ${formatCount(views)} kez baktın"
+                        if (views == 0) str(R.string.photo_not_viewed) else plural(R.plurals.photo_viewed_n, views, formatCount(views))
                     } else {
-                        if (views == 0) "Bu videoyu henüz izlemedin" else "Bu videoyu ${formatCount(views)} kez izledin"
+                        if (views == 0) str(R.string.video_not_watched) else plural(R.plurals.video_watched_n, views, formatCount(views))
                     }
                     chipTick++
                 },
@@ -696,7 +699,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onToggleBoost = {
                     boosted = !boosted
                     if (boosted && muted) muted = false
-                    chipText = if (boosted) "Ses %200'e yükseltildi" else "Ses normale döndü (%100)"
+                    chipText = str(if (boosted) R.string.boost_on else R.string.boost_off)
                     chipTick++
                 },
                 onToggleBackgroundPlay = toggleBackgroundPlay,
@@ -713,19 +716,19 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onStepFrame = { forward -> if (active) playback.stepFrame(item, forward) },
                 onPickSpeed = { picked ->
                     speed = picked
-                    chipText = "Oynatma hızı: ${formatSpeed(picked)}"
+                    chipText = str(R.string.speed_x, formatSpeed(picked))
                     chipTick++
                 },
                 onToggleAutoAdvance = {
                     val next = !vm.stats.autoAdvance
                     vm.stats.updateAutoAdvance(next)
-                    chipText = if (next) "Video bitince sıradakine geçilecek" else "Video bitince başa sarılacak"
+                    chipText = str(if (next) R.string.auto_next_on else R.string.auto_next_off)
                     chipTick++
                 },
                 onToggleNormalize = {
                     val next = !vm.stats.normalizeAudio
                     vm.stats.updateNormalizeAudio(next)
-                    chipText = if (next) "Ses dengeleme açık" else "Ses dengeleme kapalı"
+                    chipText = str(if (next) R.string.normalize_on else R.string.normalize_off)
                     chipTick++
                 },
                 onPickSleep = pickSleep,
@@ -736,9 +739,9 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                         val ab = playback.abLoop
                         val b = ab?.second
                         chipText = when {
-                            ab == null -> "A-B tekrarı kapatıldı"
-                            b == null -> "A: ${formatDuration(ab.first)} · B için menüden tekrar seç"
-                            else -> "A-B tekrarı: ${formatDuration(ab.first)} – ${formatDuration(b)}"
+                            ab == null -> str(R.string.ab_off)
+                            b == null -> str(R.string.ab_a_set, formatDuration(ab.first))
+                            else -> str(R.string.ab_range, formatDuration(ab.first), formatDuration(b))
                         }
                         chipTick++
                     }
@@ -754,11 +757,11 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onSaveFrame = {
                     val position = playback.positionOf(item)
                     if (active && position != null) {
-                        chipText = "Kare kaydediliyor…"
+                        chipText = str(R.string.frame_saving)
                         chipTick++
                         scope.launch {
                             val saved = saveFrameAsPhoto(context, item, position)
-                            chipText = if (saved != null) "Kare Resimler/GaleriReels'e kaydedildi" else "Bu videodan kare alınamadı"
+                            chipText = str(if (saved != null) R.string.frame_saved else R.string.frame_failed)
                             chipTick++
                         }
                     }
@@ -766,7 +769,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onDelete = if (cleanup) {
                     {
                         vm.markForCleanup(item)
-                        chipText = "Silinecekler listesine eklendi"
+                        chipText = str(R.string.marked_delete)
                         chipTick++
                     }
                 } else {
@@ -777,7 +780,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
 
         if (cleanup && items.isEmpty()) {
             Text(
-                "Gösterilecek video kalmadı",
+                str(R.string.no_more_videos),
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 16.sp,
                 modifier = Modifier.align(Alignment.Center),
@@ -797,7 +800,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onBack = leave,
                 onToggleShuffle = {
                     val index = vm.toggleShuffle(current?.id)
-                    chipText = if (vm.shuffled) "Karışık sıra" else "Yeniden eskiye"
+                    chipText = str(if (vm.shuffled) R.string.shuffled else R.string.newest_first)
                     chipTick++
                     scope.launch { pagerState.scrollToPage(index) }
                 },
@@ -809,7 +812,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 },
                 onHideUi = {
                     hideUi = true
-                    chipText = "Sade görünüm · geri tuşu ya da ortaya basılı tut: düğmeler"
+                    chipText = str(R.string.clean_view_hint)
                     chipTick++
                 },
             )
@@ -820,7 +823,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 hintTick = lockHintTick,
                 onUnlock = {
                     locked = false
-                    chipText = "Kilit açıldı"
+                    chipText = str(R.string.unlocked)
                     chipTick++
                 },
                 onShowHint = { lockHintTick++ },
@@ -870,8 +873,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         ) {
             Text(
                 when {
-                    fastForward -> "2x İleri ⏩"
-                    rewind -> "⏪ 2x Geri"
+                    fastForward -> str(R.string.ff_badge)
+                    rewind -> str(R.string.rew_badge)
                     else -> chipText
                 },
                 color = if (fastForward || rewind) FavoriteYellow else Color.White,
@@ -888,25 +891,24 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             val marked = vm.cleanupMarked
             AlertDialog(
                 onDismissRequest = { askBeforeLeaving = false },
-                title = { Text("Silinecekler var") },
+                title = { Text(str(R.string.pending_delete_title)) },
                 text = {
                     Text(
-                        "${marked.size} video (${formatSize(marked.sumOf { it.sizeBytes })}) silinmek üzere " +
-                            "işaretli. Çöp kutusuna taşınsın mı?",
+                        str(R.string.pending_delete_body, plural(R.plurals.n_videos, marked.size, formatCount(marked.size)), formatSize(marked.sumOf { it.sizeBytes })),
                     )
                 },
                 confirmButton = {
                     TextButton(onClick = {
                         askBeforeLeaving = false
                         trashMarked(thenLeave = true)
-                    }) { Text("Sil") }
+                    }) { Text(str(R.string.delete)) }
                 },
                 dismissButton = {
                     TextButton(onClick = {
                         askBeforeLeaving = false
                         vm.clearCleanupMarks()
                         onBack()
-                    }) { Text("Silmeden çık") }
+                    }) { Text(str(R.string.exit_without_delete)) }
                 },
             )
         }
@@ -917,16 +919,15 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 containerColor = appColors.card,
                 titleContentColor = appColors.textPrimary,
                 textContentColor = appColors.textSecondary,
-                title = { Text("Tüm beğeniler kaldırılsın mı?", fontWeight = FontWeight.Bold) },
+                title = { Text(str(R.string.remove_all_likes_q), fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "${formatCount(vm.likesOf(item))} beğeninin hepsi silinecek. " +
-                            "${if (item.isPhoto) "Fotoğraf" else "Video"} Beğendiklerin'den çıkar ve Temizlik'te artık korunmaz."
+                        str(if (item.isPhoto) R.string.remove_likes_body_photo else R.string.remove_likes_body_video, formatCount(vm.likesOf(item)))
                     )
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingClearLikes = null }) {
-                        Text("İptal", color = appColors.textSecondary)
+                        Text(str(R.string.cancel), color = appColors.textSecondary)
                     }
                 },
                 confirmButton = {
@@ -934,11 +935,11 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                         onClick = {
                             vm.clearLikes(item)
                             pendingClearLikes = null
-                            chipText = "Beğeniler kaldırıldı"
+                            chipText = str(R.string.likes_removed)
                             chipTick++
                         }
                     ) {
-                        Text("Kaldır", color = LikeRed, fontWeight = FontWeight.Bold)
+                        Text(str(R.string.remove), color = LikeRed, fontWeight = FontWeight.Bold)
                     }
                 },
             )
@@ -949,7 +950,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 item = item,
                 onSaved = {
                     trimTarget = null
-                    chipText = "Yeni video Filmler/GaleriReels'e kaydedildi"
+                    chipText = str(R.string.new_video_saved)
                     chipTick++
                     vm.reloadVideos()
                 },
@@ -1308,7 +1309,7 @@ private fun DeleteBackdrop() {
         Column(Modifier.padding(end = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(painterResource(R.drawable.ic_delete), contentDescription = null, tint = Color.White, modifier = Modifier.size(44.dp))
             Spacer(Modifier.height(6.dp))
-            Text("Sil", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(str(R.string.delete), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1326,11 +1327,11 @@ private fun CleanupBar(count: Int, bytes: Long, onUndo: () -> Unit, onDelete: ()
     ) {
         Icon(painterResource(R.drawable.ic_delete), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text("$count video · ${formatSize(bytes)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(plural(R.plurals.n_videos, count, formatCount(count)) + " · " + formatSize(bytes), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(4.dp))
-        TextButton(onClick = onUndo) { Text("Geri al", color = Color.White.copy(alpha = 0.8f)) }
+        TextButton(onClick = onUndo) { Text(str(R.string.undo), color = Color.White.copy(alpha = 0.8f)) }
         Button(onClick = onDelete, colors = ButtonDefaults.buttonColors(containerColor = DeleteRed, contentColor = Color.White)) {
-            Text("Sil")
+            Text(str(R.string.delete))
         }
     }
 }
@@ -1564,17 +1565,17 @@ private fun BottomInfo(
                     tint = FavoriteYellow,
                     modifier = Modifier.size(16.dp),
                 )
-                Text(" Favori", color = FavoriteYellow, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, style = textShadow)
+                Text(" " + str(R.string.favorite), color = FavoriteYellow, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, style = textShadow)
             }
         }
         Spacer(Modifier.height(8.dp))
         Text(
             if (item.isPhoto) {
                 val dims = if (item.width > 0) "${item.width} × ${item.height} · " else ""
-                "📷  Fotoğraf · $dims${formatSize(item.sizeBytes)}"
+                "📷  ${str(R.string.photo)} · $dims${formatSize(item.sizeBytes)}"
             } else {
                 buildString {
-                    append("♫  Orijinal ses · ${formatDuration(item.durationMs)}")
+                    append("♫  ${str(R.string.original_audio)} · ${formatDuration(item.durationMs)}")
                     if (speed != 1f) append(" · ${formatSpeed(speed)}")
                     val b = abLoop?.second
                     if (abLoop != null && b != null) append(" · 🔁 ${formatDuration(abLoop.first)}–${formatDuration(b)}")
@@ -1672,7 +1673,7 @@ private fun ActionRail(
         verticalArrangement = Arrangement.spacedBy(if (fullscreen) 8.dp else 18.dp),
     ) {
         if (onDelete != null) {
-            RailButton(icon = R.drawable.ic_delete, tint = Color.White, label = "Sil", compact = fullscreen, onClick = onDelete)
+            RailButton(icon = R.drawable.ic_delete, tint = Color.White, label = str(R.string.delete), compact = fullscreen, onClick = onDelete)
         }
         // Instagram'daki gibi kalbin altında beğeni sayısı; kalp sadece bu açılışta beğenildiyse dolu
         // Basılı tutunca: önceki açılışlarda verilen beğenileri geri alma menüsü
@@ -1681,7 +1682,7 @@ private fun ActionRail(
                 icon = if (liked) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline,
                 tint = if (liked) LikeRed else Color.White,
                 label = formatCount(likes),
-                description = if (liked) "Beğeniyi geri al" else "Beğen",
+                description = str(if (liked) R.string.unlike else R.string.like),
                 iconScale = likeScale.value,
                 compact = fullscreen,
                 onClick = onLike,
@@ -1689,7 +1690,7 @@ private fun ActionRail(
             )
             DropdownMenu(expanded = likeMenuOpen, onDismissRequest = { likeMenuOpen = false }) {
                 Text(
-                    "${formatCount(likes)} beğeni",
+                    plural(R.plurals.n_likes, likes, formatCount(likes)),
                     color = appColors.textSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1707,19 +1708,19 @@ private fun ActionRail(
             icon = R.drawable.ic_eye,
             tint = Color.White,
             label = formatCount(views),
-            description = "İzlenme sayısı",
+            description = str(R.string.view_count),
             compact = fullscreen,
             onClick = onViews,
         )
-        RailButton(icon = R.drawable.ic_send, tint = Color.White, label = "Paylaş", compact = fullscreen, onClick = onShare)
+        RailButton(icon = R.drawable.ic_send, tint = Color.White, label = str(R.string.share), compact = fullscreen, onClick = onShare)
         if (!isPhoto) {
             RailButton(
                 icon = if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_on,
                 tint = if (!muted && boosted) FavoriteYellow else Color.White,
                 label = when {
-                    muted -> "Sessiz"
+                    muted -> str(R.string.muted_label)
                     boosted -> "%200"
-                    else -> "Ses"
+                    else -> str(R.string.sound)
                 },
                 compact = fullscreen,
                 onClick = onMute,
@@ -1727,11 +1728,11 @@ private fun ActionRail(
         }
         // Üç nokta: favoriler, ses yükseltme ve video/fotoğraf bilgisi
         Box {
-            RailButton(icon = R.drawable.ic_more_vert, tint = Color.White, label = "", description = "Diğer", compact = fullscreen, onClick = { menuOpen = true })
+            RailButton(icon = R.drawable.ic_more_vert, tint = Color.White, label = "", description = str(R.string.more), compact = fullscreen, onClick = { menuOpen = true })
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 if (MediaActions.favoritesSupported) {
                     DropdownMenuItem(
-                        text = { Text(if (favorite) "Favorilerden çıkar" else "Favorilere ekle") },
+                        text = { Text(str(if (favorite) R.string.fav_remove else R.string.fav_add)) },
                         leadingIcon = {
                             Icon(
                                 painterResource(if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline),
@@ -1755,7 +1756,7 @@ private fun ActionRail(
                 }
                 if (!isPhoto) {
                     DropdownMenuItem(
-                        text = { Text(if (boosted) "Normal ses (%100)" else "Sesi yükselt (%200)") },
+                        text = { Text(str(if (boosted) R.string.normal_volume else R.string.boost_volume)) },
                         leadingIcon = {
                             Icon(
                                 painterResource(R.drawable.ic_volume_on),
@@ -1769,7 +1770,7 @@ private fun ActionRail(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (backgroundPlay) "Arka planda oynat: Açık" else "Arka planda oynat: Kapalı") },
+                        text = { Text(str(if (backgroundPlay) R.string.bg_menu_on else R.string.bg_menu_off)) },
                         leadingIcon = {
                             Icon(
                                 painterResource(R.drawable.ic_play),
@@ -1783,7 +1784,7 @@ private fun ActionRail(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Oynatma hızı: ${formatSpeed(speed)}") },
+                        text = { Text(str(R.string.speed_x, formatSpeed(speed))) },
                         leadingIcon = {
                             Icon(
                                 painterResource(R.drawable.ic_speed),
@@ -1797,7 +1798,7 @@ private fun ActionRail(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (normalize) "Ses dengeleme: Açık" else "Ses dengeleme: Kapalı") },
+                        text = { Text(str(if (normalize) R.string.normalize_menu_on else R.string.normalize_menu_off)) },
                         leadingIcon = {
                             Icon(
                                 painterResource(R.drawable.ic_equalizer),
@@ -1813,7 +1814,7 @@ private fun ActionRail(
                     DropdownMenuItem(
                         text = {
                             val left = ((sleepAt - SystemClock.elapsedRealtime()) / 60_000L + 1).coerceAtLeast(1)
-                            Text(if (sleepAt > 0L) "Uyku zamanlayıcısı: $left dk kaldı" else "Uyku zamanlayıcısı")
+                            Text(if (sleepAt > 0L) str(R.string.sleep_left, left) else str(R.string.sleep_timer))
                         },
                         leadingIcon = {
                             Icon(
@@ -1829,7 +1830,7 @@ private fun ActionRail(
                     )
                     if (pipSupported) {
                         DropdownMenuItem(
-                            text = { Text("Küçük pencerede oynat") },
+                            text = { Text(str(R.string.pip_play)) },
                             leadingIcon = {
                                 Icon(painterResource(R.drawable.ic_pip), contentDescription = null, tint = appColors.textPrimary)
                             },
@@ -1840,7 +1841,7 @@ private fun ActionRail(
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text(if (autoAdvance) "Bitince: Sıradakine geç" else "Bitince: Başa sar") },
+                        text = { Text(str(if (autoAdvance) R.string.when_ends_next else R.string.when_ends_replay)) },
                         leadingIcon = {
                             Icon(
                                 painterResource(R.drawable.ic_repeat),
@@ -1857,9 +1858,9 @@ private fun ActionRail(
                         text = {
                             Text(
                                 when {
-                                    abLoop == null -> "A-B tekrar: A noktasını işaretle"
-                                    abLoop.second == null -> "A-B tekrar: B noktasını işaretle"
-                                    else -> "A-B tekrarını kapat"
+                                    abLoop == null -> str(R.string.ab_mark_a)
+                                    abLoop.second == null -> str(R.string.ab_mark_b)
+                                    else -> str(R.string.ab_turn_off)
                                 }
                             )
                         },
@@ -1877,7 +1878,7 @@ private fun ActionRail(
                     )
                     if (videoEditSupported) {
                         DropdownMenuItem(
-                            text = { Text("Kırp / sıkıştır") },
+                            text = { Text(str(R.string.trim_compress)) },
                             leadingIcon = {
                                 Icon(painterResource(R.drawable.ic_cut), contentDescription = null, tint = appColors.textPrimary)
                             },
@@ -1889,7 +1890,7 @@ private fun ActionRail(
                     }
                     if (frameSaveSupported) {
                         DropdownMenuItem(
-                            text = { Text("Bu kareyi fotoğraf olarak kaydet") },
+                            text = { Text(str(R.string.save_frame)) },
                             leadingIcon = {
                                 Icon(painterResource(R.drawable.ic_camera), contentDescription = null, tint = appColors.textPrimary)
                             },
@@ -1901,7 +1902,7 @@ private fun ActionRail(
                     }
                 }
                 DropdownMenuItem(
-                    text = { Text(if (isPhoto) "Fotoğraf bilgisi" else "Video bilgisi") },
+                    text = { Text(str(if (isPhoto) R.string.photo_info else R.string.video_info)) },
                     leadingIcon = { Icon(painterResource(R.drawable.ic_info), contentDescription = null, tint = appColors.textPrimary) },
                     onClick = {
                         menuOpen = false
@@ -1911,7 +1912,7 @@ private fun ActionRail(
             }
             DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
                 Text(
-                    "Oynatma hızı",
+                    str(R.string.playback_speed),
                     color = appColors.textSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1921,7 +1922,7 @@ private fun ActionRail(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                if (option == 1f) "${formatSpeed(option)} (normal)" else formatSpeed(option),
+                                if (option == 1f) str(R.string.speed_normal, formatSpeed(option)) else formatSpeed(option),
                                 fontWeight = if (option == speed) FontWeight.Bold else FontWeight.Normal,
                                 color = if (option == speed) FavoriteYellow else appColors.textPrimary,
                             )
@@ -1935,7 +1936,7 @@ private fun ActionRail(
             }
             DropdownMenu(expanded = sleepMenuOpen, onDismissRequest = { sleepMenuOpen = false }) {
                 Text(
-                    "Video şu kadar sonra dursun",
+                    str(R.string.stop_after),
                     color = appColors.textSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1945,7 +1946,7 @@ private fun ActionRail(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                if (minutes == 0) "Kapalı" else "$minutes dakika",
+                                if (minutes == 0) str(R.string.off) else plural(R.plurals.n_minutes, minutes, minutes),
                                 color = if (minutes == 0 && sleepAt == 0L) FavoriteYellow else appColors.textPrimary,
                             )
                         },
@@ -1963,26 +1964,26 @@ private fun ActionRail(
 @Composable
 private fun VideoInfoDialog(item: VideoItem, views: Int, likes: Int, favorite: Boolean, onDismiss: () -> Unit) {
     val engine = when (DecoderCheck.decision(item.id)) {
-        true -> "VLC (yazılımla çözülüyor)"
-        false -> "Telefonun çözücüsü"
+        true -> str(R.string.vlc_decoding)
+        false -> str(R.string.phone_decoder)
         null -> "—"
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Tamam") } },
-        title = { Text(if (item.isPhoto) "Fotoğraf bilgisi" else "Video bilgisi") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(str(R.string.ok)) } },
+        title = { Text(str(if (item.isPhoto) R.string.photo_info else R.string.video_info)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                InfoRow("Ad", item.name)
-                InfoRow("Klasör", item.albumPath.ifEmpty { "—" })
-                InfoRow("Boyut", formatSize(item.sizeBytes))
-                if (item.width > 0) InfoRow("Çözünürlük", "${item.width} × ${item.height}")
-                if (!item.isPhoto) InfoRow("Süre", formatDuration(item.durationMs))
-                InfoRow("Tarih", formatDate(item.dateMillis))
-                InfoRow(if (item.isPhoto) "Görüntülenme" else "İzlenme", "${formatCount(views)} kez")
-                InfoRow("Beğeni", if (likes > 0) "${formatCount(likes)} kez" else "—")
-                InfoRow("Favori", if (favorite) "Evet" else "Hayır")
-                if (!item.isPhoto) InfoRow("Oynatıcı", engine)
+                InfoRow(str(R.string.name_label), item.name)
+                InfoRow(str(R.string.folder), item.albumPath.ifEmpty { "—" })
+                InfoRow(str(R.string.size), formatSize(item.sizeBytes))
+                if (item.width > 0) InfoRow(str(R.string.resolution), "${item.width} × ${item.height}")
+                if (!item.isPhoto) InfoRow(str(R.string.duration), formatDuration(item.durationMs))
+                InfoRow(str(R.string.date), formatDate(item.dateMillis))
+                InfoRow(str(if (item.isPhoto) R.string.views_photo else R.string.views_video), plural(R.plurals.n_times, views, formatCount(views)))
+                InfoRow(str(R.string.likes_label), if (likes > 0) plural(R.plurals.n_times, likes, formatCount(likes)) else "—")
+                InfoRow(str(R.string.favorite), str(if (favorite) R.string.yes else R.string.no))
+                if (!item.isPhoto) InfoRow(str(R.string.player), engine)
             }
         },
     )
@@ -2003,7 +2004,7 @@ private fun LikeRemovalItems(likes: Int, onRemoveOne: () -> Unit, onClear: () ->
         Icon(painterResource(R.drawable.ic_heart_outline), contentDescription = null, tint = appColors.textPrimary)
     }
     DropdownMenuItem(
-        text = { Text("Bir beğeniyi geri al (${formatCount(likes)} → ${formatCount(likes - 1)})") },
+        text = { Text(str(R.string.undo_one_like, formatCount(likes), formatCount(likes - 1))) },
         leadingIcon = icon,
         onClick = {
             close()
@@ -2013,7 +2014,7 @@ private fun LikeRemovalItems(likes: Int, onRemoveOne: () -> Unit, onClear: () ->
     // Tek beğeni varsa üstteki seçenek zaten hepsini kaldırır
     if (likes > 1) {
         DropdownMenuItem(
-            text = { Text("Tüm beğenileri kaldır") },
+            text = { Text(str(R.string.remove_all_likes)) },
             leadingIcon = icon,
             onClick = {
                 close()
@@ -2225,7 +2226,7 @@ private fun AdjustIndicator(brightness: Boolean, level: Float, modifier: Modifie
                     else -> R.drawable.ic_volume_on
                 }
             ),
-            contentDescription = if (brightness) "Parlaklık" else "Ses",
+            contentDescription = str(if (brightness) R.string.brightness else R.string.volume),
             tint = Color.White,
             modifier = Modifier.size(22.dp),
         )
@@ -2241,7 +2242,7 @@ private fun AdjustIndicator(brightness: Boolean, level: Float, modifier: Modifie
         }
         Spacer(Modifier.width(12.dp))
         Text(
-            "%${(level * 100).roundToInt()}",
+            str(R.string.percent, (level * 100).roundToInt()),
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
@@ -2295,9 +2296,9 @@ private fun LockOverlay(hintTick: Int, onUnlock: () -> Unit, onShowHint: () -> U
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(painterResource(R.drawable.ic_lock_open), contentDescription = "Kilidi aç", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(painterResource(R.drawable.ic_lock_open), contentDescription = str(R.string.unlock), tint = Color.White, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Kilidi açmak için dokun", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(str(R.string.tap_to_unlock), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -2305,13 +2306,13 @@ private fun LockOverlay(hintTick: Int, onUnlock: () -> Unit, onShowHint: () -> U
 
 /** "1x", "1,5x", "0,75x" */
 private fun formatSpeed(speed: Float): String =
-    if (speed % 1f == 0f) "${speed.toInt()}x" else "${speed.toString().trimEnd('0').replace('.', ',')}x"
+    if (speed % 1f == 0f) "${speed.toInt()}x" else "${speed.toString().trimEnd('0').replace('.', java.text.DecimalFormatSymbols.getInstance(Strings.locale).decimalSeparator)}x"
 
 /** Durdurulmuş videoda bir kare geri / ileri */
 @Composable
 private fun FrameStepButtons(onStep: (forward: Boolean) -> Unit, modifier: Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        listOf(false to "‹ 1 kare", true to "1 kare ›").forEach { (forward, label) ->
+        listOf(false to "‹ " + str(R.string.one_frame), true to str(R.string.one_frame) + " ›").forEach { (forward, label) ->
             Text(
                 label,
                 color = Color.White,
@@ -2336,7 +2337,7 @@ private fun SeekBurst(seconds: Int, forward: Boolean, modifier: Modifier) {
         alpha.animateTo(0f, tween(250))
     }
     Text(
-        if (forward) "$seconds sn ⏩" else "⏪ $seconds sn",
+        if (forward) str(R.string.seconds_short, seconds) + " ⏩" else "⏪ " + str(R.string.seconds_short, seconds),
         color = Color.White,
         fontSize = 18.sp,
         fontWeight = FontWeight.Bold,
@@ -2357,7 +2358,7 @@ private fun PlayIcon(modifier: Modifier) {
             .background(Color.Black.copy(alpha = 0.4f)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(painterResource(R.drawable.ic_play), contentDescription = "Oynat", tint = Color.White, modifier = Modifier.size(44.dp))
+        Icon(painterResource(R.drawable.ic_play), contentDescription = str(R.string.play), tint = Color.White, modifier = Modifier.size(44.dp))
     }
 }
 
@@ -2371,12 +2372,12 @@ private fun ErrorBox(message: String, onReport: () -> Unit, modifier: Modifier) 
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Bu video oynatılamadı", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(str(R.string.cant_play), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         Text(message, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         TextButton(onClick = onReport) {
-            Text("Sorunu bildir", color = InstaBlue, fontWeight = FontWeight.SemiBold)
+            Text(str(R.string.report_this), color = InstaBlue, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -2402,7 +2403,7 @@ private fun TopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
-            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Geri", tint = Color.White)
+            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = str(R.string.back), tint = Color.White)
         }
         Text(
             title,
@@ -2418,23 +2419,23 @@ private fun TopBar(
             IconButton(onClick = onToggleShuffle) {
                 Icon(
                     painterResource(R.drawable.ic_shuffle),
-                    contentDescription = if (shuffled) "Karışık sıra" else "Yeniden eskiye",
+                    contentDescription = str(if (shuffled) R.string.shuffled else R.string.newest_first),
                     tint = if (shuffled) Color.White else Color.White.copy(alpha = 0.4f),
                 )
             }
         }
         if (fullscreen) {
             IconButton(onClick = onHideUi) {
-                Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = "Sade görünüm (düğmeleri gizle)", tint = Color.White)
+                Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = str(R.string.clean_view), tint = Color.White)
             }
             IconButton(onClick = onLock) {
-                Icon(painterResource(R.drawable.ic_lock), contentDescription = "Ekranı kilitle", tint = Color.White)
+                Icon(painterResource(R.drawable.ic_lock), contentDescription = str(R.string.lock_screen), tint = Color.White)
             }
         }
         IconButton(onClick = onToggleFullscreen) {
             Icon(
                 painterResource(if (fullscreen) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen),
-                contentDescription = if (fullscreen) "Tam ekrandan çık" else "Tam ekran",
+                contentDescription = str(if (fullscreen) R.string.exit_fullscreen else R.string.fullscreen),
                 tint = Color.White,
             )
         }
@@ -2543,5 +2544,5 @@ private fun shareVideo(context: Context, item: VideoItem) {
         clipData = ClipData.newRawUri(null, item.uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(send, "Paylaş"))
+    context.startActivity(Intent.createChooser(send, str(R.string.share)))
 }

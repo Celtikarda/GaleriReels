@@ -65,6 +65,18 @@ Commit e-postası: hesap e-postayı gizli tutuyor, repoda `user.email` GitHub'ı
 | `ui/ReelsScreen` | Reels ekranı (temizlik modu da burada: `Album.CLEANUP`) |
 | `ui/RecapScreen`, `ui/AchievementsScreen` | Aylık özet ve başarımlar ekranları |
 | `ui/AlbumsScreen`, `ui/SettingsScreen`, `ui/GaleriReelsApp` | Ana ekran, ayarlar, ekran akışı |
+| `AppLanguage` | Uygulama dili (telefonun dili / Türkçe / English) ve `str()` / `plural()` metin yardımcıları |
+
+## Diller
+
+- Kodda ekranda görünen metin **yazılmaz**: `str(R.string.x)`, sayılı metinler `plural(R.plurals.x, n, …)`.
+  Yeni metin eklerken iki dosyaya birden ekle: `res/values/strings.xml` (İngilizce, varsayılan) ve
+  `res/values-tr/strings.xml` (Türkçe). Türkçe telefonlar Türkçe, diğer bütün diller İngilizce görür.
+- Dil Ayarlar › Dil'den seçilir. Android 13+ bunu sistemin uygulama dili ayarına yazar (`LocaleManager`,
+  `xml/locales_config`); 12 ve öncesinde SharedPreferences + `attachBaseContext` (`AppLanguage.wrap`).
+- Tarih, sayı ve boyut biçimleri seçili dile göre (`ui/Format.kt`): "9 Kasım 2026" / "November 9, 2026",
+  "1.234" / "1,234".
+- Birim testleri `TestStrings.use("tr" | "en")` ile metinleri doğrudan strings.xml'den okur.
 
 ## Veriler
 

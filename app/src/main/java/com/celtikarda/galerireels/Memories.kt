@@ -44,12 +44,11 @@ object Memories {
         if (memories.isEmpty()) return ""
         val years = memories.map { yearsAgo(it, today) }.distinct().sorted()
         val exactToday = memories.any { anniversaryDistanceDays(localDate(it.dateMillis), today) == 0L }
-        val suffix = if (exactToday && years.size == 1) "yıl önce bugün" else "yıl önce bu hafta"
         val yearsText = when (years.size) {
             1 -> "${years[0]}"
-            2 -> "${years[0]} ve ${years[1]}"
-            else -> years.dropLast(1).joinToString(", ") + " ve ${years.last()}"
+            else -> str(R.string.list_two, years.dropLast(1).joinToString(", "), years.last())
         }
-        return "$yearsText $suffix · ${memories.size} video"
+        val whenText = plural(if (exactToday && years.size == 1) R.plurals.memories_today else R.plurals.memories_week, years.last(), yearsText)
+        return "$whenText · " + plural(R.plurals.n_videos, memories.size, memories.size)
     }
 }

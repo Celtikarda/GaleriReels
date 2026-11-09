@@ -13,6 +13,9 @@ Telefonun galerisindeki videoları ve fotoğrafları Instagram Reels gibi, kayd�
 - **Gece (koyu), Aydınlık (açık) ve Sistem teması:** Ana ekrandaki güneş/ay simgesiyle ya da Ayarlar'dan tek dokunuşla tema geçişi (Reels oynatıcı ekranı her zaman sinema siyahı kalır)
 - Ayarlar ve video hata ekranından (tarayıcı üzerinden cihaz/çözücü bilgilerini hazır doldurarak) sorun bildirme ve öneri gönderme
 - **Güncelleme bildirimi:** Yeni sürüm çıkınca uygulama haber verir, tek dokunuşla APK'yı indirirsin. Uygulama internete sadece bunun için, GitHub'daki son sürüm numarasını okumak üzere bağlanır; videoların ve verilerin telefonundan çıkmaz. Ayarlar'dan kapatılabilir.
+- **Türkçe ve İngilizce:** Telefonun dili Türkçe ise Türkçe, değilse İngilizce açılır; Ayarlar › Dil / Language kısmından değiştirilebilir
+
+*English:* Browse and clean up your phone's videos and photos by swiping like Reels. The app is available in English and Turkish.
 
 Sadece Android (64-bit ARM, Android 8.0+). APK'yı [Releases](../../releases) sayfasından indirebilirsiniz.
 
@@ -163,6 +166,11 @@ kolaylaştırmak.
   - Video bitince sıradaki, kaydırma animasyonunu beklemeden hemen başlar.
   - Yatay tam ekranda iki parmakla kademeli yakınlaştırma; yakınlaştırınca yandaki videonun taşması düzeltildi.
   - Parlaklık ve ses için yalnızca ekranın kenarları kullanılır, video geçişi için ortada geniş alan kalır.
+- [x] **1.7 İngilizce**
+  - Uygulama artık İngilizce de kullanılabiliyor: telefonu Türkçe olanlar Türkçe, diğerleri İngilizce görür.
+  - Ayarlar › Dil / Language: *Telefonun dili / Türkçe / English*. Android 13 ve üstünde telefonun
+    Ayarlar › Uygulamalar › Galeri Reels › Dil menüsünden de seçilebilir.
+  - Tarihler, sayılar ve boyutlar seçilen dile göre yazılır ("9 Kasım 2026" / "November 9, 2026").
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

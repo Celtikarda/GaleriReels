@@ -204,6 +204,47 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             val currentIds = visibleVideos.mapTo(HashSet()) { it.id }
             duplicateCopies = found.filter { it.id in currentIds && !isLiked(it) && !isFavorite(it) }
         }
+        scanBlurry(snapshot.filter { it.isPhoto })
+    }
+
+    // --- Akıllı temizlik
+
+    /** Keskinliği ölçülüp bulanık bulunan fotoğraflar (tarama sürerken azar azar dolar) */
+    var blurryPhotos by mutableStateOf<List<VideoItem>>(emptyList())
+        private set
+    private var blurJob: kotlinx.coroutines.Job? = null
+
+    private fun scanBlurry(photos: List<VideoItem>) {
+        blurJob?.cancel()
+        if (photos.isEmpty()) {
+            blurryPhotos = emptyList()
+            return
+        }
+        blurJob = viewModelScope.launch {
+            val found = SmartCleanup.findBlurry(getApplication(), photos) { partial ->
+                viewModelScope.launch { blurryPhotos = partial }
+            }
+            blurryPhotos = found
+        }
+    }
+
+    /** Akıllı temizlik kategorileri: çok kısa, ekran görüntüsü/kaydı, WhatsApp, bulanık */
+    fun smartGroups(): Map<SmartCategory, List<VideoItem>> {
+        val candidates = cleanupCandidates()
+        val ids = candidates.mapTo(HashSet()) { it.id }
+        val dupIds = duplicateCopies.mapTo(HashSet()) { it.id }
+        return SmartCleanup.quickGroups(candidates, dupIds) +
+            (SmartCategory.BLURRY to blurryPhotos.filter { it.id in ids })
+    }
+
+    /** Bir akıllı temizlik kategorisiyle temizlik modunu başlatır */
+    fun openSmartCleanup(category: SmartCategory) {
+        val list = smartGroups()[category].orEmpty()
+        if (list.isEmpty()) return
+        source = list
+        items = list
+        cleanupMarked = emptyList()
+        openAlbum = Album(Album.CLEANUP, category.title, list.size, list.first())
     }
 
     /** Sadece tespit edilen kopya/benzer içeriklerle temizlik modunu başlatır */
@@ -263,6 +304,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         allVideos = allVideos.filter { it.id !in ids }
         allPhotos = allPhotos.filter { it.id !in ids }
         duplicateCopies = duplicateCopies.filter { it.id !in ids }
+        blurryPhotos = blurryPhotos.filter { it.id !in ids }
         folders = buildFolders(all)
         cleanupMarked = emptyList()
         checkAchievements()

@@ -142,6 +142,15 @@
     <string name="cleaned_today">You cleaned up %1$s today</string>
     <string name="duplicates_found">Similar / duplicate: %1$s (%2$s)</string>
     <string name="review_duplicates">Review duplicates</string>
+    <string name="review">Review</string>
+    <string name="smart_short">Very short videos</string>
+    <string name="smart_short_row">Shorter than 3 s: %1$s (%2$s)</string>
+    <string name="smart_screens">Screenshots &amp; recordings</string>
+    <string name="smart_screens_row">Screenshots / screen recordings: %1$s (%2$s)</string>
+    <string name="smart_whatsapp">From WhatsApp</string>
+    <string name="smart_whatsapp_row">From WhatsApp: %1$s (%2$s)</string>
+    <string name="smart_blurry">Blurry photos</string>
+    <string name="smart_blurry_row">Blurry: %1$s (%2$s)</string>
     <string name="data_restored">Your old data is back (%1$d videos)</string>
     <string name="data_saving_here">Data is now saved to this folder</string>
     <string name="folder_unusable">This folder can\'t be used, choose another one</string>

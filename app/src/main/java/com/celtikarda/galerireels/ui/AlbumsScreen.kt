@@ -65,6 +65,7 @@ import com.celtikarda.galerireels.MediaMode
 import com.celtikarda.galerireels.Memories
 import com.celtikarda.galerireels.MonthlyRecap
 import com.celtikarda.galerireels.R
+import com.celtikarda.galerireels.SmartCategory
 import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
 
@@ -171,6 +172,8 @@ fun AlbumsScreen(
                     duplicateBytes = duplicates.sumOf { it.sizeBytes },
                     onStart = vm::openCleanup,
                     onStartDuplicates = vm::openDuplicateCleanup,
+                    smartGroups = vm.smartGroups(),
+                    onStartSmart = vm::openSmartCleanup,
                 )
             }
         }
@@ -419,6 +422,8 @@ private fun CleanupCard(
     duplicateBytes: Long,
     onStart: () -> Unit,
     onStartDuplicates: () -> Unit,
+    smartGroups: Map<SmartCategory, List<VideoItem>>,
+    onStartSmart: (SmartCategory) -> Unit,
 ) {
     val unwatchedRes = if (mode == MediaMode.PHOTOS) R.string.cleanup_unviewed else R.string.cleanup_unwatched
     Column(
@@ -485,6 +490,27 @@ private fun CleanupCard(
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(str(R.string.review_duplicates), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        for (category in SmartCategory.entries) {
+            val list = smartGroups[category].orEmpty()
+            if (list.isEmpty()) continue
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(appColors.divider)
+                    .clickable { onStartSmart(category) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    category.row(category.countText(mode, list.size), formatSize(list.sumOf { it.sizeBytes })),
+                    color = appColors.textPrimary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(str(R.string.review), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

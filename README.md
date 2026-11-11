@@ -6,7 +6,7 @@ Telefonun galerisindeki videoları ve fotoğrafları Instagram Reels gibi, kayd�
 - Çift dokunarak beğenme (kaç kez beğendiğin sayılır), sağ/sol kenarlara basılı tutarak 2x hızlı oynatma, ortaya basılı tutarak net görünüm (arayüzü gizleme), yatay tam ekran (Landscape) izleme, paylaşma, sesi kapatma, kısık videolar için %200 ses yükseltme, karışık / yeniden eskiye sıralama
 - Her içeriğin beğenisi ve kaç kez izlendiği/bakıldığı kaydedilir; kayıt seçilen bir klasörde de
   (Documents › GaleriReels) tutulur, uygulama silinip yeniden kurulsa da geri gelir
-- Favoriler (telefonun galerisiyle ortak), Tarihte bugün anıları ve Temizlik modu: istemediğin video ve fotoğrafları sola kaydırıp sil, algısal görüntü özeti (dHash) ile kopya/benzer videoları ve seri çekim fotoğrafları yakala, ne kadar yer açtığını gör
+- Favoriler (telefonun galerisiyle ortak), Tarihte bugün anıları ve Temizlik modu: istemediğin video ve fotoğrafları sola kaydırıp sil, algısal görüntü özeti (dHash) ile kopya/benzer videoları ve seri çekim fotoğrafları yakala, ne kadar yer açtığını gör; Akıllı temizlik çok kısa videoları, ekran görüntülerini, WhatsApp'tan gelenleri ve bulanık fotoğrafları ayrı ayrı önerir
 - Aylık özet: bu ay en çok izlediğin videoları, izleme süreni ve en sevdiğin klasörü Spotify Wrapped tarzı kart olarak gör ve paylaş
 - Arka planda oynatma: ayarlar açıldığında ekran kapansa da ses devam eder ve bildirim çubuğundan oynat / durdur / sonraki kontrol edilir
 - Telefonun donanımının açamadığı büyük videolar (ör. 1440x1600@60) VLC motoruyla oynatılır
@@ -171,6 +171,14 @@ kolaylaştırmak.
   - Ayarlar › Dil / Language: *Telefonun dili / Türkçe / English*. Android 13 ve üstünde telefonun
     Ayarlar › Uygulamalar › Galeri Reels › Dil menüsünden de seçilebilir.
   - Tarihler, sayılar ve boyutlar seçilen dile göre yazılır ("9 Kasım 2026" / "November 9, 2026").
+- [x] **1.8 Akıllı temizlik**
+  - Temizlik kartında yeni öneriler: **3 saniyeden kısa videolar** (yanlışlıkla çekilenler),
+    **ekran görüntüleri ve ekran kayıtları**, **WhatsApp'tan gelenler** ve **bulanık fotoğraflar**.
+  - Bulanıklık, fotoğrafın küçük resmindeki kenar keskinliğiyle (Laplace varyansı) telefonda ölçülür;
+    net fotoğrafları önermemek için eşik bilerek temkinli tutuldu. İlk taramadan sonra sonuçlar
+    önbellekten okunur, tarama kaydırmayı yavaşlatmaz.
+  - Her öneri "İncele" ile mevcut kaydırarak temizleme ekranında açılır; beğenilenler ve favoriler
+    hiçbir öneriye girmez.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

@@ -124,6 +124,8 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -510,41 +512,50 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         onDispose { act.removeOnPictureInPictureModeChangedListener(listener) }
     }
 
-    // ---- Ses tuşuyla %200: telefonun sesi max iken ses açma tuşu videoyu %20'şer yükseltir.
-    // Tuş yutulunca telefonun ses çubuğu çıkmaz, onun yerine bizim çubuğumuz görünür.
+    // ---- Ses tuşları: Reels ekranında telefonun ses çubuğu hiç çıkmaz, her zaman bizim çubuğumuz
+    // görünür. Ses tuşu önce telefonun sesini adım adım değiştirir (göstermeden); ses max iken
+    // açma tuşu videoyu %20'şer %200'e kadar yükseltir, kısma tuşu önce yükseltmeyi azaltır.
     var keyBoostTick by remember { mutableIntStateOf(0) }
+    /** Çubukta gösterilen toplam seviye: 0..1 telefonun sesi, 1..2 yükseltme */
+    var keyLevel by remember { mutableFloatStateOf(0f) }
+    val streamMax = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    // Debug testi: telefonun gerçek sesine hiç dokunmadan sahte bir ses seviyesiyle çalışır
+    var fakeIndex by remember { mutableIntStateOf(streamMax) }
     val swallowedKeys = remember { mutableSetOf<Int>() }
     val onVolumeKey by rememberUpdatedState { event: KeyEvent ->
         val code = event.keyCode
         when {
             event.action == KeyEvent.ACTION_UP -> swallowedKeys.remove(code)
             event.action != KeyEvent.ACTION_DOWN -> false
-            !vm.stats.volumeKeyBoost || inPip || inBackground -> false
+            inPip || inBackground -> false
             else -> {
-                val handled = if (code == KeyEvent.KEYCODE_VOLUME_UP) {
-                    val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                    val atMax = MainActivity.fakeMaxVolume ||
-                        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) >= max
-                    if (atMax) {
-                        if (muted) muted = false
+                val fake = MainActivity.fakeMaxVolume
+                fun index() = if (fake) fakeIndex else audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                fun setIndex(i: Int) {
+                    if (fake) fakeIndex = i
+                    else runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, i, 0) }
+                }
+                val now = index()
+                if (code == KeyEvent.KEYCODE_VOLUME_UP) {
+                    if (muted) muted = false
+                    if (now < streamMax) {
+                        setIndex(now + 1)
+                    } else if (vm.stats.volumeKeyBoost) {
                         val next = boostKeyUp(boost)
                         if (next >= 1f && boost < 1f) {
                             screenHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                         boost = next
                     }
-                    atMax
                 } else if (boost > 0f) {
                     boost = boostKeyDown(boost)
-                    true
-                } else {
-                    false
+                } else if (now > 0) {
+                    setIndex(now - 1)
                 }
-                if (handled) {
-                    swallowedKeys += code
-                    keyBoostTick++
-                }
-                handled
+                keyLevel = index().toFloat() / streamMax + boost
+                swallowedKeys += code
+                keyBoostTick++
+                true
             }
         }
     }
@@ -922,7 +933,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
 
         if (!inPip) {
             BoostKeyIndicator(
-                boost = boost,
+                level = keyLevel,
                 tick = keyBoostTick,
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
@@ -2337,29 +2348,59 @@ internal fun boostKeyDown(boost: Float): Float {
 }
 
 /**
- * Ses tuşuyla yükseltirken sağ kenardan kayarak gelen dikey çubuk: alt yarısı beyaz (%100),
- * üst yarısı sarı dolar. Her basışta yüzde yazısı yukarı/aşağı kayarak değişir ve hafifçe
- * zıplar; %200'e gelince çerçeve sarı parlar. Tuşa basılmayınca 1.8 sn sonra kaybolur.
+ * Ses tuşlarına basınca sağ kenardan kayarak gelen dikey çubuk. [level] 0..2: alt yarısı beyaz
+ * (telefonun sesi, %0..%100), üst yarısı sarı (yükseltme, %100..%200); dolgu su gibi akar.
+ * Her basışta yüzde yazısı yukarı/aşağı kayarak değişir ve hafifçe zıplar; %200'de çerçeve
+ * sarı parlar. Tuşa basılmayınca, telefon kıpırdamayınca ve su durulunca kaybolur.
  */
 @Composable
-private fun BoostKeyIndicator(boost: Float, tick: Int, modifier: Modifier) {
+private fun BoostKeyIndicator(level: Float, tick: Int, modifier: Modifier) {
     var visible by remember { mutableStateOf(false) }
     val pulse = remember { Animatable(1f) }
+    val slosh = remember { Slosh() }
+    var frame by remember { mutableLongStateOf(0L) }
+    var lastKick by remember { mutableLongStateOf(0L) }
+    val context = LocalContext.current
+    val view = LocalView.current
     LaunchedEffect(tick) {
         if (tick == 0) return@LaunchedEffect
+        lastKick = System.nanoTime()
+        // Gizliyken açılınca boştan değil, basıştan önceki seviyeden biraz dökülerek başlar
+        if (!visible) slosh.level = (level - 0.07f).coerceAtLeast(0f)
+        slosh.pour(level)
         visible = true
-        delay(1800)
-        visible = false
+    }
+    // Çubuk ekrandayken sensör dinlenir ve sıvı her karede adımlanır; tuşa basılmayıp telefon
+    // kıpırdamadan 1.8 sn geçince ve sıvı durulunca çubuk kaybolur
+    DisposableEffect(visible) {
+        val stop = if (visible) listenGravity(context, { view.display?.rotation ?: 0 }) { x, y ->
+            slosh.onGravity(x, y, System.nanoTime())
+        } else ({})
+        onDispose { stop() }
+    }
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            val now = withFrameNanos { it }
+            if (last != 0L) slosh.step((now - last) / 1e9f)
+            last = now
+            frame = now
+            val quietSince = maxOf(lastKick, slosh.lastMotionNanos)
+            if (System.nanoTime() - quietSince > 1_800_000_000L && slosh.settled) {
+                visible = false
+                break
+            }
+        }
     }
     LaunchedEffect(tick) {
         if (tick == 0) return@LaunchedEffect
         pulse.snapTo(1.22f)
         pulse.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 600f))
     }
-    val fill by animateFloatAsState(boost, spring(dampingRatio = 0.55f, stiffness = 380f), label = "boostFill")
-    val glow by animateFloatAsState(if (boost >= 1f) 1f else 0f, tween(260), label = "boostGlow")
-    val percent = 100 + (boost * 100).roundToInt()
-    val accent = if (boost > 0f) FavoriteYellow else Color.White
+    val glow by animateFloatAsState(if (level >= 1.995f) 1f else 0f, tween(260), label = "boostGlow")
+    val percent = (level * 100).roundToInt()
+    val accent = if (percent > 100) FavoriteYellow else Color.White
     AnimatedVisibility(
         visible = visible,
         modifier = modifier.padding(end = 18.dp),
@@ -2396,40 +2437,26 @@ private fun BoostKeyIndicator(boost: Float, tick: Int, modifier: Modifier) {
                     color = if (value > 100) FavoriteYellow else Color.White,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = pulse.value
-                        scaleY = pulse.value
-                    },
+                    // Sabit genişlik: %80 → %200 arasında kutu daralıp genişlemesin
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier
+                        .width(54.dp)
+                        .graphicsLayer {
+                            scaleX = pulse.value
+                            scaleY = pulse.value
+                        },
                 )
             }
             Spacer(Modifier.height(12.dp))
-            Box(
-                Modifier
-                    .width(12.dp)
-                    .height(170.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.22f)),
-            ) {
-                // Sarı yükseltme kısmı (%100'ün üstü) alttan yukarı uzar, beyaz %100 kısmı üstüne biner
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .fillMaxHeight((0.5f + 0.5f * fill).coerceIn(0.5f, 1f))
-                        .clip(RoundedCornerShape(50))
-                        .background(Brush.verticalGradient(listOf(Color(0xFFFF8A3D), FavoriteYellow)))
-                )
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.5f)
-                        .background(Color.White)
-                )
+            // Su gibi akan dolgu: beyaz %100 yerçekimi tarafında, sarı yükseltme onun üstünde
+            val boostBrush = remember { Brush.verticalGradient(listOf(Color(0xFFFF8A3D), FavoriteYellow)) }
+            Canvas(Modifier.width(22.dp).height(170.dp)) {
+                frame // her karede yeniden çiz
+                drawLiquid(slosh, Color.White, boostBrush, Color.White.copy(alpha = 0.18f))
             }
             Spacer(Modifier.height(12.dp))
             Icon(
-                painterResource(R.drawable.ic_volume_on),
+                painterResource(if (percent == 0) R.drawable.ic_volume_off else R.drawable.ic_volume_on),
                 contentDescription = str(R.string.volume),
                 tint = accent,
                 modifier = Modifier.size(22.dp),

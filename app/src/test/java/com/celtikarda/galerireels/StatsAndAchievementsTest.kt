@@ -110,6 +110,27 @@ class StatsAndAchievementsTest {
     }
 
     @Test
+    fun `json sira ve oynatma ayarlarini korur, eski dosyada bos kalir`() {
+        val original = SavedData(
+            videos = emptyMap(), days = emptyMap(), activeDays = emptySet(), cleaned = emptyMap(),
+            trash = emptyList(), achievements = emptyMap(),
+            shuffled = false, backgroundPlay = true, autoAdvance = true, normalizeAudio = false,
+        )
+        val parsed = StatsStore.parse(StatsStore.toJson(original))
+        assertEquals(false, parsed.shuffled)
+        assertEquals(true, parsed.backgroundPlay)
+        assertEquals(true, parsed.autoAdvance)
+        assertEquals(false, parsed.normalizeAudio)
+
+        // 1.8 ve öncesinin dosyalarında bu alanlar yok: null kalmalı ki varsayılan bozulmasın
+        val old = StatsStore.parse("""{"format":2,"videos":{}}""")
+        assertEquals(null, old.shuffled)
+        assertEquals(null, old.backgroundPlay)
+        assertEquals(null, old.autoAdvance)
+        assertEquals(null, old.normalizeAudio)
+    }
+
+    @Test
     fun `aylik ozet en cok izlenen videolari ve klasoru dogru hesaplar`() {
         val v1 = sampleVideo(1L, "kedi.mp4", durationMs = 30_000L, albumId = "cam", albumName = "Camera")
         val v2 = sampleVideo(2L, "konser.mp4", durationMs = 60_000L, albumId = "wa", albumName = "WhatsApp Video")

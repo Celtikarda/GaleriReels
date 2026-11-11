@@ -59,8 +59,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     var loaded by mutableStateOf(false)
         private set
-    var shuffled by mutableStateOf(true)
-        private set
+    /** Karışık sıra mı (seçim kaydedilir, uygulama yeniden açılınca da geçerli) */
+    val shuffled: Boolean
+        get() = stats.shuffled
     var openAlbum by mutableStateOf<Album?>(null)
         private set
 
@@ -462,7 +463,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Sırayı değiştirir; o an bakılan video yerinde kalsın diye yeni indeksini döndürür. */
     fun toggleShuffle(currentId: Long?): Int {
-        shuffled = !shuffled
+        stats.updateShuffled(!shuffled)
         val current = source.firstOrNull { it.id == currentId }
         items = when {
             !shuffled -> source

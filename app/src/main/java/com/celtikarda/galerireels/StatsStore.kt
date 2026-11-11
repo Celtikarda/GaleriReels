@@ -66,6 +66,12 @@ internal class SavedData(
     val leftHoldAction: EdgeHoldAction? = null,
     /** Sağ kenara basılı tutma işlemi */
     val rightHoldAction: EdgeHoldAction? = null,
+    /** Reels sırası karışık mı (false: yeniden eskiye) */
+    val shuffled: Boolean? = null,
+    /** Ayarlar: arka planda oynatma, otomatik geçiş, ses dengeleme */
+    val backgroundPlay: Boolean? = null,
+    val autoAdvance: Boolean? = null,
+    val normalizeAudio: Boolean? = null,
 )
 
 /**
@@ -222,6 +228,9 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     /** Ses dengeleme: kısık sesleri yükseltip patlayan sesleri bastırır (videolar arası seviye eşitlenir) */
     var normalizeAudio by mutableStateOf(prefs.getBoolean(KEY_NORMALIZE, false))
         private set
+    /** Reels sırası: karışık ya da yeniden eskiye (uygulama kapanınca da hatırlanır) */
+    var shuffled by mutableStateOf(prefs.getBoolean(KEY_SHUFFLED, true))
+        private set
     /** Gösterilecek içerik türü: Videolar, Fotoğraflar ya da Tümü */
     var mediaMode by mutableStateOf(
         MediaMode.entries.firstOrNull { it.name == prefs.getString(KEY_MEDIA_MODE, null) } ?: MediaMode.VIDEOS,
@@ -376,16 +385,25 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
     fun updateBackgroundPlay(enabled: Boolean) {
         backgroundPlay = enabled
         prefs.edit { putBoolean(KEY_BG_PLAY, enabled) }
+        scheduleSave()
     }
 
     fun updateAutoAdvance(enabled: Boolean) {
         autoAdvance = enabled
         prefs.edit { putBoolean(KEY_AUTO_ADVANCE, enabled) }
+        scheduleSave()
     }
 
     fun updateNormalizeAudio(enabled: Boolean) {
         normalizeAudio = enabled
         prefs.edit { putBoolean(KEY_NORMALIZE, enabled) }
+        scheduleSave()
+    }
+
+    fun updateShuffled(enabled: Boolean) {
+        shuffled = enabled
+        prefs.edit { putBoolean(KEY_SHUFFLED, enabled) }
+        scheduleSave()
     }
 
     fun updateMediaMode(mode: MediaMode) {
@@ -465,6 +483,23 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             rightHoldAction = saved.rightHoldAction
             prefs.edit { putString(KEY_RIGHT_HOLD, saved.rightHoldAction.name) }
         }
+        // Bu telefonda hiç seçilmemişse yedekteki seçim geçerli (yeniden kurulumdan sonra)
+        if (!prefs.contains(KEY_SHUFFLED) && saved.shuffled != null) {
+            shuffled = saved.shuffled
+            prefs.edit { putBoolean(KEY_SHUFFLED, saved.shuffled) }
+        }
+        if (!prefs.contains(KEY_BG_PLAY) && saved.backgroundPlay != null) {
+            backgroundPlay = saved.backgroundPlay
+            prefs.edit { putBoolean(KEY_BG_PLAY, saved.backgroundPlay) }
+        }
+        if (!prefs.contains(KEY_AUTO_ADVANCE) && saved.autoAdvance != null) {
+            autoAdvance = saved.autoAdvance
+            prefs.edit { putBoolean(KEY_AUTO_ADVANCE, saved.autoAdvance) }
+        }
+        if (!prefs.contains(KEY_NORMALIZE) && saved.normalizeAudio != null) {
+            normalizeAudio = saved.normalizeAudio
+            prefs.edit { putBoolean(KEY_NORMALIZE, saved.normalizeAudio) }
+        }
         historyRevision++
     }
 
@@ -477,6 +512,10 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 themeMode = themeMode,
                 leftHoldAction = leftHoldAction,
                 rightHoldAction = rightHoldAction,
+                shuffled = shuffled,
+                backgroundPlay = backgroundPlay,
+                autoAdvance = autoAdvance,
+                normalizeAudio = normalizeAudio,
             ),
         )
         val target = folder
@@ -542,6 +581,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_BG_PLAY = "background_play"
         const val KEY_AUTO_ADVANCE = "auto_advance"
         const val KEY_NORMALIZE = "normalize_audio"
+        const val KEY_SHUFFLED = "shuffled"
         const val KEY_MEDIA_MODE = "media_mode"
         const val KEY_MEDIA_MODE_ASKED = "media_mode_asked"
         const val KEY_THEME_MODE = "theme_mode"
@@ -615,6 +655,10 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                     data.themeMode?.let { put("themeMode", it.name) }
                     data.leftHoldAction?.let { put("leftHoldAction", it.name) }
                     data.rightHoldAction?.let { put("rightHoldAction", it.name) }
+                    data.shuffled?.let { put("shuffled", it) }
+                    data.backgroundPlay?.let { put("backgroundPlay", it) }
+                    data.autoAdvance?.let { put("autoAdvance", it) }
+                    data.normalizeAudio?.let { put("normalizeAudio", it) }
                 }
                 .put(
                     "trash",
@@ -678,9 +722,14 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             val themeMode = root.optString("themeMode", "").let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
             val leftHoldAction = root.optString("leftHoldAction", "").let { name -> EdgeHoldAction.entries.firstOrNull { it.name == name } }
             val rightHoldAction = root.optString("rightHoldAction", "").let { name -> EdgeHoldAction.entries.firstOrNull { it.name == name } }
+            fun flag(name: String): Boolean? = if (root.has(name)) root.optBoolean(name) else null
             return SavedData(
                 videoStats, dayCounts, activeDays, cleaned, trash, achievements, hiddenAlbums,
                 mediaMode, themeMode, leftHoldAction, rightHoldAction,
+                shuffled = flag("shuffled"),
+                backgroundPlay = flag("backgroundPlay"),
+                autoAdvance = flag("autoAdvance"),
+                normalizeAudio = flag("normalizeAudio"),
             )
         }
 

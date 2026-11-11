@@ -32,7 +32,16 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import android.view.KeyEvent
+import com.celtikarda.galerireels.MainActivity
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.border
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -154,6 +163,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.pow
@@ -497,6 +508,51 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
         act.addOnPictureInPictureModeChangedListener(listener)
         onDispose { act.removeOnPictureInPictureModeChangedListener(listener) }
+    }
+
+    // ---- Ses tuşuyla %200: telefonun sesi max iken ses açma tuşu videoyu %20'şer yükseltir.
+    // Tuş yutulunca telefonun ses çubuğu çıkmaz, onun yerine bizim çubuğumuz görünür.
+    var keyBoostTick by remember { mutableIntStateOf(0) }
+    val swallowedKeys = remember { mutableSetOf<Int>() }
+    val onVolumeKey by rememberUpdatedState { event: KeyEvent ->
+        val code = event.keyCode
+        when {
+            event.action == KeyEvent.ACTION_UP -> swallowedKeys.remove(code)
+            event.action != KeyEvent.ACTION_DOWN -> false
+            !vm.stats.volumeKeyBoost || inPip || inBackground -> false
+            else -> {
+                val handled = if (code == KeyEvent.KEYCODE_VOLUME_UP) {
+                    val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                    val atMax = MainActivity.fakeMaxVolume ||
+                        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) >= max
+                    if (atMax) {
+                        if (muted) muted = false
+                        val next = boostKeyUp(boost)
+                        if (next >= 1f && boost < 1f) {
+                            screenHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        boost = next
+                    }
+                    atMax
+                } else if (boost > 0f) {
+                    boost = boostKeyDown(boost)
+                    true
+                } else {
+                    false
+                }
+                if (handled) {
+                    swallowedKeys += code
+                    keyBoostTick++
+                }
+                handled
+            }
+        }
+    }
+    DisposableEffect(activity) {
+        val main = activity as? MainActivity ?: return@DisposableEffect onDispose { }
+        val handler: (KeyEvent) -> Boolean = { onVolumeKey(it) }
+        main.volumeKeyHandler = handler
+        onDispose { if (main.volumeKeyHandler === handler) main.volumeKeyHandler = null }
     }
     fun pipParams(): PictureInPictureParams? {
         if (!pipSupported || Build.VERSION.SDK_INT < 26) return null
@@ -861,6 +917,14 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 brightness = adjustKind < 0,
                 level = adjustLevel,
                 modifier = Modifier.align(Alignment.Center),
+            )
+        }
+
+        if (!inPip) {
+            BoostKeyIndicator(
+                boost = boost,
+                tick = keyBoostTick,
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
 
@@ -2256,6 +2320,123 @@ private const val ADJUST_EDGE_FRACTION = 0.2f
 
 /** Ses %100'deyken yükseltmeye geçmek için fazladan kaydırılması gereken miktar (seviye ölçeğinde) */
 private const val BOOST_DETENT = 0.08f
+
+/** Ses tuşuyla yükseltme adımı sayısı: 5 adım = %20'şer, %100 → %200 */
+private const val BOOST_KEY_STEPS = 5
+
+/** Ses açma tuşu: bir sonraki %20 basamağına çıkar (kaydırmayla %130 olduysa %140'a) */
+internal fun boostKeyUp(boost: Float): Float {
+    val step = floor(boost * BOOST_KEY_STEPS + 0.01f).toInt()
+    return ((step + 1).coerceAtMost(BOOST_KEY_STEPS)).toFloat() / BOOST_KEY_STEPS
+}
+
+/** Ses kısma tuşu: bir önceki %20 basamağına iner (%130'dan %120'ye), en az %100 */
+internal fun boostKeyDown(boost: Float): Float {
+    val step = ceil(boost * BOOST_KEY_STEPS - 0.01f).toInt()
+    return ((step - 1).coerceAtLeast(0)).toFloat() / BOOST_KEY_STEPS
+}
+
+/**
+ * Ses tuşuyla yükseltirken sağ kenardan kayarak gelen dikey çubuk: alt yarısı beyaz (%100),
+ * üst yarısı sarı dolar. Her basışta yüzde yazısı yukarı/aşağı kayarak değişir ve hafifçe
+ * zıplar; %200'e gelince çerçeve sarı parlar. Tuşa basılmayınca 1.8 sn sonra kaybolur.
+ */
+@Composable
+private fun BoostKeyIndicator(boost: Float, tick: Int, modifier: Modifier) {
+    var visible by remember { mutableStateOf(false) }
+    val pulse = remember { Animatable(1f) }
+    LaunchedEffect(tick) {
+        if (tick == 0) return@LaunchedEffect
+        visible = true
+        delay(1800)
+        visible = false
+    }
+    LaunchedEffect(tick) {
+        if (tick == 0) return@LaunchedEffect
+        pulse.snapTo(1.22f)
+        pulse.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 600f))
+    }
+    val fill by animateFloatAsState(boost, spring(dampingRatio = 0.55f, stiffness = 380f), label = "boostFill")
+    val glow by animateFloatAsState(if (boost >= 1f) 1f else 0f, tween(260), label = "boostGlow")
+    val percent = 100 + (boost * 100).roundToInt()
+    val accent = if (boost > 0f) FavoriteYellow else Color.White
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier.padding(end = 18.dp),
+        enter = slideInHorizontally(spring(dampingRatio = 0.7f, stiffness = 500f)) { it * 2 } + fadeIn(),
+        exit = slideOutHorizontally(tween(260)) { it * 2 } + fadeOut(tween(260)),
+    ) {
+        val shape = RoundedCornerShape(30.dp)
+        Column(
+            Modifier
+                .graphicsLayer {
+                    val s = 1f + (pulse.value - 1f) * 0.25f
+                    scaleX = s
+                    scaleY = s
+                }
+                .border(2.dp, FavoriteYellow.copy(alpha = 0.9f * glow), shape)
+                .clip(shape)
+                .background(Color.Black.copy(alpha = 0.72f))
+                .padding(horizontal = 12.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            AnimatedContent(
+                targetState = percent,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut())
+                    } else {
+                        (slideInVertically { -it } + fadeIn()) togetherWith (slideOutVertically { it } + fadeOut())
+                    }
+                },
+                label = "boostPercent",
+            ) { value ->
+                Text(
+                    str(R.string.percent, value),
+                    color = if (value > 100) FavoriteYellow else Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = pulse.value
+                        scaleY = pulse.value
+                    },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Box(
+                Modifier
+                    .width(12.dp)
+                    .height(170.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.22f)),
+            ) {
+                // Sarı yükseltme kısmı (%100'ün üstü) alttan yukarı uzar, beyaz %100 kısmı üstüne biner
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight((0.5f + 0.5f * fill).coerceIn(0.5f, 1f))
+                        .clip(RoundedCornerShape(50))
+                        .background(Brush.verticalGradient(listOf(Color(0xFFFF8A3D), FavoriteYellow)))
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.5f)
+                        .background(Color.White)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Icon(
+                painterResource(R.drawable.ic_volume_on),
+                contentDescription = str(R.string.volume),
+                tint = accent,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
 
 /**
  * Parlaklık / ses ayarlanırken ekranın ortasında simge, çubuk ve yüzde. Ses için [level] 1'in

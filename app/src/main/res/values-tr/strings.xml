@@ -240,6 +240,8 @@
     <string name="playback">Oynatma</string>
     <string name="bg_play_explain">Arka planda oynatma açıkken uygulamadan çıksan ya da ekranı kapatsan bile videonun sesi devam eder ve bildirim çubuğunda oynatıcı görünür.</string>
     <string name="status">Durum</string>
+    <string name="volume_key_boost" formatted="false">Ses tuşuyla %200 yükseltme</string>
+    <string name="volume_key_boost_explain" formatted="false">Telefonun sesi zaten max iken izlerken ses açma tuşuna her basışta video %20 daha yükselir, %200\'e kadar. Ses kısma tuşu önce yükseltmeyi azaltır.</string>
     <string name="edge_hold">Kenarlara basılı tutma</string>
     <string name="edge_hold_explain" formatted="false">Videoları izlerken ekranın sol veya sağ kenarına (%25) basılı tuttuğunda yapılacak işlemi seçebilirsin. Ekranın ortasına basılı tutmak her zaman arayüzü gizler (Net görünüm).</string>
     <string name="hold_left">Sol kenara basılı tutunca</string>

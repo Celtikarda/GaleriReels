@@ -72,6 +72,8 @@ internal class SavedData(
     val backgroundPlay: Boolean? = null,
     val autoAdvance: Boolean? = null,
     val normalizeAudio: Boolean? = null,
+    /** Ses max iken ses açma tuşu %200'e kadar yükseltsin mi */
+    val volumeKeyBoost: Boolean? = null,
 )
 
 /**
@@ -227,6 +229,9 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         private set
     /** Ses dengeleme: kısık sesleri yükseltip patlayan sesleri bastırır (videolar arası seviye eşitlenir) */
     var normalizeAudio by mutableStateOf(prefs.getBoolean(KEY_NORMALIZE, false))
+        private set
+    /** Telefonun sesi max iken ses açma tuşu videoyu %20'şer %200'e kadar yükseltir */
+    var volumeKeyBoost by mutableStateOf(prefs.getBoolean(KEY_VOLUME_KEY_BOOST, true))
         private set
     /** Reels sırası: karışık ya da yeniden eskiye (uygulama kapanınca da hatırlanır) */
     var shuffled by mutableStateOf(prefs.getBoolean(KEY_SHUFFLED, true))
@@ -400,6 +405,12 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         scheduleSave()
     }
 
+    fun updateVolumeKeyBoost(enabled: Boolean) {
+        volumeKeyBoost = enabled
+        prefs.edit { putBoolean(KEY_VOLUME_KEY_BOOST, enabled) }
+        scheduleSave()
+    }
+
     fun updateShuffled(enabled: Boolean) {
         shuffled = enabled
         prefs.edit { putBoolean(KEY_SHUFFLED, enabled) }
@@ -500,6 +511,10 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
             normalizeAudio = saved.normalizeAudio
             prefs.edit { putBoolean(KEY_NORMALIZE, saved.normalizeAudio) }
         }
+        if (!prefs.contains(KEY_VOLUME_KEY_BOOST) && saved.volumeKeyBoost != null) {
+            volumeKeyBoost = saved.volumeKeyBoost
+            prefs.edit { putBoolean(KEY_VOLUME_KEY_BOOST, saved.volumeKeyBoost) }
+        }
         historyRevision++
     }
 
@@ -516,6 +531,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 backgroundPlay = backgroundPlay,
                 autoAdvance = autoAdvance,
                 normalizeAudio = normalizeAudio,
+                volumeKeyBoost = volumeKeyBoost,
             ),
         )
         val target = folder
@@ -581,6 +597,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
         const val KEY_BG_PLAY = "background_play"
         const val KEY_AUTO_ADVANCE = "auto_advance"
         const val KEY_NORMALIZE = "normalize_audio"
+        const val KEY_VOLUME_KEY_BOOST = "volume_key_boost"
         const val KEY_SHUFFLED = "shuffled"
         const val KEY_MEDIA_MODE = "media_mode"
         const val KEY_MEDIA_MODE_ASKED = "media_mode_asked"
@@ -659,6 +676,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                     data.backgroundPlay?.let { put("backgroundPlay", it) }
                     data.autoAdvance?.let { put("autoAdvance", it) }
                     data.normalizeAudio?.let { put("normalizeAudio", it) }
+                    data.volumeKeyBoost?.let { put("volumeKeyBoost", it) }
                 }
                 .put(
                     "trash",
@@ -730,6 +748,7 @@ class StatsStore(context: Context, private val scope: CoroutineScope) {
                 backgroundPlay = flag("backgroundPlay"),
                 autoAdvance = flag("autoAdvance"),
                 normalizeAudio = flag("normalizeAudio"),
+                volumeKeyBoost = flag("volumeKeyBoost"),
             )
         }
 

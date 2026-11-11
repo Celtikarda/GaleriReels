@@ -241,6 +241,8 @@
     <string name="playback">Playback</string>
     <string name="bg_play_explain">With background playback on, the video\'s audio keeps playing even if you leave the app or turn off the screen, and a player appears in the notification shade.</string>
     <string name="status">Status</string>
+    <string name="volume_key_boost" formatted="false">Boost with the volume key</string>
+    <string name="volume_key_boost_explain" formatted="false">When the phone\'s volume is already at max, each press of volume up while watching raises the video by 20%, up to 200%. Volume down lowers the boost first.</string>
     <string name="edge_hold">Holding the edges</string>
     <string name="edge_hold_explain" formatted="false">Choose what happens when you hold the left or right edge (25%) of the screen while watching. Holding the center always hides the interface (Clear view).</string>
     <string name="hold_left">When holding the left edge</string>

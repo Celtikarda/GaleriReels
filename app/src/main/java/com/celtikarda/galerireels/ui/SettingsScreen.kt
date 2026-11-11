@@ -406,6 +406,25 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
         }
         Spacer(Modifier.height(10.dp))
         Card {
+            val keyBoost = stats.volumeKeyBoost
+            Text(str(R.string.volume_key_boost), color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                str(R.string.volume_key_boost_explain),
+                color = appColors.textSecondary,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            InfoLine(str(R.string.status), str(if (keyBoost) R.string.on else R.string.off))
+            Spacer(Modifier.height(10.dp))
+            if (keyBoost) {
+                OutlinedButton(onClick = { stats.updateVolumeKeyBoost(false) }) { Text(str(R.string.turn_off)) }
+            } else {
+                Button(onClick = { stats.updateVolumeKeyBoost(true) }) { Text(str(R.string.turn_on)) }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Card {
             val leftAction = stats.leftHoldAction
             val rightAction = stats.rightHoldAction
             Text(str(R.string.edge_hold), color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)

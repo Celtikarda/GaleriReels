@@ -179,6 +179,15 @@ kolaylaştırmak.
     önbellekten okunur, tarama kaydırmayı yavaşlatmaz.
   - Her öneri "İncele" ile mevcut kaydırarak temizleme ekranında açılır; beğenilenler ve favoriler
     hiçbir öneriye girmez.
+- [x] **1.8.1 Kademeli ses yükseltme ve düzeltmeler**
+  - Yatay tam ekranda sağ kenardan yukarı kaydırınca ses %100'de kısa bir durakla durur, devam
+    edince %200'e kadar kademeli yükselir; gösterge ve ses düğmesi yükseltmede sarı ("%150").
+  - Uyku zamanlayıcısı kuruluyken alttaki satırda kalan süre görünür ("☾ 15 dk"), son dakikada
+    sarı ve saniyeli.
+  - Temizlik kartındaki akıllı öneriler tek satırlık açılır menüde toplandı.
+  - Karışık / yeniden eskiye sırası artık uygulama kapanınca da hatırlanır; arka planda oynatma,
+    otomatik geçiş ve ses dengeleme seçilen klasördeki yedeğe de yazılır.
+  - Bazı Türkçe yazılarda kesme işareti "\x27" olarak görünüyordu ("PIN\x27i değiştir"); düzeltildi.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

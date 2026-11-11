@@ -41,6 +41,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.log10
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /**
@@ -104,7 +106,7 @@ class ReelsPlayback(
     private var hostPaused = false
     private var muted = false
     /** Kısık sesli videolar için %200 ses yükseltme */
-    private var boosted = false
+    private var boost = 0f
     /** Ses dengeleme (bkz. [PlayerSlot.updateNormalize]) */
     private var normalize = false
     /** Oynatma hızı: menüden seçilen hız ya da uzun basılı tutunca 2x */
@@ -175,10 +177,13 @@ class ReelsPlayback(
         vlc?.setMuted(muted)
     }
 
-    fun setBoosted(boosted: Boolean) {
-        this.boosted = boosted
+    /** Ses yükseltme seviyesi: 0 = normal (%100), 1 = %200; arası kademeli */
+    fun setBoost(level: Float) {
+        val clamped = level.coerceIn(0f, 1f)
+        if (clamped == boost) return
+        boost = clamped
         slots.forEach { it.updateBoost() }
-        vlc?.setBoosted(boosted)
+        vlc?.setBoost(clamped)
     }
 
     fun setNormalize(normalize: Boolean) {
@@ -439,7 +444,7 @@ class ReelsPlayback(
                     engine.release()
                 } else {
                     engine.setMuted(muted)
-                    engine.setBoosted(boosted)
+                    engine.setBoost(boost)
                     engine.setNormalize(normalize)
                     engine.setSpeed(speed)
                     engine.setScrubbing(rewinding)
@@ -649,7 +654,7 @@ class ReelsPlayback(
 
         fun updateBoost() {
             val session = player.audioSessionId
-            val shouldBoost = active && boosted && !muted && session != C.AUDIO_SESSION_ID_UNSET
+            val shouldBoost = active && boost > 0.005f && !muted && session != C.AUDIO_SESSION_ID_UNSET
             if (!shouldBoost) {
                 runCatching { enhancer?.enabled = false }
                 return
@@ -660,8 +665,8 @@ class ReelsPlayback(
                     enhancer = LoudnessEnhancer(session)
                     enhancerSessionId = session
                 }
-                // +600 mB (~6 dB) sesi yaklaşık %200 seviyesine çıkarır
-                enhancer?.setTargetGain(600)
+                // Genlik (1 + boost) katına çıkar: %200'de +600 mB (~6 dB), %150'de ~+350 mB
+                enhancer?.setTargetGain(boostGainMb(boost))
                 enhancer?.enabled = true
             }
         }
@@ -919,3 +924,10 @@ private fun createPlayer(context: Context): ExoPlayer {
             }
         }
 }
+
+/**
+ * Ses yükseltme seviyesini (0 = %100, 1 = %200) LoudnessEnhancer kazancına (millibel) çevirir.
+ * Genlik (1 + level) katına çıkar: 20·log10(1 + level) dB.
+ */
+internal fun boostGainMb(level: Float): Int =
+    (2000 * log10(1.0 + level.coerceIn(0f, 1f))).roundToInt()

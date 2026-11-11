@@ -143,6 +143,7 @@
     <string name="duplicates_found">Similar / duplicate: %1$s (%2$s)</string>
     <string name="review_duplicates">Review duplicates</string>
     <string name="review">Review</string>
+    <string name="smart_header">Smart suggestions</string>
     <string name="smart_short">Very short videos</string>
     <string name="smart_short_row">Shorter than 3 s: %1$s (%2$s)</string>
     <string name="smart_screens">Screenshots &amp; recordings</string>
@@ -328,6 +329,7 @@
     <string name="bg_menu_off">Background play: Off</string>
     <string name="normalize_menu_on">Volume leveling: On</string>
     <string name="normalize_menu_off">Volume leveling: Off</string>
+    <string name="sleep_left_short">%1$d min</string>
     <string name="sleep_left">Sleep timer: %1$s min left</string>
     <string name="sleep_timer">Sleep timer</string>
     <string name="pip_play">Play in a small window</string>
@@ -404,6 +406,10 @@
     <plurals name="n_minutes">
         <item quantity="one">%1$d minute</item>
         <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <plurals name="smart_summary">
+        <item quantity="one">%1$d category · %2$s</item>
+        <item quantity="other">%1$d categories · %2$s</item>
     </plurals>
     <plurals name="sleep_in">
         <item quantity="one">The video will stop in %1$d minute</item>

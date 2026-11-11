@@ -93,6 +93,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -116,7 +117,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -190,7 +195,11 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
 
     var userPaused by remember { mutableStateOf(false) }
     var muted by rememberSaveable { mutableStateOf(false) }
-    var boosted by rememberSaveable { mutableStateOf(false) }
+    /** Ses yükseltme: 0 = normal (%100), 1 = %200; menüden aç/kapa ya da sağ kenardan kademeli */
+    var boost by rememberSaveable { mutableFloatStateOf(0f) }
+    /** %100 durağında biriken kaydırma (yükseltmeye geçmek için biraz daha itmek gerekir) */
+    var boostDetent by remember { mutableFloatStateOf(0f) }
+    val screenHaptic = LocalHapticFeedback.current
     /** Menüden seçilen oynatma hızı (uzun basılı tutunca geçici olarak 2x) */
     var speed by rememberSaveable { mutableFloatStateOf(1f) }
     var fastForward by remember { mutableStateOf(false) }
@@ -371,7 +380,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         clearView = false
     }
     LaunchedEffect(muted) { playback.setMuted(muted) }
-    LaunchedEffect(boosted) { playback.setBoosted(boosted) }
+    LaunchedEffect(boost) { playback.setBoost(boost) }
     LaunchedEffect(vm.stats.normalizeAudio) { playback.setNormalize(vm.stats.normalizeAudio) }
     LaunchedEffect(fastForward, speed) { playback.setSpeed(if (fastForward) 2f else speed) }
     LaunchedEffect(vm.stats.autoAdvance) { playback.setAutoAdvance(vm.stats.autoAdvance) }
@@ -565,13 +574,30 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 adjustLevel = brightLevel
             }
         } else {
+            // 0..1 telefonun ses seviyesi, 1..2 ses yükseltme (%100..%200)
             val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-            if (volumeLevel < 0f) volumeLevel = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
-            volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
-            val index = (volumeLevel * max).roundToInt()
+            if (volumeLevel < 0f) {
+                volumeLevel = if (boost > 0f) 1f + boost else audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
+                boostDetent = 0f
+            }
+            var next = volumeLevel + delta
+            if (boost == 0f && next > 1f) {
+                // %100'de durak: yanlışlıkla yükseltmeye geçmesin, biraz daha itmek gerekir
+                if (volumeLevel < 1f) {
+                    screenHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    boostDetent = 0f
+                }
+                boostDetent += next - maxOf(volumeLevel, 1f)
+                next = if (boostDetent > BOOST_DETENT) 1f + (boostDetent - BOOST_DETENT) else 1f
+            } else if (next <= 1f) {
+                boostDetent = 0f
+            }
+            volumeLevel = next.coerceIn(0f, 2f)
+            val index = (volumeLevel.coerceAtMost(1f) * max).roundToInt()
             if (index != audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) {
                 runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0) }
             }
+            boost = (volumeLevel - 1f).coerceIn(0f, 1f)
             if (index > 0 && muted) muted = false
             adjustKind = 1
             adjustLevel = volumeLevel
@@ -633,7 +659,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 favorite = vm.isFavorite(item),
                 views = vm.viewsOf(item),
                 muted = muted,
-                boosted = boosted,
+                boost = boost,
                 backgroundPlay = vm.stats.backgroundPlay,
                 speed = speed,
                 autoAdvance = vm.stats.autoAdvance,
@@ -697,9 +723,9 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 onShare = { shareVideo(context, item) },
                 onToggleMute = { muted = !muted },
                 onToggleBoost = {
-                    boosted = !boosted
-                    if (boosted && muted) muted = false
-                    chipText = str(if (boosted) R.string.boost_on else R.string.boost_off)
+                    boost = if (boost > 0f) 0f else 1f
+                    if (boost > 0f && muted) muted = false
+                    chipText = str(if (boost > 0f) R.string.boost_on else R.string.boost_off)
                     chipTick++
                 },
                 onToggleBackgroundPlay = toggleBackgroundPlay,
@@ -1005,7 +1031,7 @@ private fun ReelPage(
     /** Bu videoyu kaç kez izledin */
     views: Int,
     muted: Boolean,
-    boosted: Boolean,
+    boost: Float,
     backgroundPlay: Boolean,
     /** Menüden seçilen oynatma hızı */
     speed: Float,
@@ -1221,6 +1247,7 @@ private fun ReelPage(
                     fullscreen = fullscreen,
                     speed = speed,
                     abLoop = abLoop,
+                    sleepAt = sleepAt,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .graphicsLayer { alpha = uiAlpha },
@@ -1245,7 +1272,7 @@ private fun ReelPage(
                     favorite = favorite,
                     views = views,
                     muted = muted,
-                    boosted = boosted,
+                    boost = boost,
                     backgroundPlay = backgroundPlay,
                     speed = speed,
                     autoAdvance = autoAdvance,
@@ -1516,8 +1543,18 @@ private fun BottomInfo(
     fullscreen: Boolean = false,
     speed: Float = 1f,
     abLoop: Pair<Long, Long?>? = null,
+    sleepAt: Long = 0L,
     modifier: Modifier,
 ) {
+    // Uyku zamanlayıcısının kalan süresi (kuruluyken saniyede bir güncellenir)
+    val sleepLeftMs by produceState(0L, sleepAt) {
+        value = 0L
+        while (sleepAt > 0L) {
+            value = (sleepAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            if (value == 0L) break
+            delay(1000)
+        }
+    }
     Column(
         modifier
             .fillMaxWidth()
@@ -1572,13 +1609,22 @@ private fun BottomInfo(
         Text(
             if (item.isPhoto) {
                 val dims = if (item.width > 0) "${item.width} × ${item.height} · " else ""
-                "📷  ${str(R.string.photo)} · $dims${formatSize(item.sizeBytes)}"
+                AnnotatedString("📷  ${str(R.string.photo)} · $dims${formatSize(item.sizeBytes)}")
             } else {
-                buildString {
+                buildAnnotatedString {
                     append("♫  ${str(R.string.original_audio)} · ${formatDuration(item.durationMs)}")
                     if (speed != 1f) append(" · ${formatSpeed(speed)}")
                     val b = abLoop?.second
                     if (abLoop != null && b != null) append(" · 🔁 ${formatDuration(abLoop.first)}–${formatDuration(b)}")
+                    if (sleepAt > 0L && sleepLeftMs > 0L) {
+                        append(" · ")
+                        // Son dakikada saniyeyle ve sarı: birazdan duracağı fark edilsin
+                        if (sleepLeftMs < 60_000L) {
+                            withStyle(SpanStyle(color = FavoriteYellow)) { append("☾ ${formatDuration(sleepLeftMs)}") }
+                        } else {
+                            append("☾ " + str(R.string.sleep_left_short, (sleepLeftMs + 59_999L) / 60_000L))
+                        }
+                    }
                 }
             },
             color = Color.White.copy(alpha = 0.9f),
@@ -1622,7 +1668,7 @@ private fun ActionRail(
     favorite: Boolean,
     views: Int,
     muted: Boolean,
-    boosted: Boolean,
+    boost: Float,
     backgroundPlay: Boolean,
     speed: Float,
     autoAdvance: Boolean,
@@ -1716,10 +1762,10 @@ private fun ActionRail(
         if (!isPhoto) {
             RailButton(
                 icon = if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_on,
-                tint = if (!muted && boosted) FavoriteYellow else Color.White,
+                tint = if (!muted && boost > 0f) FavoriteYellow else Color.White,
                 label = when {
                     muted -> str(R.string.muted_label)
-                    boosted -> "%200"
+                    boost > 0f -> str(R.string.percent, 100 + (boost * 100).roundToInt())
                     else -> str(R.string.sound)
                 },
                 compact = fullscreen,
@@ -1756,12 +1802,12 @@ private fun ActionRail(
                 }
                 if (!isPhoto) {
                     DropdownMenuItem(
-                        text = { Text(str(if (boosted) R.string.normal_volume else R.string.boost_volume)) },
+                        text = { Text(str(if (boost > 0f) R.string.normal_volume else R.string.boost_volume)) },
                         leadingIcon = {
                             Icon(
                                 painterResource(R.drawable.ic_volume_on),
                                 contentDescription = null,
-                                tint = if (boosted) FavoriteYellow else appColors.textPrimary,
+                                tint = if (boost > 0f) FavoriteYellow else appColors.textPrimary,
                             )
                         },
                         onClick = {
@@ -2208,9 +2254,17 @@ private fun Modifier.fullscreenGestures(
 /** Parlaklık / ses kaydırmasının başladığı kenar alanı: kalan orta kısım sonraki videoya geçer */
 private const val ADJUST_EDGE_FRACTION = 0.2f
 
-/** Parlaklık / ses ayarlanırken ekranın ortasında simge, çubuk ve yüzde */
+/** Ses %100'deyken yükseltmeye geçmek için fazladan kaydırılması gereken miktar (seviye ölçeğinde) */
+private const val BOOST_DETENT = 0.08f
+
+/**
+ * Parlaklık / ses ayarlanırken ekranın ortasında simge, çubuk ve yüzde. Ses için [level] 1'in
+ * üstündeyse yükseltme bölgesi: çubuk dolu kalır, üstüne sarı yükseltme kısmı biner.
+ */
 @Composable
 private fun AdjustIndicator(brightness: Boolean, level: Float, modifier: Modifier) {
+    val boosting = !brightness && level > 1f
+    val accent = if (boosting) FavoriteYellow else Color.White
     Row(
         modifier
             .clip(RoundedCornerShape(50))
@@ -2227,7 +2281,7 @@ private fun AdjustIndicator(brightness: Boolean, level: Float, modifier: Modifie
                 }
             ),
             contentDescription = str(if (brightness) R.string.brightness else R.string.volume),
-            tint = Color.White,
+            tint = accent,
             modifier = Modifier.size(22.dp),
         )
         Spacer(Modifier.width(12.dp))
@@ -2239,11 +2293,14 @@ private fun AdjustIndicator(brightness: Boolean, level: Float, modifier: Modifie
                 .background(Color.White.copy(alpha = 0.25f))
         ) {
             Box(Modifier.fillMaxWidth(level.coerceIn(0f, 1f)).fillMaxHeight().background(Color.White))
+            if (boosting) {
+                Box(Modifier.fillMaxWidth((level - 1f).coerceIn(0f, 1f)).fillMaxHeight().background(FavoriteYellow))
+            }
         }
         Spacer(Modifier.width(12.dp))
         Text(
             str(R.string.percent, (level * 100).roundToInt()),
-            color = Color.White,
+            color = accent,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.width(44.dp),

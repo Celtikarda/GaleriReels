@@ -104,7 +104,7 @@
     <string name="storage_internal">Telefon hafızası</string>
     <string name="storage_sd">SD kart</string>
     <string name="data_readme">Bu klasör Galeri Reels uygulamasının verilerini tutar:\nhangi videoları beğendiğin ve her videoyu kaç kez izlediğin (galerireels-veri.json).\n\nUygulamayı silip yeniden kursan bile bu bilgiler burada kalır. Yeniden kurduğunda\nuygulama klasör sorunca bu klasörü (Documents › GaleriReels) seçmen yeterli;\nher şey geri gelir.\n\nBu klasörü ve içindeki dosyaları silme, taşıma ya da adını değiştirme.\nYedeklemek istersen klasörü olduğu gibi kopyalayabilirsin.\n</string>
-    <string name="err_folder_write">Seçtiğin klasöre yazılamadı. Klasör silinmiş ya da izni kaldırılmış olabilir; Ayarlar\\\x27dan yeniden seç.</string>
+    <string name="err_folder_write">Seçtiğin klasöre yazılamadı. Klasör silinmiş ya da izni kaldırılmış olabilir; Ayarlar\'dan yeniden seç.</string>
     <string name="err_vlc_failed">Bu video telefonun çözücüsüyle açılamıyor ve VLC başlatılamadı.</string>
     <string name="err_corrupt">Dosya bozuk ya da gerçek bir video değil.</string>
     <string name="err_android10">Android 10 ve üstü gerekiyor</string>
@@ -130,7 +130,7 @@
     <string name="not_backed_up">Beğeni ve izlenmelerin yedeklenmiyor · Klasör seç</string>
     <string name="folder_options">Klasör seçenekleri</string>
     <string name="hide_folder_q">«%1$s» gizlensin mi?</string>
-    <string name="hide_folder_body">Bu klasördeki %1$s ana ekranda, Tüm videolar\\\x27da, Tarihte bugün\\\x27de ve Temizlik önerilerinde gösterilmez.\n\nİstediğin zaman Ayarlar › Gizlenen klasörler kısmından geri açabilirsin.</string>
+    <string name="hide_folder_body">Bu klasördeki %1$s ana ekranda, Tüm videolar\'da, Tarihte bugün\'de ve Temizlik önerilerinde gösterilmez.\n\nİstediğin zaman Ayarlar › Gizlenen klasörler kısmından geri açabilirsin.</string>
     <string name="hide_folder">Klasörü gizle</string>
     <string name="month_recap">%1$s özeti</string>
     <string name="top_folder">En çok: %1$s</string>
@@ -142,6 +142,7 @@
     <string name="duplicates_found">Benzer / kopya %1$s (%2$s) bulundu</string>
     <string name="review_duplicates">Kopyaları incele</string>
     <string name="review">İncele</string>
+    <string name="smart_header">Akıllı öneriler</string>
     <string name="smart_short">Çok kısa videolar</string>
     <string name="smart_short_row">3 saniyeden kısa %1$s (%2$s)</string>
     <string name="smart_screens">Ekran görüntüleri ve kayıtları</string>
@@ -172,18 +173,18 @@
     <string name="protect_data_body">Beğenilerin ve izlenme sayıların telefonunda bir klasörde saklanacak; uygulamayı silip yeniden kursan bile kaybolmazlar.\n\nAçılan pencerede Documents › GaleriReels klasörü açık olacak: \"Bu klasörü kullan\" ve ardından \"İzin ver\"e bas. Uygulama sadece bu klasörü görür. Daha önce kurduysan da aynısını yap, eski verilerin geri gelir.</string>
     <string name="not_now">Şimdi değil</string>
     <string name="what_browse">Ne gezmek istersin?</string>
-    <string name="mode_explain">Fotoğraflarını da tıpkı videolar gibi Reels olarak dikey kaydırabilir ve sola kaydırarak temizleyebilirsin. İstediğin zaman ana ekrandan veya Ayarlar\\\x27dan değiştirebilirsin.</string>
+    <string name="mode_explain">Fotoğraflarını da tıpkı videolar gibi Reels olarak dikey kaydırabilir ve sola kaydırarak temizleyebilirsin. İstediğin zaman ana ekrandan veya Ayarlar\'dan değiştirebilirsin.</string>
     <string name="only_videos_n">Sadece videolar (%1$s)</string>
     <string name="only_photos_n">Sadece fotoğraflar (%1$s)</string>
     <string name="all_n">Tümü · Fotoğraf + Video (%1$s)</string>
     <string name="new_version">Yeni sürüm: %1$s</string>
-    <string name="update_install_hint">İndirince APK\\\x27yı aç ve kur. Eski sürümün üstüne kurulur, beğenilerin ve izlenmelerin silinmez.</string>
-    <string name="pin_mismatch">PIN\\\x27ler aynı değil, baştan gir</string>
+    <string name="update_install_hint">İndirince APK\'yı aç ve kur. Eski sürümün üstüne kurulur, beğenilerin ve izlenmelerin silinmez.</string>
+    <string name="pin_mismatch">PIN\'ler aynı değil, baştan gir</string>
     <string name="pin_wrong">Yanlış PIN</string>
     <string name="pin_new">Yeni PIN (%1$d hane)</string>
-    <string name="pin_again">PIN\\\x27i tekrar gir</string>
+    <string name="pin_again">PIN\'i tekrar gir</string>
     <string name="pin_wait">Çok fazla yanlış deneme. %1$s sn bekle</string>
-    <string name="pin_enter_to_view">Görmek için PIN\\\x27i gir</string>
+    <string name="pin_enter_to_view">Görmek için PIN\'i gir</string>
     <string name="pin_will_ask">Gizlenen klasörleri görmek için sorulacak</string>
     <string name="unlock_with_device">Telefonun kilidiyle aç</string>
     <string name="verify_device">Telefonunun kilidiyle doğrula</string>
@@ -232,9 +233,9 @@
     <string name="show_all_n">Tümünü göster (%1$s)</string>
     <string name="pin_on_explain">PIN açık: bu liste PIN ya da telefonunun kilidiyle (parmak izi) açılır. Uygulamadan çıkınca tekrar kilitlenir.</string>
     <string name="pin_off_explain">PIN koyarsan bu listeyi görmek ve klasörleri geri açmak için PIN sorulur.</string>
-    <string name="change_pin">PIN\\\x27i değiştir</string>
+    <string name="change_pin">PIN\'i değiştir</string>
     <string name="pin_removed">PIN kaldırıldı</string>
-    <string name="remove_pin">PIN\\\x27i kaldır</string>
+    <string name="remove_pin">PIN\'i kaldır</string>
     <string name="set_pin">PIN koy</string>
     <string name="playback">Oynatma</string>
     <string name="bg_play_explain">Arka planda oynatma açıkken uygulamadan çıksan ya da ekranı kapatsan bile videonun sesi devam eder ve bildirim çubuğunda oynatıcı görünür.</string>
@@ -249,7 +250,7 @@
     <string name="feedback">Geri bildirim</string>
     <string name="report_or_suggest">Sorun bildir / Öneri gönder</string>
     <string name="updates">Güncellemeler</string>
-    <string name="updates_explain">Açıkken uygulama yeni sürüm çıkınca haber verir. Bunun için sadece GitHub\\\x27daki son sürüm numarasına bakar; telefonundan hiçbir bilgi göndermez.</string>
+    <string name="updates_explain">Açıkken uygulama yeni sürüm çıkınca haber verir. Bunun için sadece GitHub\'daki son sürüm numarasına bakar; telefonundan hiçbir bilgi göndermez.</string>
     <string name="notification">Bildirim</string>
     <string name="new_version_label">Yeni sürüm</string>
     <string name="version_ready">%1$s hazır, indir</string>
@@ -285,7 +286,7 @@
     <string name="like_undone">Bir beğeni geri alındı</string>
     <string name="photo_not_viewed">Bu fotoğrafa henüz bakmadın</string>
     <string name="video_not_watched">Bu videoyu henüz izlemedin</string>
-    <string name="boost_on" formatted="false">Ses %200\\\x27e yükseltildi</string>
+    <string name="boost_on" formatted="false">Ses %200\'e yükseltildi</string>
     <string name="boost_off" formatted="false">Ses normale döndü (%100)</string>
     <string name="auto_next_on">Video bitince sıradakine geçilecek</string>
     <string name="auto_next_off">Video bitince başa sarılacak</string>
@@ -295,7 +296,7 @@
     <string name="ab_a_set">A: %1$s · B için menüden tekrar seç</string>
     <string name="ab_range">A-B tekrarı: %1$s – %2$s</string>
     <string name="frame_saving">Kare kaydediliyor…</string>
-    <string name="frame_saved">Kare Resimler/GaleriReels\\\x27e kaydedildi</string>
+    <string name="frame_saved">Kare Resimler/GaleriReels\'e kaydedildi</string>
     <string name="frame_failed">Bu videodan kare alınamadı</string>
     <string name="marked_delete">Silinecekler listesine eklendi</string>
     <string name="no_more_videos">Gösterilecek video kalmadı</string>
@@ -309,10 +310,10 @@
     <string name="pending_delete_body">%1$s (%2$s) silinmek üzere işaretli. Çöp kutusuna taşınsın mı?</string>
     <string name="exit_without_delete">Silmeden çık</string>
     <string name="remove_all_likes_q">Tüm beğeniler kaldırılsın mı?</string>
-    <string name="remove_likes_body_video">%1$s beğeninin hepsi silinecek. Video Beğendiklerin\\\x27den çıkar ve Temizlik\\\x27te artık korunmaz.</string>
-    <string name="remove_likes_body_photo">%1$s beğeninin hepsi silinecek. Fotoğraf Beğendiklerin\\\x27den çıkar ve Temizlik\\\x27te artık korunmaz.</string>
+    <string name="remove_likes_body_video">%1$s beğeninin hepsi silinecek. Video Beğendiklerin\'den çıkar ve Temizlik\'te artık korunmaz.</string>
+    <string name="remove_likes_body_photo">%1$s beğeninin hepsi silinecek. Fotoğraf Beğendiklerin\'den çıkar ve Temizlik\'te artık korunmaz.</string>
     <string name="likes_removed">Beğeniler kaldırıldı</string>
-    <string name="new_video_saved">Yeni video Filmler/GaleriReels\\\x27e kaydedildi</string>
+    <string name="new_video_saved">Yeni video Filmler/GaleriReels\'e kaydedildi</string>
     <string name="original_audio">Orijinal ses</string>
     <string name="unlike">Beğeniyi geri al</string>
     <string name="like">Beğen</string>
@@ -327,6 +328,7 @@
     <string name="bg_menu_off">Arka planda oynat: Kapalı</string>
     <string name="normalize_menu_on">Ses dengeleme: Açık</string>
     <string name="normalize_menu_off">Ses dengeleme: Kapalı</string>
+    <string name="sleep_left_short">%1$d dk</string>
     <string name="sleep_left">Uyku zamanlayıcısı: %1$s dk kaldı</string>
     <string name="sleep_timer">Uyku zamanlayıcısı</string>
     <string name="pip_play">Küçük pencerede oynat</string>
@@ -403,6 +405,10 @@
     <plurals name="n_minutes">
         <item quantity="one">%1$d dakika</item>
         <item quantity="other">%1$d dakika</item>
+    </plurals>
+    <plurals name="smart_summary">
+        <item quantity="one">%1$d kategori · %2$s</item>
+        <item quantity="other">%1$d kategori · %2$s</item>
     </plurals>
     <plurals name="sleep_in">
         <item quantity="one">%1$d dakika sonra video duracak</item>

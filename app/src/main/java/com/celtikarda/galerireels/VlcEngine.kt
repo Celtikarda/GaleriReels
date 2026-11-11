@@ -15,6 +15,7 @@ import org.videolan.libvlc.interfaces.IVLCVout
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
+import kotlin.math.roundToInt
 
 /**
  * VLC'nin oynatma motoru (FFmpeg + dav1d). Telefonun donanım çözücüsünün açamadığı ve
@@ -39,7 +40,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var hasMedia = false
     private var pendingStart = false
     private var muted = false
-    private var boosted = false
+    private var boost = 0f
     private var normalize = false
     private var speed = 1f
     /** Geri sarılıyor: ses kısılır (video ileri-geri atlarken cızırtı olmasın) */
@@ -104,8 +105,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
 
     private fun targetVolume(): Int = when {
         muted || scrubbing -> 0
-        boosted -> 200
-        else -> 100
+        else -> 100 + (boost * 100).roundToInt()
     }
 
     /**
@@ -245,8 +245,9 @@ class VlcEngine private constructor(private val appContext: Context, private val
         if (hasMedia) applyVolume()
     }
 
-    fun setBoosted(boosted: Boolean) {
-        this.boosted = boosted
+    /** 0 = %100, 1 = %200 (VLC ses seviyesi 100..200) */
+    fun setBoost(level: Float) {
+        this.boost = level.coerceIn(0f, 1f)
         if (hasMedia) applyVolume()
     }
 

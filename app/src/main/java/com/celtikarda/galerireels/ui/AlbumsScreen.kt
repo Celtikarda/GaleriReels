@@ -2,6 +2,10 @@ package com.celtikarda.galerireels.ui
 
 import com.celtikarda.galerireels.plural
 import com.celtikarda.galerireels.str
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,10 +45,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -492,25 +498,64 @@ private fun CleanupCard(
                 Text(str(R.string.review_duplicates), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
-        for (category in SmartCategory.entries) {
-            val list = smartGroups[category].orEmpty()
-            if (list.isEmpty()) continue
+        // Akıllı öneriler kapalı başlar: tek satırda özet, dokununca kategoriler açılır
+        val smart = SmartCategory.entries.mapNotNull { c -> smartGroups[c]?.takeIf { it.isNotEmpty() }?.let { c to it } }
+        if (smart.isNotEmpty()) {
+            var expanded by rememberSaveable { mutableStateOf(false) }
+            val arrow by animateFloatAsState(if (expanded) 180f else 0f, label = "smartArrow")
+            // Bir öğe birden çok kategoride olabilir (WhatsApp'tan gelen kısa video): boyutu bir kez say
+            val totalBytes = smart.flatMap { it.second }.distinctBy { it.id }.sumOf { it.sizeBytes }
             Row(
                 Modifier
                     .fillMaxWidth()
                     .background(appColors.divider)
-                    .clickable { onStartSmart(category) }
+                    .clickable { expanded = !expanded }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    category.row(category.countText(mode, list.size), formatSize(list.sumOf { it.sizeBytes })),
+                    str(R.string.smart_header),
                     color = appColors.textPrimary,
                     fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "  ·  " + plural(R.plurals.smart_summary, smart.size, smart.size, formatSize(totalBytes)),
+                    color = appColors.textSecondary,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(12.dp))
-                Text(str(R.string.review), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Icon(
+                    painterResource(R.drawable.ic_expand_more),
+                    contentDescription = str(R.string.smart_header),
+                    tint = appColors.textSecondary,
+                    modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = arrow },
+                )
+            }
+            AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
+                Column {
+                    for ((category, list) in smart) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(appColors.divider)
+                                .clickable { onStartSmart(category) }
+                                .padding(start = 28.dp, end = 16.dp, top = 9.dp, bottom = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                category.row(category.countText(mode, list.size), formatSize(list.sumOf { it.sizeBytes })),
+                                color = appColors.textPrimary,
+                                fontSize = 13.sp,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(str(R.string.review), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
     }

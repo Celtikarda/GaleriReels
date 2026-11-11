@@ -188,6 +188,13 @@ kolaylaştırmak.
   - Karışık / yeniden eskiye sırası artık uygulama kapanınca da hatırlanır; arka planda oynatma,
     otomatik geçiş ve ses dengeleme seçilen klasördeki yedeğe de yazılır.
   - Bazı Türkçe yazılarda kesme işareti "\x27" olarak görünüyordu ("PIN\x27i değiştir"); düzeltildi.
+- [x] **1.9 Ses tuşuyla %200 ve su gibi akan ses çubuğu**
+  - Videolarda ses tuşlarına basınca telefonun ses çubuğu yerine uygulamanın kendi çubuğu çıkar:
+    tek çubukta %0-%100 telefonun sesi (beyaz), %100-%200 yükseltme (sarı).
+  - Telefonun sesi max iken ses açma tuşu videoyu %20'şer %200'e kadar yükseltir; ses kısma tuşu
+    önce yükseltmeyi azaltır. Ayarlar › Oynatma'dan kapatılabilir.
+  - Çubuğun dolgusu su gibi davranır: her basışta çalkalanır, telefonu eğince yüzeyi yere paralel
+    kalır, ters çevirince öbür uca akar. %200'de çerçeve sarı parlar.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

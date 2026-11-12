@@ -507,19 +507,45 @@ class ReelsPlayback(
         // (bkz. stopVlc); bu video o zamana kadar hazırlanıp bekler
         val viewBusy = vlcViewItemId != null && vlcViewItemId != item.id
         if (!viewBusy) vlcViewItemId = item.id
+        // Uzun video doğrudan kaldığı yerden açılır (bkz. VlcEngine.newMedia)
+        val startMs = resume.get(item) ?: 0L
+        val t0 = SystemClock.uptimeMillis()
+        var announced = false
         engine.play(
             item.uri,
             onFirstFrame = {
                 renderedIds = renderedIds + item.id
                 OpenTimer.firstFrame(item.id, "vlc")
-                resume.get(item)?.let { ms ->
-                    engine.seekTo(ms)
-                    onResumed(item, ms)
+                // Video bitip baştan açılınca ilk kare yeniden gelir; bilgi bir kez gösterilir
+                if (startMs > 0L && !announced) {
+                    announced = true
+                    onResumed(item, startMs)
+                    if (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                        measureVlcResume(item, engine, startMs, t0)
+                    }
                 }
             },
             onError = { error = item.id to str(R.string.err_corrupt) },
             waitForView = viewBusy,
+            startMs = startMs,
         )
+    }
+
+    /** Ölçüm (debug): VLC videosu açılıştan kaç ms sonra kaldığı yerden akmaya başladı (logcat GaleriDevam) */
+    private fun measureVlcResume(item: VideoItem, engine: VlcEngine, ms: Long, t0: Long) {
+        scope.launch {
+            while (SystemClock.uptimeMillis() - t0 < 8000) {
+                if (vlcItemId != item.id) return@launch
+                if (engine.timeMs > ms + 100) {
+                    android.util.Log.i(
+                        "GaleriDevam",
+                        "vlc video=${item.id} hedef=$ms akış=${SystemClock.uptimeMillis() - t0 - 100} ms",
+                    )
+                    return@launch
+                }
+                delay(5)
+            }
+        }
     }
 
     private fun stopVlc() {

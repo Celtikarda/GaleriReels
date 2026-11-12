@@ -54,6 +54,8 @@ class VlcEngine private constructor(private val appContext: Context, private val
     // Olaylarla gelen son konum; okumak için VLC'yi beklemek gerekmesin
     private var positionCache = 0f
     private var timeCache = 0L
+    /** Kaldığı yerden açıldı: bitince başa sarmayı biz yaparız (VLC başlangıç noktasına sarardı) */
+    private var manualRepeat = false
 
     // Sadece vlc-control iş parçacığında kullanılanlar
     private var file: ParcelFileDescriptor? = null
@@ -96,6 +98,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
                     positionCache = next
                 }
                 MediaPlayer.Event.EndReached -> {
+                    if (manualRepeat) restartFromZero()
                     positionCache = 0f
                     timeCache = 0L
                 }
@@ -112,14 +115,23 @@ class VlcEngine private constructor(private val appContext: Context, private val
      * [waitForView] true ise eldeki yüzey başka bir videonun sayfasında: video hazırlanır ama yeni
      * yüzey bağlanana kadar başlamaz (eski yüzeye çizip onu kaldırırken beklemeye yol açmasın).
      */
-    fun play(uri: Uri, onFirstFrame: () -> Unit, onError: () -> Unit, waitForView: Boolean = false) {
+    fun play(
+        uri: Uri,
+        onFirstFrame: () -> Unit,
+        onError: () -> Unit,
+        waitForView: Boolean = false,
+        startMs: Long = 0L,
+    ) {
         val gen = ++generation
         readyGeneration = 0
         this.onFirstFrame = onFirstFrame
         this.onError = onError
         hasMedia = true
         positionCache = 0f
-        timeCache = 0L
+        timeCache = startMs.coerceAtLeast(0L)
+        // Kaldığı yerden açılan videoda VLC'nin kendi tekrarı başa değil başlangıç noktasına
+        // sarıyor; bu videolarda bitince başa sarmayı kendimiz yaparız (bkz. [restartFromZero])
+        manualRepeat = startMs > 0L
         // Görüntü yüzeyi bağlanmadan başlarsa VLC görüntü çıkışı açamaz; yüzey hazır olunca başla
         pendingStart = waitForView || !vout.areViewsAttached()
         val startNow = !pendingStart
@@ -135,14 +147,10 @@ class VlcEngine private constructor(private val appContext: Context, private val
                 return@onControl
             }
             file = fd
-            val media = Media(libVlc, fd.fileDescriptor).apply {
-                // Buraya sadece donanımın açamadığı videolar gelir; doğrudan FFmpeg / dav1d ile çöz
-                setHWDecoderEnabled(false, false)
-                addOption(":input-repeat=65535") // başa sar
-                if (normalizeNow) addOption(":audio-filter=normvol")
+            newMedia(fd, normalizeNow, startMs).let {
+                player.media = it
+                it.release() // player kendi referansını tutar
             }
-            player.media = media
-            media.release()
             player.volume = volume
             player.rate = speed
             controlGeneration = gen
@@ -153,6 +161,46 @@ class VlcEngine private constructor(private val appContext: Context, private val
         if (debug) {
             main.removeCallbacks(statsLogger)
             main.postDelayed(statsLogger, 2000)
+        }
+    }
+
+    /**
+     * vlc-control iş parçacığında: VLC'ye verilecek video. [startMs] > 0 ise doğrudan oradan açılır;
+     * önce baştan açıp ilk kareden sonra oraya atlamak yazılımsal çözücüde ana kareden hedefe kadar
+     * her kareyi çözdürüyor, baştaki kare görünüp video bir süre donuyordu.
+     */
+    private fun newMedia(fd: ParcelFileDescriptor, normalize: Boolean, startMs: Long): Media {
+        val media = Media(libVlc, fd.fileDescriptor).apply {
+            // Buraya sadece donanımın açamadığı videolar gelir; doğrudan FFmpeg / dav1d ile çöz
+            setHWDecoderEnabled(false, false)
+            if (startMs > 0L) {
+                addOption(":start-time=%.3f".format(java.util.Locale.US, startMs / 1000.0))
+            } else {
+                addOption(":input-repeat=65535") // başa sar
+            }
+            if (normalize) addOption(":audio-filter=normvol")
+        }
+        return media
+    }
+
+    /**
+     * Kaldığı yerden açılan video bitti: aynı dosyayla baştan, bu sefer VLC'nin kendi tekrarıyla
+     * açılır. Yüzey bağlı kalır.
+     */
+    private fun restartFromZero() {
+        manualRepeat = false
+        positionCache = 0f
+        timeCache = 0L
+        val gen = generation
+        val normalizeNow = normalize
+        onControl {
+            val fd = file
+            if (gen != controlGeneration || fd == null) return@onControl
+            newMedia(fd, normalizeNow, 0L).let {
+                player.media = it
+                it.release()
+            }
+            player.play()
         }
     }
 
@@ -173,6 +221,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
         readyGeneration = 0
         main.removeCallbacks(statsLogger)
         hasMedia = false
+        manualRepeat = false
         pendingStart = false
         positionCache = 0f
         timeCache = 0L

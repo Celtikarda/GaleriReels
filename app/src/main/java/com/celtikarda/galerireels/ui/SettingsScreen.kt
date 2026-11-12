@@ -425,6 +425,25 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
         }
         Spacer(Modifier.height(10.dp))
         Card {
+            val ownBar = stats.ownVolumeBar
+            Text(str(R.string.own_volume_bar), color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                str(R.string.own_volume_bar_explain),
+                color = appColors.textSecondary,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            InfoLine(str(R.string.status), str(if (ownBar) R.string.on else R.string.off))
+            Spacer(Modifier.height(10.dp))
+            if (ownBar) {
+                OutlinedButton(onClick = { stats.updateOwnVolumeBar(false) }) { Text(str(R.string.turn_off)) }
+            } else {
+                Button(onClick = { stats.updateOwnVolumeBar(true) }) { Text(str(R.string.turn_on)) }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Card {
             val leftAction = stats.leftHoldAction
             val rightAction = stats.rightHoldAction
             Text(str(R.string.edge_hold), color = appColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)

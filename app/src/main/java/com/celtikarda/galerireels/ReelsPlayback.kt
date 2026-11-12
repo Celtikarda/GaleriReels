@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -570,7 +571,10 @@ class ReelsPlayback(
             updateSpeed()
             updateScrubbing()
             updateRepeat()
-            player.setMediaItem(MediaItem.Builder().setUri(item.uri).setMediaId(item.id.toString()).build())
+            // Uzun video baştan değil kaldığı yerden hazırlanır: ekrana gelince atlayıp yeniden
+            // çözmek ~0,6-0,9 sn duraklatıyordu (önce baştaki kare görünüp sonra atlıyordu)
+            val mediaItem = MediaItem.Builder().setUri(item.uri).setMediaId(item.id.toString()).build()
+            player.setMediaItem(mediaItem, startPosition())
             player.prepare()
             updateBoost()
             updateNormalize()
@@ -594,7 +598,7 @@ class ReelsPlayback(
 
         fun activate(play: Boolean) {
             // Kaydırılırken geri dönüldüyse sarma hâlâ bekliyor: hemen yapılır
-            if (leaveRewindJob?.isActive == true) player.seekTo(0)
+            if (leaveRewindJob?.isActive == true) player.seekTo(startPosition())
             leaveRewindJob?.cancel()
             if (!active) restorePosition()
             active = true
@@ -610,8 +614,30 @@ class ReelsPlayback(
         private fun restorePosition() {
             val item = item ?: return
             val ms = resume.get(item) ?: return
-            player.seekTo(ms)
+            val before = player.currentPosition
+            // Zaten kaldığı yerde hazırlandıysa (bkz. [load], [deactivate]) yeniden atlamak
+            // hazır kareyi çöpe atıp çözmeyi baştan başlatır; atlanmaz
+            if (abs(before - ms) > RESUME_SEEK_TOLERANCE_MS) player.seekTo(ms)
             onResumed(item, ms)
+            if (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) measureResume(item, ms, before)
+        }
+
+        /** Ölçüm: kaldığın yere gelince videonun oradan akmaya başlaması kaç ms sürdü (logcat GaleriDevam) */
+        private fun measureResume(item: VideoItem, ms: Long, before: Long) {
+            val t0 = SystemClock.uptimeMillis()
+            scope.launch {
+                while (SystemClock.uptimeMillis() - t0 < 5000) {
+                    if (itemId != item.id) return@launch
+                    if (player.isPlaying && player.currentPosition > ms + 100) {
+                        android.util.Log.i(
+                            "GaleriDevam",
+                            "video=${item.id} öncesi=$before hedef=$ms akış=${SystemClock.uptimeMillis() - t0 - 100} ms",
+                        )
+                        return@launch
+                    }
+                    delay(5)
+                }
+            }
         }
 
         fun deactivate() {
@@ -628,9 +654,13 @@ class ReelsPlayback(
             leaveRewindJob?.cancel()
             leaveRewindJob = scope.launch {
                 delay(REWIND_AFTER_LEAVE_MS)
-                if (!released) player.seekTo(0)
+                // Uzun video kaldığı yerde, kısa video başında bekler
+                if (!released) player.seekTo(startPosition())
             }
         }
+
+        /** Hazırlanırken / ekrandan çıkınca beklenecek yer: uzun videoda kaldığın yer, yoksa baş */
+        private fun startPosition(): Long = item?.let { resume.get(it) } ?: 0L
 
         fun updateSpeed() {
             val target = if (active) speed else 1f
@@ -826,6 +856,8 @@ private const val VIEW_AFTER_MS = 5_000L
 
 /** Ekrandan çıkan video, kaydırma bittikten sonra başa sarılır */
 private const val REWIND_AFTER_LEAVE_MS = 300L
+/** Kaldığın yere bu kadar yakın hazırlanan video ayrıca atlatılmaz */
+private const val RESUME_SEEK_TOLERANCE_MS = 1_500L
 
 private fun isSoftwareDecoder(name: String): Boolean =
     name.startsWith("c2.android.") || name.startsWith("OMX.google.")

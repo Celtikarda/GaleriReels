@@ -528,6 +528,8 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
             event.action == KeyEvent.ACTION_UP -> swallowedKeys.remove(code)
             event.action != KeyEvent.ACTION_DOWN -> false
             inPip || inBackground -> false
+            // Kullanıcı telefonun kendi ses çubuğunu seçtiyse tuşlara hiç karışmayız
+            !vm.stats.ownVolumeBar -> false
             else -> {
                 val fake = MainActivity.fakeMaxVolume
                 fun index() = if (fake) fakeIndex else audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -2370,11 +2372,16 @@ private fun BoostKeyIndicator(level: Float, tick: Int, modifier: Modifier) {
         slosh.pour(level)
         visible = true
     }
-    // Çubuk ekrandayken sensör dinlenir ve sıvı her karede adımlanır; tuşa basılmayıp telefon
-    // kıpırdamadan 1.8 sn geçince ve sıvı durulunca çubuk kaybolur
+    // Çubuk ekrandayken sensörler dinlenir ve sıvı her karede adımlanır. Son tuşa basıştan
+    // 1.8 sn sonra sıvı durulunca, durulmazsa (yürürken telefon hep sallanır) en geç 2.6 sn sonra
+    // çubuk kaybolur; telefonun hareketi çubuğu ekranda tutmaz
     DisposableEffect(visible) {
-        val stop = if (visible) listenGravity(context, { view.display?.rotation ?: 0 }) { x, y ->
-            slosh.onGravity(x, y, System.nanoTime())
+        val stop = if (visible) {
+            listenGravity(
+                context,
+                { view.display?.rotation ?: 0 },
+                onShake = { side, along -> slosh.onShake(side, along) },
+            ) { x, y -> slosh.onGravity(x, y, System.nanoTime()) }
         } else ({})
         onDispose { stop() }
     }
@@ -2386,8 +2393,8 @@ private fun BoostKeyIndicator(level: Float, tick: Int, modifier: Modifier) {
             if (last != 0L) slosh.step((now - last) / 1e9f)
             last = now
             frame = now
-            val quietSince = maxOf(lastKick, slosh.lastMotionNanos)
-            if (System.nanoTime() - quietSince > 1_800_000_000L && slosh.settled) {
+            val quiet = System.nanoTime() - lastKick
+            if (quiet > 2_600_000_000L || (quiet > 1_800_000_000L && slosh.settled)) {
                 visible = false
                 break
             }

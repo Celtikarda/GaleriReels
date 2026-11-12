@@ -45,6 +45,47 @@ class SloshTest {
     }
 
     @Test
+    fun pourBelow100_neverShowsYellow_evenWhenSpringOvershoots() {
+        val s = Slosh()
+        s.level = 0.8f
+        s.pour(1f)
+        var maxLevel = 0f
+        var t = 0f
+        while (t < 2f) {
+            s.step(0.016f)
+            maxLevel = maxOf(maxLevel, s.level)
+            assertFalse("sarı görünmemeli (seviye ${s.level})", s.boostPresent)
+            t += 0.016f
+        }
+        assertTrue("yay biraz taşmalı ki test anlamlı olsun", maxLevel > 1f)
+    }
+
+    @Test
+    fun boost_appearsAbove100_andDrainsAway() {
+        val s = Slosh()
+        s.level = 1f
+        s.pour(1.4f)
+        run(s, 1f)
+        assertTrue(s.boostPresent)
+        s.pour(1f)
+        run(s, 2f)
+        assertFalse(s.boostPresent)
+    }
+
+    @Test
+    fun shake_makesWaves_thatSettle() {
+        val s = Slosh()
+        s.level = 0.6f
+        s.targetLevel = 0.6f
+        s.onShake(6f, 0f)
+        run(s, 0.2f)
+        assertTrue("yüzey dalgalanmalı", s.heights.any { kotlin.math.abs(it) > 0.02f })
+        assertFalse(s.settled)
+        run(s, 5f)
+        assertTrue(s.settled)
+    }
+
+    @Test
     fun pour_raisesLevel_withSplash() {
         val s = Slosh()
         s.pour(0.4f)

@@ -534,12 +534,19 @@ class ReelsPlayback(
     /** Ölçüm (debug): VLC videosu açılıştan kaç ms sonra kaldığı yerden akmaya başladı (logcat GaleriDevam) */
     private fun measureVlcResume(item: VideoItem, engine: VlcEngine, ms: Long, t0: Long) {
         scope.launch {
+            // Hızlı atlamada video hedefin biraz önündeki anahtar kareden başlar: ilk görülen
+            // konumdan 100 ms ilerleyince akıyor sayılır
+            // (sayaç açılışta hedefi hemen gösterebiliyor; ilk değişimi bekle)
+            val initial = engine.timeMs
+            var first = -1L
             while (SystemClock.uptimeMillis() - t0 < 8000) {
                 if (vlcItemId != item.id) return@launch
-                if (engine.timeMs > ms + 100) {
+                val now = engine.timeMs
+                if (first < 0L && now != initial && now > 0L) first = now
+                if (first >= 0L && now > first + 100) {
                     android.util.Log.i(
                         "GaleriDevam",
-                        "vlc video=${item.id} hedef=$ms akış=${SystemClock.uptimeMillis() - t0 - 100} ms",
+                        "vlc video=${item.id} hedef=$ms başladı=$first akış=${SystemClock.uptimeMillis() - t0} ms",
                     )
                     return@launch
                 }

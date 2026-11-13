@@ -29,6 +29,27 @@ class SloshTest {
     }
 
     @Test
+    fun upsideDown_pourDoesNotTeleport() {
+        val s = Slosh()
+        run(s, 1f, 0f to 9.8f)
+        var last = s.pos
+        var maxJump = 0f
+        var t = 0f
+        var sawSplit = false
+        while (t < 2f) {
+            s.onGravity(0f, -9.8f, 0L)
+            s.step(0.016f)
+            maxJump = maxOf(maxJump, kotlin.math.abs(s.pos - last))
+            if (s.pos in 0.3f..0.7f && s.vel > 0.5f) sawSplit = true
+            last = s.pos
+            t += 0.016f
+        }
+        assertTrue("tek karede en fazla %4 akmalı (oldu ${maxJump})", maxJump < 0.04f)
+        assertTrue("ortada iki uçta birden sıvı + akış görülmeli", sawSplit)
+        assertEquals(1f, s.pos, 0.001f)
+    }
+
+    @Test
     fun tilt_makesSurfaceLevelWithGround() {
         val s = Slosh()
         // Sağ kenar aşağı eğik: yüzey ekranda sağa doğru yükselir (eğim negatif)

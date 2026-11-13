@@ -119,16 +119,28 @@ internal class Slosh {
         while (left > 0f) {
             val dt = min(left, 0.0125f)
             left -= dt
-            vel += (55f * (targetPos - pos) - 7f * vel) * dt
+            // Şelale: sıvı tek blok halinde kaymaz; eski uçtan kopup ince bir akışla yeni uca
+            // dökülür. Akış önce hızlanır, sona doğru incelir; döküldüğü yer çöküp dalgalanır.
+            val remaining = targetPos - pos
+            val want = if (abs(remaining) < 0.0005f) 0f
+            else (if (remaining > 0f) 1f else -1f) * FLOW_RATE * min(1f, 0.35f + abs(remaining) * 3f)
+            vel += (want - vel) * 9f * dt
+            val before = pos
             pos += vel * dt
-            if (pos < 0f || pos > 1f) {
-                // Uca çarpınca sekip sıçrar
-                val hit = abs(vel)
-                wave = min(1f, wave + hit * 0.35f)
-                for (i in 0 until COLUMNS) speeds[i] += hit * 3f * if (i % 3 == 0) 1f else -0.5f
-                pos = pos.coerceIn(0f, 1f)
-                vel = -vel * 0.25f
+            if ((before - targetPos) * (pos - targetPos) <= 0f && before != targetPos) {
+                // Son damla da indi: kısa bir sıçrama + kabarcıklar
+                pos = targetPos
+                wave = min(1f, wave + abs(vel) * 0.25f)
+                for (d in -1..1) speeds[COLUMNS / 2 + d] += abs(vel) * 2.5f
+                repeat(2) { if (bubbles.size < 8) bubbles += floatArrayOf(0.05f + rand() * 0.2f, 0.25f + rand() * 0.5f, 1f) }
+                vel = 0f
+            } else if (pos > 0f && pos < 1f && abs(vel) > 0.05f) {
+                // Akış biriken sıvının ortasına çarpar: o bölge içeri itilir, dalga yayılır
+                val hit = abs(vel) * dt
+                for (d in -1..1) speeds[COLUMNS / 2 + d] += hit * if (d == 0) 22f else 11f
+                wave = min(1f, wave + hit * 0.4f)
             }
+            pos = pos.coerceIn(0f, 1f)
             // Sarsıntı: yana ivmede sıvı geride kalır, aşağı-yukarıda yüzey zıplar
             if (shakeSide != 0f || shakeUp != 0f) {
                 slopeVel += shakeSide * 1.2f * dt
@@ -208,6 +220,8 @@ internal class Slosh {
 
     companion object {
         const val COLUMNS = 14
+        /** Ters çevrilince sıvının en hızlı akışı (toplamın saniyedeki payı): ~0,6 s'de dökülür */
+        private const val FLOW_RATE = 1.9f
         /** Sütunlar arası çekim; büyüdükçe dalga hızlı yayılır */
         private const val WAVE_STIFFNESS = 900f
     }
@@ -275,20 +289,21 @@ internal fun DrawScope.drawLiquid(s: Slosh, white: Color, boostBrush: Brush, tra
     val boostLen = if (s.boostPresent) h * 0.5f * (lvl - 1f).coerceAtLeast(0f) else 0f
     val total = whiteLen + boostLen
     if (total < 0.5f) return
-    // Akarken sıvı biraz uzar (ince akış gibi)
-    val shown = min(h, total * (1f + 1.2f * abs(s.vel)))
-    val scale = shown / total
-    val start = (1f - s.pos) * (h - shown)
-    val end = start + shown
-    // Sıvı azken dalga da küçük kalır (boş çubukta dev dalga olmasın)
-    val depthMul = (shown / (w * 1.5f)).coerceIn(0.25f, 1f)
+    // Sıvı iki uçta birikebilir: pos kadarı üst uçta, kalanı alt uçta; arada akış (şelale)
+    val topLen = total * s.pos
+    val bottomLen = total - topLen
+    val whiteShare = whiteLen / total
     val ripple = s.wave * w * 0.08f
-    val flip = if (s.pos < 0.5f) 1f else -1f
 
-    fun edge(y0: Float, mul: Float): (Float) -> Float = { x ->
-        val u = x / w
-        y0 + s.slope * (x - w / 2f) +
-            mul * depthMul * (flip * s.surfaceAt(u) * w + ripple * sin(s.phase + u * 5.6f))
+    // flip: alt uçtaki birikintide +1, üst uçtakinde -1 (yüzey ters bakar)
+    fun edge(y0: Float, mul: Float, flip: Float, len: Float): (Float) -> Float {
+        // Sıvı azken dalga da küçük kalır (boş çubukta dev dalga olmasın)
+        val depthMul = (len / (w * 1.5f)).coerceIn(0.25f, 1f)
+        return { x ->
+            val u = x / w
+            y0 + s.slope * (x - w / 2f) +
+                mul * depthMul * (flip * s.surfaceAt(u) * w + ripple * sin(s.phase + u * 5.6f))
+        }
     }
 
     val steps = 16
@@ -310,43 +325,88 @@ internal fun DrawScope.drawLiquid(s: Slosh, white: Color, boostBrush: Brush, tra
 
     val whiteBrush = SolidColor(white)
     clipPath(container) {
-        val free: (Float) -> Float
-        val hasBoost = boostLen * scale >= 0.75f
-        if (s.pos < 0.5f) {
-            // Sıvı alt uçta: yüzey yukarıda
-            free = edge(start, 1f)
-            val back = if (end >= h - 1f) edge(h + w * 2f, 0f) else edge(end, 0.35f)
+        val hasBoost = boostLen >= 0.75f
+        val surfaces = ArrayList<(Float) -> Float>(2)
+        if (bottomLen >= 0.5f) {
+            // Alt uçtaki birikinti: yüzey yukarıda, beyaz dipte, sarı onun üstünde
+            val free = edge(h - bottomLen, 1f, 1f, bottomLen)
+            val back = edge(h + w * 2f, 0f, 1f, bottomLen)
             if (hasBoost) {
-                val boundary = edge(end - whiteLen * scale, 0.45f)
+                val boundary = edge(h - bottomLen * whiteShare, 0.45f, 1f, bottomLen)
                 fillBetween(free, boundary, boostBrush)
                 fillBetween(boundary, back, whiteBrush)
             } else {
                 fillBetween(free, back, whiteBrush)
             }
-        } else {
-            // Ters: sıvı üst uçta, yüzey aşağıda
-            free = edge(end, 1f)
-            val back = if (start <= 1f) edge(-w * 2f, 0f) else edge(start, 0.35f)
+            surfaces += free
+        }
+        if (topLen >= 0.5f) {
+            // Üst uçtaki birikinti (telefon ters): yüzey aşağıda
+            val free = edge(topLen, 1f, -1f, topLen)
+            val back = edge(-w * 2f, 0f, -1f, topLen)
             if (hasBoost) {
-                val boundary = edge(start + whiteLen * scale, 0.45f)
+                val boundary = edge(topLen * whiteShare, 0.45f, -1f, topLen)
                 fillBetween(back, boundary, whiteBrush)
                 fillBetween(boundary, free, boostBrush)
             } else {
                 fillBetween(back, free, whiteBrush)
             }
+            surfaces += free
         }
-        // Kabarcıklar: dipten yüzeye doğru yükselir, yüzeye yaklaştıkça söner
+        // Akış: kaynağın yüzeyinden kopar, düştükçe incelir ve kıvrılır, öbür birikintiye çarpar
+        if (s.pos > 0.001f && s.pos < 0.999f && abs(s.vel) > 0.03f) {
+            val toTop = s.vel > 0f
+            val srcLen = if (toTop) bottomLen else topLen
+            val ySrc = if (toTop) h - bottomLen else topLen
+            val ySink = if (toTop) topLen else h - bottomLen
+            val strength = min(1f, abs(s.vel) / 1.9f) * min(1f, srcLen / (w * 0.8f) + 0.2f)
+            val hw0 = w * (0.12f + 0.2f * strength)
+            val n = 14
+            val stream = Path()
+            fun sx(t: Float, side: Float): Float {
+                val y = ySrc + (ySink - ySrc) * t
+                val wobble = w * 0.07f * sin(s.phase * 2.3f + y / w * 1.9f) * t
+                return w / 2f + s.slope * w * 0.3f + wobble + side * hw0 * (1f - 0.45f * t)
+            }
+            for (k in 0..n) {
+                val t = k / n.toFloat()
+                val y = ySrc + (ySink - ySrc) * t
+                if (k == 0) stream.moveTo(sx(t, -1f), y) else stream.lineTo(sx(t, -1f), y)
+            }
+            for (k in n downTo 0) {
+                val t = k / n.toFloat()
+                stream.lineTo(sx(t, 1f), ySrc + (ySink - ySrc) * t)
+            }
+            stream.close()
+            drawPath(stream, if (hasBoost) boostBrush else whiteBrush)
+            // Çarptığı yerde sıçrayan birkaç damla
+            val back = if (toTop) 1f else -1f
+            for (k in 0..2) {
+                val p = (s.phase * 1.3f + k * 0.37f) % 1f
+                val dx = (k - 1) * w * 0.28f * (0.4f + p)
+                val dy = back * w * 0.9f * p * (1f - p) * 4f * strength
+                drawCircle(
+                    Color.White.copy(alpha = 0.7f * (1f - p)),
+                    (1f + strength) * density,
+                    Offset(w / 2f + dx, ySink + dy),
+                )
+            }
+        }
+        // Kabarcıklar: büyük birikintide dipten yüzeye doğru yükselir, yüzeye yaklaştıkça söner
         val bubbleColor = if (hasBoost) Color.White else Color.Black
+        val mainLen = max(topLen, bottomLen)
         for (b in s.bubbles) {
             val x = b[1] * w
-            val fromBack = shown * b[0]
-            val y = if (s.pos < 0.5f) end - fromBack else start + fromBack
+            val fromBack = mainLen * b[0]
+            val y = if (bottomLen >= topLen) h - fromBack else fromBack
             val r = (1.1f + b[2] * 1.1f) * density
             drawCircle(bubbleColor.copy(alpha = 0.35f * b[2]), r, Offset(x, y))
         }
-        val shine = Path()
-        trace(shine, free, forward = true, move = true)
-        drawPath(shine, Color.White.copy(alpha = 0.6f), style = Stroke(width = 1.5f * density))
+        for (free in surfaces) {
+            val shine = Path()
+            trace(shine, free, forward = true, move = true)
+            drawPath(shine, Color.White.copy(alpha = 0.6f), style = Stroke(width = 1.5f * density))
+        }
     }
     // Kenardaki hafif cam parlaması
     drawLine(

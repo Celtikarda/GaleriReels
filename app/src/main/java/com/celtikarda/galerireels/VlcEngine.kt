@@ -6,6 +6,8 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import android.view.SurfaceView
 import org.videolan.libvlc.LibVLC
@@ -175,6 +177,10 @@ class VlcEngine private constructor(private val appContext: Context, private val
             setHWDecoderEnabled(false, false)
             if (startMs > 0L) {
                 addOption(":start-time=%.3f".format(java.util.Locale.US, startMs / 1000.0))
+                // Hedefe tam oturmak için anahtar kareden itibaren yüzlerce kare çözmek gerekiyor
+                // (webm'de ~1,8 s); en yakın anahtar kareden başlamak anında akar, birkaç saniye
+                // önceden başlamak da kaldığın yeri hatırlatır
+                addOption(":input-fast-seek")
             } else {
                 addOption(":input-repeat=65535") // başa sar
             }
@@ -196,6 +202,9 @@ class VlcEngine private constructor(private val appContext: Context, private val
         onControl {
             val fd = file
             if (gen != controlGeneration || fd == null) return@onControl
+            // VLC tanıtıcının kopyasını (dup) okur, okuma konumu ortak: video bitince dosyanın
+            // sonunda kalıyor ve yeni açılış boş dosya görüp hata veriyordu. Başa al.
+            runCatching { Os.lseek(fd.fileDescriptor, 0L, OsConstants.SEEK_SET) }
             newMedia(fd, normalizeNow, 0L).let {
                 player.media = it
                 it.release()

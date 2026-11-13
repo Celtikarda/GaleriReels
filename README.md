@@ -195,6 +195,15 @@ kolaylaştırmak.
     önce yükseltmeyi azaltır. Ayarlar › Oynatma'dan kapatılabilir.
   - Çubuğun dolgusu su gibi davranır: her basışta çalkalanır, telefonu eğince yüzeyi yere paralel
     kalır, ters çevirince öbür uca akar. %200'de çerçeve sarı parlar.
+- [x] **1.9.1 Kaldığın yerden takılmadan devam**
+  - Uzun videolarda "kaldığın yerden devam" artık bekletmiyor: video baştaki kareyi gösterip sonra
+    atlamak yerine doğrudan kaldığı yerden açılır (webm gibi VLC ile oynayanlar dahil).
+  - Kaldığı yerden açılan bir VLC videosu sonuna gelince "Bu video oynatılamadı" hatası veriyordu;
+    artık başa sarar.
+  - Ses çubuğu: telefonu ters çevirince sıvı tek parça ışınlanmıyor, şelale gibi öbür uca dökülüp
+    sıçrıyor. Dalgalar, sarsıntı ve kabarcıklar daha canlı.
+  - Ayarlar › Oynatma'ya "Su gibi akan ses çubuğu" eklendi; kapatınca videolarda telefonun kendi
+    ses çubuğu çıkar.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

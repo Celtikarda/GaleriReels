@@ -326,13 +326,17 @@ internal fun DrawScope.drawLiquid(s: Slosh, white: Color, boostBrush: Brush, tra
     val whiteBrush = SolidColor(white)
     clipPath(container) {
         val hasBoost = boostLen >= 0.75f
+        // Sarı katman dalgada bile en az bu kadar kalın görünür
+        val minBoost = min(boostLen, 1.5f * density)
         val surfaces = ArrayList<(Float) -> Float>(2)
         if (bottomLen >= 0.5f) {
             // Alt uçtaki birikinti: yüzey yukarıda, beyaz dipte, sarı onun üstünde
             val free = edge(h - bottomLen, 1f, 1f, bottomLen)
             val back = edge(h + w * 2f, 0f, 1f, bottomLen)
             if (hasBoost) {
-                val boundary = edge(h - bottomLen * whiteShare, 0.45f, 1f, bottomLen)
+                // Sınır serbest yüzeyin üstüne taşmasın: dalgada beyaz turuncunun üstünde görünüyordu
+                val rawB = edge(h - bottomLen * whiteShare, 0.45f, 1f, bottomLen)
+                val boundary = { x: Float -> max(rawB(x), free(x) + minBoost) }
                 fillBetween(free, boundary, boostBrush)
                 fillBetween(boundary, back, whiteBrush)
             } else {
@@ -345,7 +349,8 @@ internal fun DrawScope.drawLiquid(s: Slosh, white: Color, boostBrush: Brush, tra
             val free = edge(topLen, 1f, -1f, topLen)
             val back = edge(-w * 2f, 0f, -1f, topLen)
             if (hasBoost) {
-                val boundary = edge(topLen * whiteShare, 0.45f, -1f, topLen)
+                val rawB = edge(topLen * whiteShare, 0.45f, -1f, topLen)
+                val boundary = { x: Float -> min(rawB(x), free(x) - minBoost) }
                 fillBetween(back, boundary, whiteBrush)
                 fillBetween(boundary, free, boostBrush)
             } else {
@@ -386,14 +391,14 @@ internal fun DrawScope.drawLiquid(s: Slosh, white: Color, boostBrush: Brush, tra
                 val dx = (k - 1) * w * 0.28f * (0.4f + p)
                 val dy = back * w * 0.9f * p * (1f - p) * 4f * strength
                 drawCircle(
-                    Color.White.copy(alpha = 0.7f * (1f - p)),
+                    (if (hasBoost) BoostShine else Color.White).copy(alpha = 0.7f * (1f - p)),
                     (1f + strength) * density,
                     Offset(w / 2f + dx, ySink + dy),
                 )
             }
         }
         // Kabarcıklar: büyük birikintide dipten yüzeye doğru yükselir, yüzeye yaklaştıkça söner
-        val bubbleColor = if (hasBoost) Color.White else Color.Black
+        val bubbleColor = if (hasBoost) BoostShine else Color.Black
         val mainLen = max(topLen, bottomLen)
         for (b in s.bubbles) {
             val x = b[1] * w
@@ -402,10 +407,12 @@ internal fun DrawScope.drawLiquid(s: Slosh, white: Color, boostBrush: Brush, tra
             val r = (1.1f + b[2] * 1.1f) * density
             drawCircle(bubbleColor.copy(alpha = 0.35f * b[2]), r, Offset(x, y))
         }
+        // Yüzeydeki parlak çizgi turuncunun üstünde beyaz tabaka gibi duruyordu: orada açık sarı
+        val shineColor = if (hasBoost) BoostShine.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.6f)
         for (free in surfaces) {
             val shine = Path()
             trace(shine, free, forward = true, move = true)
-            drawPath(shine, Color.White.copy(alpha = 0.6f), style = Stroke(width = 1.5f * density))
+            drawPath(shine, shineColor, style = Stroke(width = 1.5f * density))
         }
     }
     // Kenardaki hafif cam parlaması
@@ -416,4 +423,7 @@ internal fun DrawScope.drawLiquid(s: Slosh, white: Color, boostBrush: Brush, tra
         strokeWidth = w * 0.12f,
     )
 }
+
+/** Yükseltme sıvısının parlaması: beyaz değil açık sarı (turuncunun üstünde beyaz tabaka olmasın) */
+private val BoostShine = Color(0xFFFFE27A)
 

@@ -64,7 +64,12 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
+fun TrimDialog(
+    item: VideoItem,
+    onSaved: (Uri, String?) -> Unit,
+    onDismiss: () -> Unit,
+    hidden: Boolean = false,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val duration = item.durationMs.coerceAtLeast(1L)
@@ -197,10 +202,10 @@ fun TrimDialog(item: VideoItem, onSaved: (Uri) -> Unit, onDismiss: () -> Unit) {
                         error = null
                         progress = 0f
                         job = scope.launch {
-                            val result = exportEdited(context, item, startMs, endMs, quality) { progress = it }
+                            val result = exportEdited(context, item, startMs, endMs, quality, hidden) { progress = it }
                             job = null
                             when (result) {
-                                is EditResult.Saved -> onSaved(result.uri)
+                                is EditResult.Saved -> onSaved(result.uri, result.bucketId)
                                 is EditResult.Failed -> error = result.reason
                             }
                         }

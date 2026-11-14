@@ -252,6 +252,27 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     var chipVisible by remember { mutableStateOf(false) }
     var inBackground by remember { mutableStateOf(false) }
 
+    /** Otomatik geçiş: sıradaki sayfaya kayar; sıradaki yoksa false */
+    fun advanceToNext(): Boolean {
+        val nextIndex = pagerState.settledPage + 1
+        if (nextIndex >= vm.items.size) return false
+        advancingTo = nextIndex
+        scope.launch {
+            try {
+                // Arka planda kare çizilmediği için kaydırma animasyonu ilerlemez
+                if (inBackground) {
+                    pagerState.scrollToPage(nextIndex)
+                } else {
+                    pagerState.animateScrollToPage(nextIndex, animationSpec = tween(AUTO_ADVANCE_SLIDE_MS))
+                }
+            } finally {
+                // Kullanıcı kaydırmayı keserse oturduğu sayfa geçerli olur
+                advancingTo = null
+            }
+        }
+        return true
+    }
+
     val playback = remember {
         ReelsPlayback(
             context,
@@ -261,28 +282,7 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
                 chipText = str(R.string.resumed_from, formatDuration(ms))
                 chipTick++
             },
-            onEnded = {
-                val nextIndex = pagerState.settledPage + 1
-                if (nextIndex < vm.items.size) {
-                    advancingTo = nextIndex
-                    scope.launch {
-                        try {
-                            // Arka planda kare çizilmediği için kaydırma animasyonu ilerlemez
-                            if (inBackground) {
-                                pagerState.scrollToPage(nextIndex)
-                            } else {
-                                pagerState.animateScrollToPage(nextIndex, animationSpec = tween(AUTO_ADVANCE_SLIDE_MS))
-                            }
-                        } finally {
-                            // Kullanıcı kaydırmayı keserse oturduğu sayfa geçerli olur
-                            advancingTo = null
-                        }
-                    }
-                    true
-                } else {
-                    false
-                }
-            },
+            onEnded = { advanceToNext() },
         )
     }
     DisposableEffect(playback) {
@@ -382,6 +382,18 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
     val previous = items.getOrNull(page - 1)
     val next = items.getOrNull(page + 1)
 
+    // Gizli klasördeyken son uygulamalar ekranındaki önizleme boş kalır (gizli video orada
+    // görünüyordu). Ekran görüntüsü engellenmez; Android 13 öncesinde bu ayar yok.
+    val showingHidden = album.id in vm.stats.hiddenAlbums ||
+        (current != null && current.albumId in vm.stats.hiddenAlbums)
+    DisposableEffect(showingHidden) {
+        val act = activity
+        if (Build.VERSION.SDK_INT >= 33 && act != null) act.setRecentsScreenshotEnabled(!showingHidden)
+        onDispose {
+            if (Build.VERSION.SDK_INT >= 33 && act != null) act.setRecentsScreenshotEnabled(true)
+        }
+    }
+
     // Kaydırma bitip sayfa oturunca o video oynar; komşuları (önce sıradaki) arkada hazırlanır
     LaunchedEffect(current?.id, previous?.id, next?.id) {
         playback.show(current, listOfNotNull(next, previous))
@@ -391,6 +403,14 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         fastForward = false
         rewind = false
         clearView = false
+    }
+    // Otomatik geçişte fotoğrafın bir sonu yok, akış ilk fotoğrafta kalıyordu: fotoğraf bir süre
+    // gösterilip sıradakine geçilir. Ortaya basılı tutup bakarken (net görünüm) beklenir.
+    LaunchedEffect(current?.id, vm.stats.autoAdvance, inBackground, clearView) {
+        val item = current ?: return@LaunchedEffect
+        if (!item.isPhoto || !vm.stats.autoAdvance || inBackground || clearView) return@LaunchedEffect
+        delay(PHOTO_DWELL_MS)
+        if (advancingTo == null && pagerState.settledPage == page) advanceToNext()
     }
     LaunchedEffect(muted) { playback.setMuted(muted) }
     LaunchedEffect(boost) { playback.setBoost(boost) }
@@ -408,10 +428,12 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
 
     fun updateBackgroundNotification() {
         val item = items.getOrNull(pagerState.settledPage) ?: return
+        // Bildirim kilit ekranında da görünür: gizli klasördeki videonun adı ve klasörü yazılmaz
+        val hidden = item.albumId in vm.stats.hiddenAlbums
         BackgroundPlayService.startOrUpdate(
             context = context,
-            title = item.name.substringBeforeLast('.'),
-            subtitle = vm.albumNameOf(item),
+            title = if (hidden) str(R.string.app_name) else item.name.substringBeforeLast('.'),
+            subtitle = if (hidden) str(R.string.hidden_playing) else vm.albumNameOf(item),
             paused = userPaused,
             onTogglePause = {
                 userPaused = !userPaused
@@ -1049,10 +1071,16 @@ fun ReelsScreen(vm: GalleryViewModel, album: Album, onBack: () -> Unit) {
         }
 
         trimTarget?.let { item ->
+            // Gizli klasördeki videonun kopyası da gizli kalır: ayrı klasöre yazılır, o klasör gizlenir
+            val hiddenSource = item.albumId in vm.stats.hiddenAlbums
             TrimDialog(
                 item = item,
-                onSaved = {
+                hidden = hiddenSource,
+                onSaved = { _, bucketId ->
                     trimTarget = null
+                    if (hiddenSource && bucketId != null && bucketId !in vm.stats.hiddenAlbums) {
+                        vm.hideAlbum(bucketId)
+                    }
                     chipText = str(R.string.new_video_saved)
                     chipTick++
                     vm.reloadVideos()
@@ -1442,6 +1470,9 @@ private fun CleanupBar(count: Int, bytes: Long, onUndo: () -> Unit, onDelete: ()
 
 /** Video bitince sıradakine geçiş animasyonu; video bu sırada zaten oynuyor */
 private const val AUTO_ADVANCE_SLIDE_MS = 220
+
+/** Otomatik geçişte bir fotoğrafın ekranda kaldığı süre */
+private const val PHOTO_DWELL_MS = 5_000L
 
 /** Videonun sayfayı doldurması için gereken ölçek; oran bilinmiyorsa ya da zaten doluyorsa 1 */
 internal fun fillScale(ratio: Float, pageWidth: Float, pageHeight: Float): Float {

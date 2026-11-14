@@ -230,6 +230,7 @@
     <string name="pin_locked">PIN ile kilitli.</string>
     <string name="no_hidden">Gizlenmiş klasör yok.</string>
     <string name="hidden_album_line">%1$s · İzlemek için dokun</string>
+    <string name="hidden_playing">Oynatılıyor</string>
     <string name="show_all_n">Tümünü göster (%1$s)</string>
     <string name="pin_on_explain">PIN açık: bu liste PIN ya da telefonunun kilidiyle (parmak izi) açılır. Uygulamadan çıkınca tekrar kilitlenir.</string>
     <string name="pin_off_explain">PIN koyarsan bu listeyi görmek ve klasörleri geri açmak için PIN sorulur.</string>

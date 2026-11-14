@@ -61,13 +61,16 @@ enum class EditQuality(val title: String, val shortSide: Int?, val bitrate: Int?
 val videoEditSupported: Boolean get() = Build.VERSION.SDK_INT >= 29
 
 sealed interface EditResult {
-    data class Saved(val uri: Uri) : EditResult
+    /** [bucketId]: yeni dosyanın klasörü (gizli kopyada o klasör de gizlenir) */
+    data class Saved(val uri: Uri, val bucketId: String? = null) : EditResult
     data class Failed(val reason: String) : EditResult
 }
 
 /**
  * Videonun [startMs]–[endMs] arasını [quality] kalitesinde yeni bir dosya olarak
  * "Filmler/GaleriReels" klasörüne kaydeder; orijinale dokunmaz. [onProgress] 0..1 arası.
+ * [hidden] (video gizli bir klasörden) ise ayrı "Filmler/GaleriReels/Gizli" klasörüne yazılır;
+ * çağıran o klasörü de gizler ki kopya ana akışta görünmesin.
  * Coroutine iptal edilirse dışa aktarma durur ve yarım dosya silinir.
  */
 @OptIn(UnstableApi::class)
@@ -77,6 +80,7 @@ suspend fun exportEdited(
     startMs: Long,
     endMs: Long,
     quality: EditQuality,
+    hidden: Boolean = false,
     onProgress: (Float) -> Unit,
 ): EditResult {
     if (Build.VERSION.SDK_INT < 29) return EditResult.Failed(str(R.string.err_android10))
@@ -158,7 +162,10 @@ suspend fun exportEdited(
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, "${base}_$suffix.mp4")
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/GaleriReels")
+                put(
+                    MediaStore.Video.Media.RELATIVE_PATH,
+                    "${Environment.DIRECTORY_MOVIES}/GaleriReels" + if (hidden) "/Gizli" else "",
+                )
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
             val resolver = appContext.contentResolver
@@ -172,7 +179,12 @@ suspend fun exportEdited(
                 return@withContext EditResult.Failed(str(R.string.err_file_write))
             }
             resolver.update(uri, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
-            EditResult.Saved(uri)
+            val bucket = runCatching {
+                resolver.query(uri, arrayOf(MediaStore.Video.Media.BUCKET_ID), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) c.getString(0) else null
+                }
+            }.getOrNull()
+            EditResult.Saved(uri, bucket)
         } finally {
             temp.delete()
         }

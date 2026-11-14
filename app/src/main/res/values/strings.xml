@@ -231,6 +231,7 @@
     <string name="pin_locked">Locked with a PIN.</string>
     <string name="no_hidden">No hidden folders.</string>
     <string name="hidden_album_line">%1$s · Tap to watch</string>
+    <string name="hidden_playing">Playing</string>
     <string name="show_all_n">Show all (%1$s)</string>
     <string name="pin_on_explain">PIN is on: this list opens with the PIN or your phone lock (fingerprint). It locks again when you leave the app.</string>
     <string name="pin_off_explain">If you set a PIN, it will be asked to view this list and unhide folders.</string>

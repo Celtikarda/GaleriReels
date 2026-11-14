@@ -204,6 +204,16 @@ kolaylaştırmak.
     sıçrıyor. Dalgalar, sarsıntı ve kabarcıklar daha canlı.
   - Ayarlar › Oynatma'ya "Su gibi akan ses çubuğu" eklendi; kapatınca videolarda telefonun kendi
     ses çubuğu çıkar.
+- [x] **1.9.2 Gerçek şelale, gizli klasörlere tam gizlilik**
+  - Ses çubuğu: ters çevirince su gerçekten dökülür; önce yüzeydeki sarı akar, sonra beyaz, düşen
+    su hızlanır ve öbür uca vardıkça birikir, sonunda ince kuyruğu kopar. Sarının üstündeki açık
+    renkli ince tabaka kalktı.
+  - Gizli klasörler: aylık özette görünmüyor (PIN'siz açılabiliyordu), arka planda oynarken kilit
+    ekranı bildiriminde videonun adı yazmıyor, son uygulamalar önizlemesi boş kalıyor, gizli bir
+    videonun kırpılmış kopyası da gizli kalıyor.
+  - Otomatik geçiş: VLC ile oynayan videolar bitince bir an başa sarmadan doğrudan sıradakine
+    geçiyor; fotoğraflarda akış takılmıyor (her fotoğraf 5 sn gösterilir).
+  - Büyük yazı / büyük ekran ayarında bozulan düğmeler, başlıklar ve özet kutuları düzeltildi.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

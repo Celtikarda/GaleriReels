@@ -189,7 +189,10 @@ class ReelsPlayback(
 
     fun setNormalize(normalize: Boolean) {
         this.normalize = normalize
-        slots.forEach { it.updateNormalize() }
+        slots.forEach {
+            it.updateNormalize()
+            it.updateBoost()
+        }
         vlc?.setNormalize(normalize)
     }
 
@@ -738,7 +741,10 @@ class ReelsPlayback(
         fun updateBoost() {
             val session = player.audioSessionId
             val shouldBoost = active && boost > 0.005f && !muted && session != C.AUDIO_SESSION_ID_UNSET
-            if (!shouldBoost) {
+            if (!shouldBoost || normalizerHandlesBoost()) {
+                // Dengeleme açıkken yükseltmeyi dengeleyici yapar (bkz. [updateNormalize]): ayrı bir
+                // yükseltici dengeleyiciden sonra çalışınca yüksek sesler yine patlıyordu
+                if (normalizerHandlesBoost()) updateNormalize()
                 runCatching { enhancer?.enabled = false }
                 return
             }
@@ -755,8 +761,8 @@ class ReelsPlayback(
         }
 
         /**
-         * Ses dengeleme (Android 9+): sıkıştırıcı kısık sesleri ~+10 dB yükseltir, eşiğin
-         * üstündekileri 4'te 1'e bastırır; sınırlayıcı patlamayı (cızırtıyı) önler. Böylece
+         * Ses dengeleme (Android 9+): sıkıştırıcı yüksek sesleri bastırıp kısıkları yükseltir
+         * (bkz. [setNormalizerGain]); sınırlayıcı patlamayı (cızırtıyı) önler. Böylece
          * fısıltılı ve bağırışlı videolar aşağı yukarı aynı seviyede duyulur.
          */
         fun updateNormalize() {
@@ -773,9 +779,16 @@ class ReelsPlayback(
                     dynamics = createNormalizer(session)
                     dynamicsSessionId = session
                 }
+                // Ses yükseltme dengeleyicinin çıkış kazancına eklenir; sınırlayıcı en sonda kalır
+                val boostDb = if (boost > 0.005f) boostGainMb(boost) / 100f else 0f
+                dynamics?.let { setNormalizerGain(it, boostDb) }
                 dynamics?.enabled = true
             }
+            if (normalizerHandlesBoost()) runCatching { enhancer?.enabled = false }
         }
+
+        private fun normalizerHandlesBoost(): Boolean =
+            Build.VERSION.SDK_INT >= 28 && active && normalize && !muted && dynamics != null
 
         fun releaseEnhancer() {
             runCatching { enhancer?.release() }
@@ -793,6 +806,14 @@ class ReelsPlayback(
         override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
             updateBoost()
             updateNormalize()
+        }
+
+        /**
+         * Ses izi açıldı: ondan önce etkinleştirilen dengeleyici ses sunucusunda kapalı kalabiliyor
+         * (VLC'de görüldü, bkz. VlcEngine.normalizerPending); iz açılınca yeniden etkinleştirilir.
+         */
+        override fun onAudioTrackInitialized(eventTime: AnalyticsListener.EventTime, audioTrackConfig: androidx.media3.exoplayer.audio.AudioSink.AudioTrackConfig) {
+            if (Build.VERSION.SDK_INT >= 28 && dynamics?.enabled == true) runCatching { dynamics?.enabled = true }
         }
 
         override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
@@ -880,7 +901,7 @@ class ReelsPlayback(
 
 /** Ses dengeleyici: tek bantlı sıkıştırıcı + sınırlayıcı (bkz. PlayerSlot.updateNormalize) */
 @androidx.annotation.RequiresApi(28)
-private fun createNormalizer(session: Int): DynamicsProcessing {
+internal fun createNormalizer(session: Int): DynamicsProcessing {
     val config = DynamicsProcessing.Config.Builder(
         DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
         2, // kanal
@@ -890,18 +911,29 @@ private fun createNormalizer(session: Int): DynamicsProcessing {
         true, // sınırlayıcı
     ).build()
     return DynamicsProcessing(0, session, config).apply {
-        setMbcBandAllChannelsTo(
-            0,
-            DynamicsProcessing.MbcBand(
-                true, 20_000f, // bütün frekanslar
-                10f, 250f, // atak / bırakma (ms)
-                4f, -30f, 8f, // oran, eşik (dB), diz genişliği
-                -70f, 1f, // gürültü kapısı kapalı sayılır
-                0f, 10f, // ön / son kazanç (dB)
-            ),
-        )
-        setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 10f, -2f, 0f))
+        setNormalizerGain(this, 0f)
+        setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 20f, -1.5f, 0f))
     }
+}
+
+/**
+ * Sıkıştırıcı: -42 dB'nin üstü 6'da 1'e bastırılır, sonra +22 dB (+ yükseltme) eklenir. Eski ayar
+ * (-30 dB, 4'te 1, +10 dB) bağıran videoyla fısıltılı video arasındaki farkı 35 dB'den ancak
+ * 20 dB'ye indiriyordu; yüksek sesli videolar yine çok yüksek kalıyordu. Şimdi ~6-8 dB.
+ * Çok kısık uğultu (-62 dB altı) 2'de 1 kısılır ki kazançla hışırtı yükselmesin.
+ */
+@androidx.annotation.RequiresApi(28)
+internal fun setNormalizerGain(dynamics: DynamicsProcessing, boostDb: Float) {
+    dynamics.setMbcBandAllChannelsTo(
+        0,
+        DynamicsProcessing.MbcBand(
+            true, 20_000f, // bütün frekanslar
+            5f, 200f, // atak / bırakma (ms)
+            6f, -42f, 6f, // oran, eşik (dB), diz genişliği
+            -62f, 2f, // gürültü kapısı / genişletici oranı
+            0f, 22f + boostDb, // ön / son kazanç (dB)
+        ),
+    )
 }
 
 /** Bir videonun izlenmiş sayılması için oynaması gereken süre */

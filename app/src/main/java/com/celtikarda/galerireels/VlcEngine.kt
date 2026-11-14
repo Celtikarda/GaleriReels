@@ -3,6 +3,7 @@ package com.celtikarda.galerireels
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -29,7 +30,12 @@ import kotlin.math.roundToInt
  * donuyordu; hepsi sırayla "vlc-control" iş parçacığında yapılır. Görüntü yüzeyi bağlama
  * (attach/detach) Android gereği ana iş parçacığında kalır.
  */
-class VlcEngine private constructor(private val appContext: Context, private val libVlc: LibVLC) {
+class VlcEngine private constructor(
+    private val appContext: Context,
+    private val libVlc: LibVLC,
+    /** VLC'nin sesi bu Android ses oturumunda çalınır; dengeleyici buna takılır (bkz. [setNormalize]) */
+    private val audioSessionId: Int,
+) {
 
     private val player = MediaPlayer(libVlc)
     private val vout: IVLCVout = player.vlcVout
@@ -43,7 +49,40 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var pendingStart = false
     private var muted = false
     private var boost = 0f
+    private var dynamics: android.media.audiofx.DynamicsProcessing? = null
     private var normalize = false
+
+    /**
+     * Dengeleme açıkken video sessiz başlar: VLC ses izini açmadan önce etkinleştirilen dengeleyici
+     * ses sunucusunda kapalı kalıyor, ilk an ses dengelenmeden (yüksek) çıkıyordu. Ses izi
+     * çalmaya başlayınca dengeleyici yeniden açılır, ses ondan sonra açılır.
+     */
+    private var normalizerPending = false
+    private val normalizerFallback = Runnable { finishNormalizerWait() }
+    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+
+    /** Bu video "Playing" oldu; ondan sonra başlayan ses izi VLC'ninkidir (öncesi eski videonun kapanışı) */
+    private var playingSeen = false
+
+    /**
+     * Bir ses izi çalmaya başlayınca haber verir. Android uygulamalara oturum numarasını
+     * göstermiyor (sessionId:0); video "Playing" olduktan sonraki ilk değişiklik VLC'nin izidir. Yanılırsa da
+     * dengeleyici [applyNormalize] ile her "Playing"de ve en geç [NORMALIZER_FALLBACK_MS]'de açılır.
+     */
+    private val playbackCallback = object : android.media.AudioManager.AudioPlaybackCallback() {
+        override fun onPlaybackConfigChanged(configs: MutableList<android.media.AudioPlaybackConfiguration>) {
+            if (normalizerPending && playingSeen) finishNormalizerWait()
+        }
+    }
+
+    private fun finishNormalizerWait() {
+        main.removeCallbacks(normalizerFallback)
+        if (!normalizerPending) return
+        normalizerPending = false
+        applyNormalize()
+        if (hasMedia) applyVolume()
+        if (debug) Log.i(TAG, "dengeleyici ses iziyle açıldı")
+    }
     private var speed = 1f
     /** Geri sarılıyor: ses kısılır (video ileri-geri atlarken cızırtı olmasın) */
     private var scrubbing = false
@@ -90,11 +129,19 @@ class VlcEngine private constructor(private val appContext: Context, private val
     }
 
     init {
+        audioManager.registerAudioPlaybackCallback(playbackCallback, main)
         player.setEventListener { event ->
             if (readyGeneration != generation) return@setEventListener
             when (event.type) {
                 MediaPlayer.Event.Vout -> if (event.voutCount > 0) onFirstFrame()
-                MediaPlayer.Event.Playing -> applyVolume()
+                MediaPlayer.Event.Playing -> {
+                    playingSeen = true
+                    applyVolume()
+                    applyNormalize()
+                    // Ses izinin başladığı yakalanamazsa (bkz. [playbackCallback]) en geç burada açılır
+                    main.removeCallbacks(normalizerFallback)
+                    if (normalizerPending) main.postDelayed(normalizerFallback, NORMALIZER_FALLBACK_MS)
+                }
                 MediaPlayer.Event.EncounteredError -> onError()
                 MediaPlayer.Event.TimeChanged -> timeCache = event.timeChanged
                 MediaPlayer.Event.PositionChanged -> {
@@ -116,7 +163,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
     }
 
     private fun targetVolume(): Int = when {
-        muted || scrubbing -> 0
+        muted || scrubbing || normalizerPending -> 0
         else -> 100 + (boost * 100).roundToInt()
     }
 
@@ -137,6 +184,10 @@ class VlcEngine private constructor(private val appContext: Context, private val
         this.onFirstFrame = onFirstFrame
         this.onError = onError
         hasMedia = true
+        // Dengeleme açıksa ses izi başlayana kadar sessiz (bkz. [normalizerPending])
+        main.removeCallbacks(normalizerFallback)
+        normalizerPending = normalize && Build.VERSION.SDK_INT >= 28
+        playingSeen = false
         positionCache = 0f
         timeCache = startMs.coerceAtLeast(0L)
         // Kaldığı yerden açılan videoda VLC'nin kendi tekrarı başa değil başlangıç noktasına
@@ -147,7 +198,6 @@ class VlcEngine private constructor(private val appContext: Context, private val
         pendingStart = waitForView || !vout.areViewsAttached()
         val startNow = !pendingStart
         val volume = targetVolume()
-        val normalizeNow = normalize
 
         onControl {
             stopPlayer()
@@ -158,7 +208,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
                 return@onControl
             }
             file = fd
-            newMedia(fd, normalizeNow, startMs, repeat = !stopAtEnd).let {
+            newMedia(fd, startMs, repeat = !stopAtEnd).let {
                 player.media = it
                 it.release() // player kendi referansını tutar
             }
@@ -180,7 +230,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
      * önce baştan açıp ilk kareden sonra oraya atlamak yazılımsal çözücüde ana kareden hedefe kadar
      * her kareyi çözdürüyor, baştaki kare görünüp video bir süre donuyordu.
      */
-    private fun newMedia(fd: ParcelFileDescriptor, normalize: Boolean, startMs: Long, repeat: Boolean = true): Media {
+    private fun newMedia(fd: ParcelFileDescriptor, startMs: Long, repeat: Boolean = true): Media {
         val media = Media(libVlc, fd.fileDescriptor).apply {
             // Buraya sadece donanımın açamadığı videolar gelir; doğrudan FFmpeg / dav1d ile çöz
             setHWDecoderEnabled(false, false)
@@ -193,7 +243,6 @@ class VlcEngine private constructor(private val appContext: Context, private val
             } else if (repeat) {
                 addOption(":input-repeat=65535") // başa sar
             }
-            if (normalize) addOption(":audio-filter=normvol")
         }
         return media
     }
@@ -207,14 +256,13 @@ class VlcEngine private constructor(private val appContext: Context, private val
         positionCache = 0f
         timeCache = 0L
         val gen = generation
-        val normalizeNow = normalize
         onControl {
             val fd = file
             if (gen != controlGeneration || fd == null) return@onControl
             // VLC tanıtıcının kopyasını (dup) okur, okuma konumu ortak: video bitince dosyanın
             // sonunda kalıyor ve yeni açılış boş dosya görüp hata veriyordu. Başa al.
             runCatching { Os.lseek(fd.fileDescriptor, 0L, OsConstants.SEEK_SET) }
-            newMedia(fd, normalizeNow, 0L).let {
+            newMedia(fd, 0L).let {
                 player.media = it
                 it.release()
             }
@@ -319,11 +367,32 @@ class VlcEngine private constructor(private val appContext: Context, private val
     }
 
     /**
-     * Ses dengeleme: VLC'nin "normvol" süzgeci. Süzgeç video açılırken eklendiği için açıp
-     * kapatmak bir sonraki VLC videosunda etkili olur.
+     * Ses dengeleme (Android 9+): VLC'nin ses oturumuna ExoPlayer'daki dengeleyici takılır
+     * (bkz. createNormalizer). VLC'nin %200'e kadar ses yükseltmesi dengeleyiciden önce
+     * uygulandığı için sınırlayıcı patlamayı yine önler. Açıp kapatmak anında işler.
      */
     fun setNormalize(normalize: Boolean) {
         this.normalize = normalize
+        if (!normalize && normalizerPending) finishNormalizerWait()
+        applyNormalize()
+    }
+
+    /**
+     * Dengeleyiciyi oturuma uygular. VLC çalmaya başlayınca (ses izini açınca) dengeleyicinin
+     * denetimi başka bir tutamağa geçebiliyor ve açık görünse de ses sunucusunda kapalı kalıyordu;
+     * o yüzden her "Playing"de denetim kontrol edilir, kaybolduysa yeniden takılır.
+     */
+    private fun applyNormalize() {
+        if (Build.VERSION.SDK_INT < 28) return
+        runCatching {
+            val current = dynamics
+            if (normalize && (current == null || !current.hasControl())) {
+                current?.release()
+                dynamics = createNormalizer(audioSessionId)
+            }
+            dynamics?.enabled = normalize
+            if (debug) Log.i(TAG, "dengeleme=$normalize oturum=$audioSessionId etkin=${dynamics?.enabled} denetim=${dynamics?.hasControl()}")
+        }.onFailure { Log.w(TAG, "dengeleyici takılamadı", it) }
     }
 
     fun setSpeed(speed: Float) {
@@ -375,6 +444,12 @@ class VlcEngine private constructor(private val appContext: Context, private val
     fun release() {
         stop()
         detach()
+        normalize = false // bekleyen kontrol dengeleyiciyi yeniden takmasın
+        normalizerPending = false
+        main.removeCallbacks(normalizerFallback)
+        audioManager.unregisterAudioPlaybackCallback(playbackCallback)
+        runCatching { dynamics?.release() }
+        dynamics = null
         onControl {
             player.release()
             libVlc.release()
@@ -384,6 +459,8 @@ class VlcEngine private constructor(private val appContext: Context, private val
 
     companion object {
         private const val TAG = "VlcEngine"
+        /** Ses izinin başladığı haberi gelmezse dengeleme beklenmeden ses bu kadar sonra açılır */
+        private const val NORMALIZER_FALLBACK_MS = 500L
 
         /**
          * VLC'nin açılışı (kütüphaneleri yüklemesi) yarım saniye kadar sürüyor; bunu arka planda
@@ -392,15 +469,16 @@ class VlcEngine private constructor(private val appContext: Context, private val
          */
         fun createAsync(context: Context, onReady: (VlcEngine) -> Unit, onFailed: () -> Unit) {
             val appContext = context.applicationContext
+            val session = (appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager).generateAudioSessionId()
             thread(name = "vlc-init") {
                 val libVlc = try {
-                    LibVLC(appContext, options())
+                    LibVLC(appContext, options(session))
                 } catch (e: IllegalStateException) {
                     Log.e(TAG, "LibVLC açılamadı", e)
                     Handler(Looper.getMainLooper()).post { onFailed() }
                     return@thread
                 }
-                Handler(Looper.getMainLooper()).post { onReady(VlcEngine(appContext, libVlc)) }
+                Handler(Looper.getMainLooper()).post { onReady(VlcEngine(appContext, libVlc, session)) }
             }
         }
 
@@ -408,7 +486,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
          * libVLC tanımadığı tek bir seçenekte bile hiç açılmıyor ("can't create LibVLC instance");
          * seçenek adları libVLC 3.x'teki adlarla birebir aynı olmalı (vlc --help).
          */
-        private fun options() = arrayListOf(
+        private fun options(session: Int) = arrayListOf(
             "--no-osd",
             "--avcodec-threads=0", // tüm çekirdekleri kullan
             // Yüksek çözünürlüklü videolarda ve 2x hızlı oynatmada yazılımsal çözmeyi
@@ -427,6 +505,11 @@ class VlcEngine private constructor(private val appContext: Context, private val
             // dakikadan uzun sürüyor ve video o bitene kadar açılmıyordu.
             "--no-spu",
             "--text-renderer=none",
+            // Ses dengeleme için: VLC sesini bizim verdiğimiz Android ses oturumunda çalar, ona
+            // ExoPlayer'daki dengeleyicinin aynısı takılır (bkz. [setNormalize]). VLC'nin kendi
+            // süzgeçleri kullanılamıyor: libVLC oynatıcısı "audio-filter" ayarını eziyor; videoya
+            // ":audio-filter=normvol" vermek de hiç işlemiyordu (log'da süzgeç hiç yüklenmiyordu).
+            "--audiotrack-session-id=$session",
         )
     }
 }

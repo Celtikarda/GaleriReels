@@ -29,6 +29,7 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
+import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.extractor.DefaultExtractorsFactory
 import android.os.Handler
@@ -295,10 +296,18 @@ class ReelsPlayback(
         seekToMs(item, position + deltaMs)
     }
 
-    /** Durdurulmuş videoda bir kare ileri / geri (kare hızı bilinmiyorsa 30 fps varsayılır) */
+    /**
+     * Durdurulmuş videoda bir kare ileri / geri. ExoPlayer'da ileri: video sessizce oynatılıp
+     * sıradaki kare ekrana çizilince durdurulur (sarma gibi anahtar kareden yeniden çözmez, anında).
+     * Geri: ekrandaki karenin gerçek zamanından bir önceki kareye tam sarılır.
+     */
     fun stepFrame(item: VideoItem, forward: Boolean) {
-        val fps = slots.firstOrNull { it.itemId == item.id }?.frameRate?.takeIf { it > 0f } ?: 30f
-        val frameMs = (1000f / fps).roundToLong().coerceAtLeast(1L)
+        val slot = slots.firstOrNull { it.itemId == item.id }
+        if (slot != null && vlcItemId != item.id) {
+            if (forward) slot.stepForward() else slot.stepBackward()
+            return
+        }
+        val frameMs = (1000f / 30f).roundToLong()
         seekBy(item, if (forward) frameMs else -frameMs)
     }
 
@@ -609,8 +618,128 @@ class ReelsPlayback(
         /** Videonun kare hızı; başlıkta yazmıyorsa 0 */
         val frameRate: Float get() = videoFormat?.frameRate ?: 0f
 
+        /** Ekrana son çizilen karenin zamanı (µs) ve son kare aralıkları (oynatma iş parçacığından yazılır) */
+        @Volatile private var lastFramePtsUs = C.TIME_UNSET
+        private val frameGapsUs = LongArray(8)
+        @Volatile private var frameGapIndex = 0
+        /** Kare kare ileri: kaç kare daha çizilince durulacak (yalnız ana iş parçacığı) */
+        private var stepsLeft = 0
+        @Volatile private var stepping = false
+        @Volatile private var stepFromUs = C.TIME_UNSET
+        private var stepTimeoutJob: Job? = null
+        private val mainHandler = Handler(android.os.Looper.getMainLooper())
+        private var stepStartedAt = 0L
+        @Volatile private var backSeekAt = 0L
+        private val debugBuild = appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+        private val frameListener = VideoFrameMetadataListener { ptsUs, _, _, _ ->
+            val prev = lastFramePtsUs
+            if (prev != C.TIME_UNSET && !stepping) {
+                val gap = ptsUs - prev
+                if (gap in 2_000L..150_000L) {
+                    frameGapsUs[frameGapIndex % frameGapsUs.size] = gap
+                    frameGapIndex++
+                }
+            }
+            lastFramePtsUs = ptsUs
+            if (backSeekAt > 0L) {
+                val took = SystemClock.uptimeMillis() - backSeekAt
+                backSeekAt = 0L
+                android.util.Log.i("GaleriKare", "geri $took ms kare=${ptsUs / 1000}")
+            }
+            if (stepping && ptsUs > stepFromUs) {
+                stepFromUs = ptsUs
+                mainHandler.postAtFrontOfQueue { onSteppedFrame() }
+            }
+        }
+
         init {
             player.addAnalyticsListener(this)
+            player.setVideoFrameMetadataListener(frameListener)
+        }
+
+        /** İki kare arası (µs): son oynatmada ölçülen en kısa aralık, yoksa başlıktaki kare hızı, yoksa 30 fps */
+        private fun frameIntervalUs(): Long {
+            val measured = frameGapsUs.filter { it > 0 }.minOrNull()
+            if (measured != null) return measured
+            val fps = frameRate.takeIf { it > 0f } ?: 30f
+            return (1_000_000f / fps).roundToLong()
+        }
+
+        fun stepForward() {
+            if (player.playbackState == Player.STATE_ENDED) return
+            if (stepping) {
+                // Arka arkaya basılınca her basış bir kare daha ilerletir
+                stepsLeft++
+                armStepTimeout()
+                return
+            }
+            stepsLeft = 1
+            stepFromUs = lastFramePtsUs.takeIf { it != C.TIME_UNSET } ?: (player.currentPosition * 1000L)
+            stepping = true
+            stepStartedAt = SystemClock.uptimeMillis()
+            // Kareler ekrana ~50 ms önceden gönderiliyor; 60 fps'de durdurma yetişmeyip 2-4 kare
+            // birden geçiliyordu. Adım sırasında video yavaşlatılır: iki kare arası ~90 ms olur.
+            val stepSpeed = (frameIntervalUs() / 1000f / STEP_FRAME_GAP_MS).coerceIn(0.1f, 1f)
+            player.setPlaybackSpeed(stepSpeed)
+            // Ses varken saat sesin 80 ms'lik parçalarıyla ilerliyor ve aradaki kareler geç kalıp
+            // atılıyordu (her basış ~5 kare). Adım sırasında ses izi kapalı: saat düzgün ilerler.
+            setAudioDisabled(true)
+            player.volume = 0f
+            player.playWhenReady = true
+            armStepTimeout()
+        }
+
+        fun stepBackward() {
+            if (stepping) finishStep()
+            val base = lastFramePtsUs.takeIf { it != C.TIME_UNSET } ?: (player.currentPosition * 1000L)
+            val interval = frameIntervalUs()
+            // Tam sarma hedefin üstündeki ilk kareyi gösterir: bir buçuk kare geriye sarılınca
+            // tam olarak bir önceki kare gelir (kare aralığı biraz oynasa da)
+            val targetUs = (base - interval * 3 / 2).coerceAtLeast(0L)
+            // Kare çizilmeden yeniden basılırsa bir önceki hedeften devam edilir
+            lastFramePtsUs = (base - interval).coerceAtLeast(0L)
+            if (debugBuild) backSeekAt = SystemClock.uptimeMillis()
+            player.seekTo(targetUs / 1000L)
+        }
+
+        private fun armStepTimeout() {
+            stepTimeoutJob?.cancel()
+            stepTimeoutJob = scope.launch {
+                delay(STEP_TIMEOUT_MS)
+                if (stepping) finishStep()
+            }
+        }
+
+        private fun onSteppedFrame() {
+            if (!stepping) return
+            stepsLeft--
+            if (debugBuild) android.util.Log.i("GaleriKare", "ileri ${SystemClock.uptimeMillis() - stepStartedAt} ms kare=${lastFramePtsUs / 1000} konum=${player.currentPosition}")
+            if (stepsLeft <= 0) finishStep()
+        }
+
+        private fun setAudioDisabled(disabled: Boolean) {
+            val params = player.trackSelectionParameters
+            if (params.disabledTrackTypes.contains(C.TRACK_TYPE_AUDIO) == disabled) return
+            player.trackSelectionParameters = params.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, disabled).build()
+        }
+
+        /** Yeni video: eski videonun kare zamanları ve yarım kalan adım unutulur */
+        private fun resetFrameStep() {
+            if (stepping) finishStep()
+            lastFramePtsUs = C.TIME_UNSET
+            frameGapsUs.fill(0L)
+        }
+
+        private fun finishStep() {
+            stepping = false
+            stepsLeft = 0
+            stepTimeoutJob?.cancel()
+            stepTimeoutJob = null
+            if (!(active && !paused && !hostPaused)) player.playWhenReady = false
+            player.volume = if (muted) 0f else 1f
+            setAudioDisabled(false)
+            updateSpeed()
         }
 
         fun load(item: VideoItem) {
@@ -619,6 +748,7 @@ class ReelsPlayback(
             this.item = item
             reclaimRetries = 0
             active = false
+            resetFrameStep()
             decoderName = null
             videoFormat = null
             // Önceki videonun sayfasına çizmesin; yeni videonun sayfası kendi yüzeyini bağlar
@@ -642,6 +772,7 @@ class ReelsPlayback(
             itemId = null
             item = null
             active = false
+            resetFrameStep()
             updateSpeed()
             updateScrubbing()
             updateRepeat()
@@ -656,6 +787,7 @@ class ReelsPlayback(
             // Kaydırılırken geri dönüldüyse sarma hâlâ bekliyor: hemen yapılır
             if (leaveRewindJob?.isActive == true) player.seekTo(startPosition())
             leaveRewindJob?.cancel()
+            if (stepping) finishStep()
             if (!active) restorePosition()
             active = true
             player.playWhenReady = play
@@ -699,6 +831,7 @@ class ReelsPlayback(
         fun deactivate() {
             if (!active) return
             active = false
+            if (stepping) finishStep()
             updateSpeed()
             updateScrubbing()
             updateRepeat()
@@ -935,6 +1068,11 @@ internal fun setNormalizerGain(dynamics: DynamicsProcessing, boostDb: Float) {
         ),
     )
 }
+
+/** Kare kare ilerlerken sıradaki kare bu sürede gelmezse (video sonu, takılma) adım bırakılır */
+private const val STEP_TIMEOUT_MS = 800L
+/** Kare kare ilerlerken iki karenin arası (gerçek zamanda, ms); durdurmanın yetişmesi için */
+private const val STEP_FRAME_GAP_MS = 90f
 
 /** Bir videonun izlenmiş sayılması için oynaması gereken süre */
 private const val VIEW_AFTER_MS = 5_000L

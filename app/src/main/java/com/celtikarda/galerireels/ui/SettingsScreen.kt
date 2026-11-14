@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -140,7 +141,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             Spacer(Modifier.height(10.dp))
             InfoLine(str(R.string.selected_theme), currentTheme.title)
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ButtonFlow {
                 ThemeMode.entries.forEach { entry ->
                     if (entry == currentTheme) {
                         Button(onClick = { vm.setThemeMode(entry) }) { Text(entry.title) }
@@ -173,7 +174,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 MediaMode.VIDEOS.count(vm.allVideosCount) + " · " + MediaMode.PHOTOS.count(vm.allPhotosCount),
             )
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ButtonFlow {
                 MediaMode.entries.forEach { entry ->
                     if (entry == currentMode) {
                         Button(onClick = { vm.setMediaMode(entry) }) { Text(entry.title) }
@@ -370,7 +371,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 )
                 Spacer(Modifier.height(8.dp))
                 if (lock.hasPin) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ButtonFlow {
                         OutlinedButton(onClick = { pinMode = PinMode.SET }) { Text(str(R.string.change_pin)) }
                         OutlinedButton(onClick = {
                             lock.removePin()
@@ -479,7 +480,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     }
                     .padding(vertical = 3.dp)
             ) {
-                Text(str(R.string.source_code), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text(str(R.string.source_code), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.labelWidth())
                 Text("github.com/Celtikarda/GaleriReels", color = InstaBlue, fontSize = 14.sp)
             }
             Row(
@@ -487,7 +488,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                     .clickable { openIssueReport(context) }
                     .padding(vertical = 3.dp)
             ) {
-                Text(str(R.string.feedback), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                Text(str(R.string.feedback), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.labelWidth())
                 Text(str(R.string.report_or_suggest), color = InstaBlue, fontSize = 14.sp)
             }
             Spacer(Modifier.height(10.dp))
@@ -516,12 +517,12 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                         .clickable { showDialog = true }
                         .padding(vertical = 3.dp)
                 ) {
-                    Text(str(R.string.new_version_label), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+                    Text(str(R.string.new_version_label), color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.labelWidth())
                     Text(str(R.string.version_ready, update.version), color = InstaBlue, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ButtonFlow {
                 if (updates.enabled) {
                     OutlinedButton(onClick = { updates.updateEnabled(false) }) { Text(str(R.string.turn_off)) }
                 } else {
@@ -668,7 +669,27 @@ private fun Card(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun InfoLine(label: String, value: String) {
     Row(Modifier.padding(vertical = 3.dp)) {
-        Text(label, color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.width(96.dp))
+        Text(label, color = appColors.textSecondary, fontSize = 14.sp, modifier = Modifier.labelWidth())
         Text(value, color = appColors.textPrimary, fontSize = 14.sp)
     }
+}
+
+/**
+ * Yan yana düğmeler: sığmayınca alt satıra geçer. Düz Row'da büyük yazı / büyük ekran
+ * ayarında son düğme dikey harflere bölünüyordu ("S-i-s-t-e-m").
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ButtonFlow(content: @Composable () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) { content() }
+}
+
+/** Bilgi satırındaki etiket sütunu: yazı büyütülünce o da genişler ("Seçili tema" kırılmasın) */
+@Composable
+private fun Modifier.labelWidth(): Modifier {
+    val scale = LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
+    return width((96 * scale).dp)
 }

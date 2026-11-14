@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -321,7 +322,14 @@ private fun StatBox(label: String, value: String, modifier: Modifier = Modifier)
     ) {
         Text(label, color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
-        Text(value, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Büyük yazı ayarında "4 sa 4…" diye kesiliyordu: sığmazsa küçülür
+        Text(
+            value,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 20.sp),
+        )
     }
 }
 

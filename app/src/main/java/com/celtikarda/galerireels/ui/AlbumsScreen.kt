@@ -28,6 +28,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -75,6 +79,7 @@ import com.celtikarda.galerireels.SmartCategory
 import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AlbumsScreen(
     vm: GalleryViewModel,
@@ -98,8 +103,10 @@ fun AlbumsScreen(
     val currentRecap = remember(vm.stats.historyRevision, vm.videoCount) { vm.monthlyRecap() }
     val memories = remember(vm.videoCount) { vm.memories() }
 
+    // Normal ayarda 3 sütun; ekran / yazı büyütülünce klasör adları sığsın diye 2 sütuna iner
+    val tileMin = (104 * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)).dp
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+        columns = GridCells.Adaptive(tileMin),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -109,13 +116,14 @@ fun AlbumsScreen(
             val isDark = appColors.isDark
             Column(Modifier.statusBarsPadding().padding(start = 4.dp, top = 16.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Büyük yazı / büyük ekran ayarında dört simgenin yanında "Galeri R…" diye
+                    // kesiliyordu: sığmazsa kesilmek yerine küçülür
                     Text(
                         "Galeri Reels",
                         color = appColors.textPrimary,
-                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        autoSize = TextAutoSize.StepBased(minFontSize = 17.sp, maxFontSize = 26.sp),
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = { vm.toggleDarkLight(isDark) }, modifier = Modifier.size(42.dp)) {
@@ -193,8 +201,11 @@ fun AlbumsScreen(
         if (memories.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
+                    // Sığmazsa özet yazısı bütün halde alt satıra geçer (Row'da ikiye bölünüp
+                    // yarısı başlığın üstüne düşüyordu)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        itemVerticalAlignment = Alignment.Bottom,
                         modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
                     ) {
                         Text(
@@ -203,7 +214,6 @@ fun AlbumsScreen(
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                         )
-                        Spacer(Modifier.width(8.dp))
                         Text(
                             Memories.summaryText(memories),
                             color = appColors.accentGold,

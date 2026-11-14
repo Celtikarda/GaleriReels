@@ -2375,25 +2375,43 @@ private fun BoostKeyIndicator(level: Float, tick: Int, modifier: Modifier) {
     // Çubuk ekrandayken sensörler dinlenir ve sıvı her karede adımlanır. Son tuşa basıştan
     // 1.8 sn sonra sıvı durulunca, durulmazsa (yürürken telefon hep sallanır) en geç 2.6 sn sonra
     // çubuk kaybolur; telefonun hareketi çubuğu ekranda tutmaz
+    // Sadece debug testleri (MainActivity.fakeFlip / slowMo); release'de ikisi de kapalı
+    val slowMo = MainActivity.slowMo
+    var simTime by remember { mutableFloatStateOf(0f) }
     DisposableEffect(visible) {
         val stop = if (visible) {
             listenGravity(
                 context,
                 { view.display?.rotation ?: 0 },
                 onShake = { side, along -> slosh.onShake(side, along) },
-            ) { x, y -> slosh.onGravity(x, y, System.nanoTime()) }
+            ) { x, y ->
+                if (MainActivity.fakeFlip) {
+                    // Masada yatan telefonda da çalışsın: önce dik, 0,3 sn sonra ters
+                    slosh.onGravity(0f, if (simTime > 0.3f) -9.8f else 9.8f, System.nanoTime())
+                } else {
+                    slosh.onGravity(x, y, System.nanoTime())
+                }
+            }
         } else ({})
         onDispose { stop() }
     }
     LaunchedEffect(visible) {
         if (!visible) return@LaunchedEffect
         var last = 0L
+        simTime = 0f
         while (true) {
             val now = withFrameNanos { it }
-            if (last != 0L) slosh.step((now - last) / 1e9f)
+            if (last != 0L) {
+                val dt = (now - last) / 1e9f * slowMo
+                slosh.step(dt)
+                simTime += dt
+            }
             last = now
             frame = now
             val quiet = System.nanoTime() - lastKick
+            if (slowMo < 1f) {
+                if (quiet > 30_000_000_000L) { visible = false; break } else continue
+            }
             if (quiet > 2_600_000_000L || (quiet > 1_800_000_000L && slosh.settled)) {
                 visible = false
                 break

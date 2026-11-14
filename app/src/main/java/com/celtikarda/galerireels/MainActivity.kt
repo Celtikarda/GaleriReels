@@ -51,6 +51,12 @@ class MainActivity : ComponentActivity() {
         val openVideoId = if (debuggable) intent.getLongExtra("open_video_id", -1L).takeIf { it > 0 } else null
         val openCleanupIds = if (debuggable) intent.getLongArrayExtra("open_cleanup_ids")?.toList() else null
         if (debuggable && intent.getBooleanExtra("fake_max_volume", false)) fakeMaxVolume = true
+        // Ses çubuğundaki dökülmeyi telefonu çevirmeden görmek için: --ez fake_flip true (çubuk
+        // açıldıktan 0,3 sn sonra telefon ters sayılır) ve --ef slow_mo 0.1 (fizik 10 kat yavaş)
+        if (debuggable) {
+            fakeFlip = intent.getBooleanExtra("fake_flip", false)
+            slowMo = intent.getFloatExtra("slow_mo", 1f).coerceIn(0.01f, 1f)
+        }
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -62,5 +68,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Sadece debug testi: telefonun sesi max değilken de max'mış gibi davran */
         var fakeMaxVolume = false
+        /** Sadece debug testi: ses çubuğu açılınca telefon ters çevrilmiş gibi */
+        var fakeFlip = false
+        /** Sadece debug testi: ses çubuğu fiziğinin hızı (1 = gerçek) */
+        var slowMo = 1f
     }
 }

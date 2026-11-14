@@ -214,6 +214,13 @@ kolaylaştırmak.
   - Otomatik geçiş: VLC ile oynayan videolar bitince bir an başa sarmadan doğrudan sıradakine
     geçiyor; fotoğraflarda akış takılmıyor (her fotoğraf 5 sn gösterilir).
   - Büyük yazı / büyük ekran ayarında bozulan düğmeler, başlıklar ve özet kutuları düzeltildi.
+- [x] **1.9.3 Kare kare oynatma ve ses dengeleme düzeldi**
+  - Durdurulmuş videoda "1 kare ›" anında ve tam bir kare ilerler (önceden gecikiyordu, bazı
+    videolarda basış hiç işlemiyordu); "‹ 1 kare" tam bir önceki kareye gider.
+  - Ses dengeleme bağıran ve fısıldayan videoları birbirine çok daha yakın seviyede duyurur;
+    ses yükseltmeyle (%200) birlikte de patlamaz.
+  - VLC ile oynayan videolarda (webm vb.) ses dengeleme hiç çalışmıyordu; artık çalışır, açıp
+    kapatınca anında etkili olur ve video açılırken ilk an ses yüksek çıkmaz.
 
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki

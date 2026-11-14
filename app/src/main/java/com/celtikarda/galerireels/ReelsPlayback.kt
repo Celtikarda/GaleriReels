@@ -340,6 +340,23 @@ class ReelsPlayback(
         resume.save(item, position)
     }
 
+    /**
+     * Kaldığı yerden açılan VLC videosu sona geldi (bkz. VlcEngine.onEndReached). Otomatik geçiş
+     * açıksa doğrudan sıradakine geçilir: video önce başa sarılıp ilk karesi bir an görünmez.
+     * true dönerse VLC başa sarmaz.
+     */
+    private fun onVlcEndReached(): Boolean {
+        if (released || !autoAdvance || abLoop != null) return false
+        val item = current ?: return false
+        if (vlcItemId != item.id) return false
+        // [checkLoop] aynı bitişi bir daha görüp ikinci kez geçmesin (bir video atlanırdı)
+        lastLoopPositionMs = 0L
+        if (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            android.util.Log.i("GaleriDevam", "vlc bitti: video=${item.id} → sıradakine geçiliyor")
+        }
+        return onEnded()
+    }
+
     /** A-B tekrarında B'ye gelince A'ya döner; VLC'de video bitince (başa sarınca) [onEnded] */
     private fun checkLoop() {
         if (released) return
@@ -449,6 +466,7 @@ class ReelsPlayback(
                     engine.setNormalize(normalize)
                     engine.setSpeed(speed)
                     engine.setScrubbing(rewinding)
+                    engine.onEndReached = ::onVlcEndReached
                     vlc = engine
                     arrange()
                 }
@@ -513,6 +531,8 @@ class ReelsPlayback(
         var announced = false
         engine.play(
             item.uri,
+            // Otomatik geçişte VLC kendisi başa sarmasın: bitiş yakalanıp sıradakine geçilir
+            stopAtEnd = autoAdvance,
             onFirstFrame = {
                 renderedIds = renderedIds + item.id
                 OpenTimer.firstFrame(item.id, "vlc")

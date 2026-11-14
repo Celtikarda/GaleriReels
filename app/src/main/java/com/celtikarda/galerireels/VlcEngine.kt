@@ -63,6 +63,12 @@ class VlcEngine private constructor(private val appContext: Context, private val
     private var file: ParcelFileDescriptor? = null
     private var controlGeneration = 0
 
+    /**
+     * Kaldığı yerden açılan video sona geldi (ana iş parçacığında). true dönerse (ör. otomatik
+     * geçişle sıradaki videoya geçiliyor) başa sarılmaz, son kare ekranda kalır.
+     */
+    var onEndReached: () -> Boolean = { false }
+
     private var onFirstFrame: () -> Unit = {}
     private var onError: () -> Unit = {}
 
@@ -100,7 +106,8 @@ class VlcEngine private constructor(private val appContext: Context, private val
                     positionCache = next
                 }
                 MediaPlayer.Event.EndReached -> {
-                    if (manualRepeat) restartFromZero()
+                    // Kaldığı yerden açılan video bitti: sıradakine geçilecekse başa sarma
+                    if (manualRepeat && !onEndReached()) restartFromZero()
                     positionCache = 0f
                     timeCache = 0L
                 }
@@ -123,6 +130,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
         onError: () -> Unit,
         waitForView: Boolean = false,
         startMs: Long = 0L,
+        stopAtEnd: Boolean = false,
     ) {
         val gen = ++generation
         readyGeneration = 0
@@ -132,8 +140,9 @@ class VlcEngine private constructor(private val appContext: Context, private val
         positionCache = 0f
         timeCache = startMs.coerceAtLeast(0L)
         // Kaldığı yerden açılan videoda VLC'nin kendi tekrarı başa değil başlangıç noktasına
-        // sarıyor; bu videolarda bitince başa sarmayı kendimiz yaparız (bkz. [restartFromZero])
-        manualRepeat = startMs > 0L
+        // sarıyor; bu videolarda bitince başa sarmayı kendimiz yaparız (bkz. [restartFromZero]).
+        // [stopAtEnd] (otomatik geçiş) ise de: bitiş [onEndReached]'e sorulur, kendiliğinden sarılmaz
+        manualRepeat = startMs > 0L || stopAtEnd
         // Görüntü yüzeyi bağlanmadan başlarsa VLC görüntü çıkışı açamaz; yüzey hazır olunca başla
         pendingStart = waitForView || !vout.areViewsAttached()
         val startNow = !pendingStart
@@ -149,7 +158,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
                 return@onControl
             }
             file = fd
-            newMedia(fd, normalizeNow, startMs).let {
+            newMedia(fd, normalizeNow, startMs, repeat = !stopAtEnd).let {
                 player.media = it
                 it.release() // player kendi referansını tutar
             }
@@ -171,7 +180,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
      * önce baştan açıp ilk kareden sonra oraya atlamak yazılımsal çözücüde ana kareden hedefe kadar
      * her kareyi çözdürüyor, baştaki kare görünüp video bir süre donuyordu.
      */
-    private fun newMedia(fd: ParcelFileDescriptor, normalize: Boolean, startMs: Long): Media {
+    private fun newMedia(fd: ParcelFileDescriptor, normalize: Boolean, startMs: Long, repeat: Boolean = true): Media {
         val media = Media(libVlc, fd.fileDescriptor).apply {
             // Buraya sadece donanımın açamadığı videolar gelir; doğrudan FFmpeg / dav1d ile çöz
             setHWDecoderEnabled(false, false)
@@ -181,7 +190,7 @@ class VlcEngine private constructor(private val appContext: Context, private val
                 // (webm'de ~1,8 s); en yakın anahtar kareden başlamak anında akar, birkaç saniye
                 // önceden başlamak da kaldığın yeri hatırlatır
                 addOption(":input-fast-seek")
-            } else {
+            } else if (repeat) {
                 addOption(":input-repeat=65535") // başa sar
             }
             if (normalize) addOption(":audio-filter=normvol")

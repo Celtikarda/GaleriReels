@@ -1036,7 +1036,7 @@ class ReelsPlayback(
 @androidx.annotation.RequiresApi(28)
 internal fun createNormalizer(session: Int): DynamicsProcessing {
     val config = DynamicsProcessing.Config.Builder(
-        DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+        DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION, // TIME_RESOLUTION vivo'da sesi tamamen kesiyor
         2, // kanal
         false, 0, // ön EQ yok
         true, 1, // tek bantlı sıkıştırıcı
@@ -1045,15 +1045,14 @@ internal fun createNormalizer(session: Int): DynamicsProcessing {
     ).build()
     return DynamicsProcessing(0, session, config).apply {
         setNormalizerGain(this, 0f)
-        setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 20f, -1.5f, 0f))
+        setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, true, 0, 5f, 120f, 10f, -1f, 0f))
     }
 }
 
 /**
- * Sıkıştırıcı: -42 dB'nin üstü 6'da 1'e bastırılır, sonra +22 dB (+ yükseltme) eklenir. Eski ayar
- * (-30 dB, 4'te 1, +10 dB) bağıran videoyla fısıltılı video arasındaki farkı 35 dB'den ancak
- * 20 dB'ye indiriyordu; yüksek sesli videolar yine çok yüksek kalıyordu. Şimdi ~6-8 dB.
- * Çok kısık uğultu (-62 dB altı) 2'de 1 kısılır ki kazançla hışırtı yükselmesin.
+ * Sıkıştırıcı: -34 dB'nin üstü 3'te 1'e bastırılır, sonra +12 dB (+ yükseltme) eklenir.
+ * v1.9.3'teki sert ayar (-42 dB, 6'da 1, 5 ms atak, +22 dB, gürültü kapısı) bütün videolarda
+ * sesi elektronik/metalik yapıyordu; kaliteyi bozmadan dengelemek için yumuşatıldı.
  */
 @androidx.annotation.RequiresApi(28)
 internal fun setNormalizerGain(dynamics: DynamicsProcessing, boostDb: Float) {
@@ -1061,10 +1060,10 @@ internal fun setNormalizerGain(dynamics: DynamicsProcessing, boostDb: Float) {
         0,
         DynamicsProcessing.MbcBand(
             true, 20_000f, // bütün frekanslar
-            5f, 200f, // atak / bırakma (ms)
-            6f, -42f, 6f, // oran, eşik (dB), diz genişliği
-            -62f, 2f, // gürültü kapısı / genişletici oranı
-            0f, 22f + boostDb, // ön / son kazanç (dB)
+            30f, 500f, // atak / bırakma (ms): hızlı olunca ses dalgası bozulup elektronik duyuluyordu
+            3f, -34f, 10f, // oran, eşik (dB), diz genişliği
+            -90f, 1f, // gürültü kapısı kapalı (açılıp kapanması cızırtı yapıyordu)
+            0f, 12f + boostDb, // ön / son kazanç (dB)
         ),
     )
 }

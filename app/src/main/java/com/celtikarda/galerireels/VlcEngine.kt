@@ -510,6 +510,10 @@ class VlcEngine private constructor(
             // süzgeçleri kullanılamıyor: libVLC oynatıcısı "audio-filter" ayarını eziyor; videoya
             // ":audio-filter=normvol" vermek de hiç işlemiyordu (log'da süzgeç hiç yüklenmiyordu).
             "--audiotrack-session-id=$session",
+            // VLC sesi Android'e 48000 Hz verir; 44100 Hz videolarda örnekleme hızını kendisi
+            // çevirir. Varsayılan çeviricisi sesi "elektronik"/cızırtılı yapıyordu (vivo,
+            // 1440x1600 AAC 44.1k videolar). soxr en kaliteli çevirici: ses vivo Galeri'deki gibi temiz.
+            "--audio-resampler=soxr",
         )
     }
 }

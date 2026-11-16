@@ -222,6 +222,12 @@ kolaylaştırmak.
   - VLC ile oynayan videolarda (webm vb.) ses dengeleme hiç çalışmıyordu; artık çalışır, açıp
     kapatınca anında etkili olur ve video açılırken ilk an ses yüksek çıkmaz.
 
+### Sıradaki
+- [ ] **Reels içinden silme modu** · Normal kaydırırken silmek istediğin bir video çıkınca
+  Temizlik'e gidip onu yeniden aramak gerekmesin: üst bardaki 🗑 ile aynı videoda kalarak silme
+  modu açılır, sola kaydırıp işaretlersin, en sonda tek onayla silersin. Mod içinde filtreler:
+  10 saniyeden kısa, hiç izlenmemiş, en çok yer kaplayan.
+
 ### Değerlendiriliyor
 - **iPhone sürümü** · İstek var ama Apple geliştirici üyeliği (yıllık ücretli) ve kodun iki
   platforma göre yeniden düzenlenmesi gerekiyor. Android sürümü olgunlaşınca karar verilecek.

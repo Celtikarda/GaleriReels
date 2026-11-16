@@ -1,7 +1,6 @@
 # Reels içinden silme modu — plan
 
-Hedef: **Cuma 2026-11-20**. Normal kaydırırken silinecek bir video çıkınca Temizlik'e gidip onu
-yeniden aramak gerekmesin.
+Normal kaydırırken silinecek bir video çıkınca Temizlik'e gidip onu yeniden aramak gerekmesin.
 
 ## Tasarım (seçenek A)
 - Reels üst barına 🗑 düğmesi. Basınca **aynı videoda kalınır**, o klasörde silme modu açılır.
@@ -17,9 +16,11 @@ yeniden aramak gerekmesin.
   `CleanupBar` da öyle. → Bu koşul `cleanup || deleteMode` olacak.
 - `GalleryViewModel.openCleanup()`: ayrı `Album.CLEANUP` akışı (önce izlenmemiş, sonra en büyük).
 
-## Günlere bölünmüş iş
-- [x] **Salı 11-17:** Plan (bu dosya).
-- [ ] **Çarşamba 11-18:** `deleteMode` durumu + üst bar 🗑 düğmesi; mod açıkken kaydırıp işaretleme
-  ve `CleanupBar` normal klasörde çalışır.
-- [ ] **Perşembe 11-19:** Çıkarken "Silinsin mi?" onayı, beğeni/favori uyarısı, filtre çipleri.
-- [ ] **Cuma 11-20:** Telefonda test, README güncelle, sürüm yayınla.
+## Yapılacaklar
+- [x] Plan (bu dosya)
+- [ ] `deleteMode` durumu + üst bar 🗑 düğmesi; mod açıkken kaydırıp işaretleme ve `CleanupBar`
+  normal klasörde çalışır
+- [ ] Moddan çıkarken "Silinsin mi?" onayı
+- [ ] Beğeni / favori işaretlenirken uyarı
+- [ ] Filtre çipleri (10 sn'den kısa, hiç izlenmemiş, en çok yer kaplayan)
+- [ ] Telefonda test, README güncelle, sürüm yayınla

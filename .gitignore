@@ -14,3 +14,6 @@
 *.jks
 *.keystore
 keystore.properties
+
+# Derlenmiş APK dosyaları repoya girmez (sürümlere eklenir)
+*.apk

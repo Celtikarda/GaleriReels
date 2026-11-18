@@ -222,6 +222,10 @@ kolaylaştırmak.
   - VLC ile oynayan videolarda (webm vb.) ses dengeleme hiç çalışmıyordu; artık çalışır, açıp
     kapatınca anında etkili olur ve video açılırken ilk an ses yüksek çıkmaz.
 
+- [x] **1.9.4 Daha temiz ses**
+  - VLC ile oynayan videolarda (webm vb.) arada duyulan cızırtılı, "elektronik" ses düzeldi.
+  - Ses dengeleme daha yumuşak çalışır; sesler arasındaki geçişler pompalama yapmadan, doğal duyulur.
+
 ### Sıradaki
 - [ ] **Reels içinden silme modu** · Normal kaydırırken silmek istediğin bir video çıkınca
   Temizlik'e gidip onu yeniden aramak gerekmesin: üst bardaki 🗑 ile aynı videoda kalarak silme

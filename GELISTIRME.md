@@ -110,6 +110,14 @@ Commit e-postası: hesap e-postayı gizli tutuyor, repoda `user.email` GitHub'ı
   --text-renderer=none` ile kapalı; açmayın.
 - **VLC ana iş parçacığında durdurulmamalı:** `MediaPlayer.stop()` VLC'nin iş parçacığını bekliyor,
   ana iş parçacığında uygulamayı donduruyordu (ANR). `VlcEngine` hepsini `vlc-control`'da yapıyor.
+- **VLC ses çevirici (soxr):** VLC sesi Android'e 48000 Hz verir, 44100 Hz videoları kendisi
+  çevirir. Varsayılan çevirici sesi cızırtılı/"elektronik" yapıyordu; `--audio-resampler=soxr`
+  ile düzeldi, kaldırmayın. Ses bozuksa önce şunları eleyin (vivo'da hepsi temiz çıktı): işlemci
+  yükü, `underrun` sayısı (`dumpsys media.audio_flinger`), ses dengeleme, hız değiştirme.
+- **Ses dengeleme ayarları:** Sert sıkıştırma (5 ms atak, 6:1) sesi bozuyordu; şimdiki eğri
+  30/500 ms, 3:1, +12 dB. `VARIANT_FAVOR_TIME_RESOLUTION` vivo'da sesi tamamen kesiyor; açmayın.
+  VLC'nin kendi `audio-filter`/`normvol` süzgeçleri libVLC'de çalışmıyor; dengeleyici VLC'nin ses
+  oturumuna (`--audiotrack-session-id`) takılıyor.
 - **Donanım çözücü sınırı:** Bu telefonda (Snapdragon 685) H.264/HEVC/VP9 en fazla 1920x1088;
   AV1 donanımı yok. 1440x1600@60 ve bazı AV1 webm'ler VLC'ye gider.
 - **Kaydırıcı (Pager) ekrandaki videoyu anahtarıyla yerinde tutar:** listeye eleman ekleyince

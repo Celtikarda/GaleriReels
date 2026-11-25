@@ -558,6 +558,8 @@ class ReelsPlayback(
                 }
             },
             onError = { error = item.id to str(R.string.err_corrupt) },
+            // Yüzey gitti: dönüşte yeni kare gelene kadar siyah ekran yerine küçük resim görünsün
+            onViewLost = { renderedIds = renderedIds - item.id },
             waitForView = viewBusy,
             startMs = startMs,
         )

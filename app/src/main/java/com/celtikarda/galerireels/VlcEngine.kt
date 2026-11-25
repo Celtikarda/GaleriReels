@@ -47,6 +47,8 @@ class VlcEngine private constructor(
     private var attachedView: SurfaceView? = null
     private var hasMedia = false
     private var pendingStart = false
+    /** Video açıkken yüzey gitti (uygulamadan çıkıldı); dönünce görüntü [restoreVideo] ile açılır */
+    private var viewLost = false
     private var muted = false
     private var boost = 0f
     private var dynamics: android.media.audiofx.DynamicsProcessing? = null
@@ -109,6 +111,7 @@ class VlcEngine private constructor(
     var onEndReached: () -> Boolean = { false }
 
     private var onFirstFrame: () -> Unit = {}
+    private var onViewLost: () -> Unit = {}
     private var onError: () -> Unit = {}
 
     // Debug sürümde 2 saniyede bir kare istatistiklerini logcat'e yazar (akıcılık testi için)
@@ -175,6 +178,7 @@ class VlcEngine private constructor(
         uri: Uri,
         onFirstFrame: () -> Unit,
         onError: () -> Unit,
+        onViewLost: () -> Unit = {},
         waitForView: Boolean = false,
         startMs: Long = 0L,
         stopAtEnd: Boolean = false,
@@ -183,7 +187,9 @@ class VlcEngine private constructor(
         readyGeneration = 0
         this.onFirstFrame = onFirstFrame
         this.onError = onError
+        this.onViewLost = onViewLost
         hasMedia = true
+        viewLost = false
         // Dengeleme açıksa ses izi başlayana kadar sessiz (bkz. [normalizerPending])
         main.removeCallbacks(normalizerFallback)
         normalizerPending = normalize && Build.VERSION.SDK_INT >= 28
@@ -289,6 +295,7 @@ class VlcEngine private constructor(
         hasMedia = false
         manualRepeat = false
         pendingStart = false
+        viewLost = false
         positionCache = 0f
         timeCache = 0L
         onControl {
@@ -433,11 +440,25 @@ class VlcEngine private constructor(
             }
         }
         vout.setWindowSize(width, height)
-        if (pendingStart) start()
+        if (pendingStart) start() else if (viewLost) restoreVideo()
+    }
+
+    /**
+     * Yüzey yokken libVLC görüntü izini kapatır, yüzey gelince yeniden açar; ses hiç durmaz. Yeni
+     * açılan çözücü bir sonraki ana kareye kadar hiçbir şey gösteremediği için görüntü saniyelerce
+     * siyah kalıyordu (AV1 1080p60'ta ana kare aralığı 5,5 sn). En yakın ana kareye atlayınca hemen gelir.
+     */
+    private fun restoreVideo() {
+        viewLost = false
+        seekFast(timeCache)
     }
 
     fun detach() {
         attachedView = null
+        if (vout.areViewsAttached() && hasMedia && !pendingStart && !viewLost) {
+            viewLost = true
+            onViewLost()
+        }
         if (vout.areViewsAttached()) vout.detachViews()
     }
 

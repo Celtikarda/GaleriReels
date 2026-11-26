@@ -382,7 +382,7 @@ private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF2B1055), Color(0xFF5E1742))))
+            .background(appColors.card)
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -571,7 +571,7 @@ private fun MemoryTile(video: VideoItem, yearsAgo: Int, onClick: () -> Unit) {
             .width(92.dp)
             .aspectRatio(9f / 16f)
             .clip(RoundedCornerShape(12.dp))
-            .border(1.5.dp, Brush.sweepGradient(StoryRing), RoundedCornerShape(12.dp))
+            .border(1.5.dp, Makara.Amber, RoundedCornerShape(12.dp))
             .background(Color(0xFF1C1C1E))
             .clickable(onClick = onClick)
     ) {

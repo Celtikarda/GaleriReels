@@ -40,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -62,13 +61,6 @@ import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
 import kotlinx.coroutines.launch
 import java.time.YearMonth
-
-private val RecapGradient = listOf(
-    Color(0xFF2B1055),
-    Color(0xFF5E1742),
-    Color(0xFF1A0F26),
-    Color(0xFF100E16),
-)
 
 @Composable
 fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
@@ -195,8 +187,8 @@ private fun RecapCard(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(RecapGradient))
-            .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(24.dp))
+            .background(appColors.card)
+            .border(1.dp, Makara.Outline, RoundedCornerShape(24.dp))
             .padding(20.dp)
     ) {
         Box(

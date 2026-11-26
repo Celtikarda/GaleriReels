@@ -6,23 +6,36 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-val LikeRed = Color(0xFFFF3040)
-val InstaBlue = Color(0xFF0095F6)
-val FavoriteYellow = Color(0xFFFFC83D)
-val DeleteRed = Color(0xFFE5383B)
-val CleanupGreen = Color(0xFF34C759)
+/** Makara kimliğinin renkleri — kaynak: DESIGN.md (önce orası güncellenir) */
+object Makara {
+    /** Makara siyahı: her ekranın zemini */
+    val Black = Color(0xFF120F0D)
+    /** Kare zemini: kartlar, film şeridi, alt menü */
+    val Surface = Color(0xFF1E1915)
+    /** Kutu kenarı */
+    val SurfaceHigh = Color(0xFF2B241F)
+    val Outline = Color(0xFF3A302A)
+    /** Kehribar: yalnızca "şu an" ve eylem için */
+    val Amber = Color(0xFFFFB547)
+    val OnAmber = Color(0xFF120F0D)
+    val Cream = Color(0xFFF5EDE3)
+    val CreamSoft = Color(0xFFD8CCBE)
+    val Muted = Color(0xFFA89B8C)
+    val Error = Color(0xFFB3261E)
+    val OnError = Color(0xFFFFFFFF)
+}
 
-/** Profil resminin etrafındaki hikâye halkası renkleri */
-val StoryRing = listOf(
-    Color(0xFFFEDA75),
-    Color(0xFFFA7E1E),
-    Color(0xFFD62976),
-    Color(0xFF962FBF),
-    Color(0xFF4F5BD5),
-    Color(0xFFFEDA75),
-)
+// Eski adlar: Aşama 4'te kaldırılacak. ReelsScreen.kt'ye dokunmadan oynatıcının da Makara'ya geçmesi için.
+val LikeRed = Makara.Amber
+val InstaBlue = Makara.Amber
+val FavoriteYellow = Makara.Amber
+val DeleteRed = Makara.Error
+val CleanupGreen = Makara.Amber
 
-/** Gece (koyu) ve Aydınlık (açık) modlar için ortak renk paleti */
+/** Anı / profil halkası renkleri (eski adıyla) */
+val StoryRing = listOf(Makara.Amber, Color(0xFFFFD08A), Makara.Amber)
+
+/** Uygulamanın renk paleti (2.0'da tek, koyu Makara teması) */
 @Immutable
 data class AppColors(
     val isDark: Boolean,
@@ -38,35 +51,25 @@ data class AppColors(
     val statusBarScrim: Color,
 )
 
-val DarkAppColors = AppColors(
+val MakaraAppColors = AppColors(
     isDark = true,
-    background = Color.Black,
-    card = Color(0xFF1C1C1E),
-    cardElevated = Color(0xFF2C2C2E),
-    textPrimary = Color.White,
-    textSecondary = Color.White.copy(alpha = 0.72f),
-    textMuted = Color.White.copy(alpha = 0.45f),
-    divider = Color.White.copy(alpha = 0.08f),
-    accentGold = FavoriteYellow,
-    achievementDoneBg = Color(0xFF2A2412),
-    statusBarScrim = Color.Black.copy(alpha = 0.92f),
+    background = Makara.Black,
+    card = Makara.Surface,
+    cardElevated = Makara.SurfaceHigh,
+    textPrimary = Makara.Cream,
+    textSecondary = Makara.CreamSoft,
+    textMuted = Makara.Muted,
+    divider = Makara.Outline,
+    accentGold = Makara.Amber,
+    achievementDoneBg = Makara.SurfaceHigh,
+    statusBarScrim = Makara.Black.copy(alpha = 0.92f),
 )
 
-val LightAppColors = AppColors(
-    isDark = false,
-    background = Color(0xFFF2F2F7),
-    card = Color.White,
-    cardElevated = Color(0xFFE5E5EA),
-    textPrimary = Color(0xFF111114),
-    textSecondary = Color(0xFF3C3C43).copy(alpha = 0.78f),
-    textMuted = Color(0xFF3C3C43).copy(alpha = 0.48f),
-    divider = Color.Black.copy(alpha = 0.06f),
-    accentGold = Color(0xFFC28200),
-    achievementDoneBg = Color(0xFFFFF3D1),
-    statusBarScrim = Color(0xFFF2F2F7).copy(alpha = 0.92f),
-)
+// Geçici: Task 3'te kaldırılacak
+val DarkAppColors = MakaraAppColors
+val LightAppColors = MakaraAppColors
 
-val LocalAppColors = staticCompositionLocalOf { DarkAppColors }
+val LocalAppColors = staticCompositionLocalOf { MakaraAppColors }
 
 val appColors: AppColors
     @Composable

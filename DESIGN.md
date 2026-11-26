@@ -211,7 +211,7 @@ Bu bir başka uygulamanın kopyası değildir: Instagram gradyanı, iOS grileri 
 ## Layout
 
 - Kenar boşluğu 20 dp; yıl şeridi görünen ekranlarda sağ boşluk 56 dp (şerit altına içerik girmez; yatay kayan şeritler kenardan kenara akabilir).
-- Ana ekran sırası: başlık (logo, ara, ayarlar) → medya seçici (VİDEO · FOTO · HEPSİ) → gerekirse uyarı şeridi → **Kaldığın yer** → son izlediklerin sırası → ay sayacı → **ay / tarihte bugün makarası** → **En çok sarılanlar** → temizlik satırı (yalnızca boşaltılacak yer varsa) → **Kutular** (önce Tüm videolar, Favoriler, Beğendiklerin; sonra klasörler).
+- Ana ekran sırası: başlık (logo, ara, ayarlar) → medya seçici (VİDEO · FOTO · HEPSİ) → gerekirse uyarı şeridi → **Kaldığın yer** → son izlediklerin sırası → **Bu ay** kutusu (kehribar zemin; izleme süresi + video sayısı; dokununca Aylık özet) ve yanında temizlik kutusu (yalnızca boşaltılacak yer varsa, yoksa Bu ay tam genişlik) → ay sayacı → **ay / tarihte bugün makarası** → **En çok sarılanlar** → **Kutular** (önce Tüm videolar, Favoriler, Beğendiklerin; sonra klasörler).
 - Alt menü yüzer: Makara · Akış · Sevdiklerim · Sen. Sayfa sonunda 110 dp boşluk bırak ki içerik menünün altında kalmasın.
 - "Sen" sekmesi: aylık özet, başarımlar, izleme süresi.
 - Dokunma alanı en az 44 dp.

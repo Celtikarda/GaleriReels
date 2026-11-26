@@ -53,7 +53,8 @@ Arda: "diğer uygulamalara çok benzedik, biraz da kendi elimizden bi şi gelsin
   - Tarihte bugün (Memories) → o gün anı varsa "Tarihte bugün makarası", yoksa ay makarası
   - Görüntülenme sayıları (StatsStore.viewsOf) → En çok sarılanlar
   - Tüm videolar / Favoriler / Beğendiklerin → Kutular ilk sıra; klasörler + gizli klasör (PIN) davranışı aynı
-  - Temizlik kartı → tek satır, yalnızca boşaltılacak yer varsa
+  - Temizlik kartı → "Bu ay" kutusunun yanında kare kutu, yalnızca boşaltılacak yer varsa
+  - (Mozaik'ten, Arda istedi) **Bu ay** kutusu: `MonthlyRecap.watchTimeMs` + izlenen video sayısı; dokununca Aylık özet. Süre tahminidir (video süresi × izlenme); "Bu hafta" yeni sayaç gerektirdiği için 2.0'da "Bu ay"
   - Açık/koyu düğmesi → kalkar
   - Ayarlar, kurulum, güncelleme, başarım kutlaması → aynı yerde, yeni token'larla
   - Oynatıcı: sayaç başlığı, sağ sütun (Beğen/Favori/Hız/Kilit), ⋮ (kırp, uyku, PiP, sil), ince parçalı ilerleme, sararken film şeridi önizlemesi

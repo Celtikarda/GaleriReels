@@ -343,6 +343,12 @@ fun AlbumsScreen(
 }
 
 /** Ana ekranda Videolar / Fotoğraflar / Tümü arasında hızlı geçiş sekmesi */
+/** Medya seçici sekmesinin zemin ve yazı rengi */
+internal data class TabColors(val background: Color, val text: Color)
+
+internal fun mediaModeTabColors(selected: Boolean, palette: AppColors): TabColors =
+    if (selected) TabColors(Makara.Amber, Makara.OnAmber) else TabColors(Color.Transparent, palette.textSecondary)
+
 @Composable
 private fun MediaModeSelector(current: MediaMode, onSelect: (MediaMode) -> Unit) {
     Row(
@@ -355,18 +361,19 @@ private fun MediaModeSelector(current: MediaMode, onSelect: (MediaMode) -> Unit)
     ) {
         MediaMode.entries.forEach { entry ->
             val selected = entry == current
+            val colors = mediaModeTabColors(selected, appColors)
             Box(
                 Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(9.dp))
-                    .background(if (selected) InstaBlue else Color.Transparent)
+                    .background(colors.background)
                     .clickable { onSelect(entry) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     entry.title,
-                    color = if (selected) Color.White else appColors.textSecondary,
+                    color = colors.text,
                     fontSize = 13.sp,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 )

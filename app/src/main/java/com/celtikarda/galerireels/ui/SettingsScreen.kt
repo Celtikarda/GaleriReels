@@ -70,7 +70,12 @@ import com.celtikarda.galerireels.TrashedVideo
 import com.celtikarda.galerireels.VideoItem
 import kotlinx.coroutines.launch
 
-private val WarningOrange = Color(0xFFFFB020)
+/** Uyarı rengi: Makara'da kehribar (kehribar = dikkat/eylem) */
+private val WarningOrange = Makara.Amber
+
+/** Kayıt klasörü simgesi: her şey yolundaysa sade krem, klasör yoksa kehribar uyarı */
+internal fun folderStatusTint(hasFolder: Boolean, palette: AppColors): Color =
+    if (hasFolder) palette.textPrimary else WarningOrange
 
 @Composable
 fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () -> Unit) {
@@ -168,7 +173,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Icon(
                     painterResource(R.drawable.ic_folder),
                     contentDescription = null,
-                    tint = if (folder != null) InstaBlue else WarningOrange,
+                    tint = folderStatusTint(folder != null, appColors),
                     modifier = Modifier.size(28.dp),
                 )
                 Spacer(Modifier.width(12.dp))

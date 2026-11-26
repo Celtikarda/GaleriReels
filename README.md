@@ -225,6 +225,8 @@ kolaylaştırmak.
 - [x] **1.9.4 Daha temiz ses**
   - VLC ile oynayan videolarda (webm vb.) arada duyulan cızırtılı, "elektronik" ses düzeldi.
   - Ses dengeleme daha yumuşak çalışır; sesler arasındaki geçişler pompalama yapmadan, doğal duyulur.
+  - Uygulamaya geri dönünce VLC ile oynayan video birkaç saniye siyah kalmıyor; kapak resmi görünür ve
+    video hemen devam eder.
 
 ### Sıradaki
 - [ ] **Reels içinden silme modu** · Normal kaydırırken silmek istediğin bir video çıkınca

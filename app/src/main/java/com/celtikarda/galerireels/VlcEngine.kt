@@ -49,6 +49,24 @@ class VlcEngine private constructor(
     private var pendingStart = false
     /** Video açıkken yüzey gitti (uygulamadan çıkıldı); dönünce görüntü [restoreVideo] ile açılır */
     private var viewLost = false
+    /**
+     * Duraklatılmış videoda yüzey geri geldi: durduğu kare çizilsin diye sessizce kısa bir an
+     * oynatılıyor, ilk kare gelince yeniden duraklatılacak (bkz. [restoreVideo])
+     */
+    @Volatile private var restoringPaused = false
+    private val finishPausedRestore = Runnable {
+        if (!restoringPaused) return@Runnable
+        restoringPaused = false
+        val gen = generation
+        val volume = targetVolume()
+        onControl {
+            if (gen == controlGeneration) {
+                player.pause()
+                player.volume = volume
+            }
+        }
+        onFirstFrame()
+    }
     private var muted = false
     private var boost = 0f
     private var dynamics: android.media.audiofx.DynamicsProcessing? = null
@@ -136,7 +154,11 @@ class VlcEngine private constructor(
         player.setEventListener { event ->
             if (readyGeneration != generation) return@setEventListener
             when (event.type) {
-                MediaPlayer.Event.Vout -> if (event.voutCount > 0) onFirstFrame()
+                MediaPlayer.Event.Vout -> if (event.voutCount > 0) {
+                    // Görüntü çıkışı açıldı ama ilk kare henüz çizilmemiş olabilir; çizilsin diye kısa bekle
+                    if (restoringPaused) main.postDelayed(finishPausedRestore, PAUSED_RESTORE_FRAME_MS)
+                    else onFirstFrame()
+                }
                 MediaPlayer.Event.Playing -> {
                     playingSeen = true
                     applyVolume()
@@ -166,7 +188,7 @@ class VlcEngine private constructor(
     }
 
     private fun targetVolume(): Int = when {
-        muted || scrubbing || normalizerPending -> 0
+        muted || scrubbing || normalizerPending || restoringPaused -> 0
         else -> 100 + (boost * 100).roundToInt()
     }
 
@@ -190,6 +212,7 @@ class VlcEngine private constructor(
         this.onViewLost = onViewLost
         hasMedia = true
         viewLost = false
+        cancelPausedRestore()
         // Dengeleme açıksa ses izi başlayana kadar sessiz (bkz. [normalizerPending])
         main.removeCallbacks(normalizerFallback)
         normalizerPending = normalize && Build.VERSION.SDK_INT >= 28
@@ -296,6 +319,7 @@ class VlcEngine private constructor(
         manualRepeat = false
         pendingStart = false
         viewLost = false
+        cancelPausedRestore()
         positionCache = 0f
         timeCache = 0L
         onControl {
@@ -313,12 +337,26 @@ class VlcEngine private constructor(
     }
 
     fun pause() {
+        val wasRestoring = restoringPaused
+        cancelPausedRestore()
         val gen = generation
-        onControl { if (gen == controlGeneration) player.pause() }
+        val volume = targetVolume()
+        onControl {
+            if (gen == controlGeneration) {
+                player.pause()
+                if (wasRestoring) player.volume = volume
+            }
+        }
     }
 
     fun resume() {
         if (!hasMedia || pendingStart) return
+        // Durduğu kare çizilirken oynat'a basıldı: yeniden duraklatma, sesi aç
+        if (restoringPaused) {
+            cancelPausedRestore()
+            applyVolume()
+            return
+        }
         val gen = generation
         onControl { if (gen == controlGeneration) player.play() }
     }
@@ -450,11 +488,32 @@ class VlcEngine private constructor(
      */
     private fun restoreVideo() {
         viewLost = false
-        seekFast(timeCache)
+        val gen = generation
+        val target = timeCache
+        onControl {
+            if (gen != controlGeneration) return@onControl
+            if (player.isPlaying) {
+                player.setTime(target, true)
+                return@onControl
+            }
+            // Duraklatılmış: VLC durmuşken yeni yüzeye kare çizmiyor, küçük resim kalıyordu. Durduğu
+            // yere tam sarıp sessizce oynat; ilk kare gelince [finishPausedRestore] yeniden duraklatır.
+            restoringPaused = true
+            player.volume = 0
+            player.setTime(target, false)
+            player.play()
+        }
+    }
+
+    private fun cancelPausedRestore() {
+        restoringPaused = false
+        main.removeCallbacks(finishPausedRestore)
     }
 
     fun detach() {
         attachedView = null
+        // Durduğu kare çizilirken yine çıkıldı: oynamaya devam etmesin
+        if (restoringPaused) pause()
         if (vout.areViewsAttached() && hasMedia && !pendingStart && !viewLost) {
             viewLost = true
             onViewLost()
@@ -482,6 +541,8 @@ class VlcEngine private constructor(
         private const val TAG = "VlcEngine"
         /** Ses izinin başladığı haberi gelmezse dengeleme beklenmeden ses bu kadar sonra açılır */
         private const val NORMALIZER_FALLBACK_MS = 500L
+        /** Duraklatılmış videoda yüzey dönünce görüntü çıkışı açıldıktan sonra ilk karenin çizilmesi için beklenen süre */
+        private const val PAUSED_RESTORE_FRAME_MS = 120L
 
         /**
          * VLC'nin açılışı (kütüphaneleri yüklemesi) yarım saniye kadar sürüyor; bunu arka planda

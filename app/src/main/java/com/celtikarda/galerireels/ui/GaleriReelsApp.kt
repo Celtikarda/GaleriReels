@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -156,102 +157,104 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     }
 
     MakaraTheme {
-        Box(Modifier.fillMaxSize().background(if (openAlbum != null) Color.Black else MakaraAppColors.background)) {
-            when {
-                access == MediaAccess.NONE -> PermissionScreen(
-                    deniedBefore = askedOnce,
-                    onRequest = requestAccess,
-                    onOpenSettings = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+        CompositionLocalProvider(LocalAppColors provides MakaraAppColors) {
+            Box(Modifier.fillMaxSize().background(if (openAlbum != null) Color.Black else MakaraAppColors.background)) {
+                when {
+                    access == MediaAccess.NONE -> PermissionScreen(
+                        deniedBefore = askedOnce,
+                        onRequest = requestAccess,
+                        onOpenSettings = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                            )
+                        },
+                    )
+                    !vm.loaded -> LoadingScreen()
+                    vm.stats.folder == null && !vm.stats.folderPromptDismissed -> FolderSetupScreen(
+                        onPick = pickFolder,
+                        onLater = vm::dismissFolderPrompt,
+                    )
+                    !vm.stats.mediaModeAsked -> MediaModeSetupScreen(
+                        videoCount = vm.allVideosCount,
+                        photoCount = vm.allPhotosCount,
+                        onSelect = vm::setMediaMode,
+                    )
+                    vm.totalVideoCount == 0 -> {
+                        val mode = vm.stats.mediaMode
+                        val hasOther = vm.totalAnyMediaCount > 0
+                        MessageScreen(
+                            title = str(when (mode) { MediaMode.VIDEOS -> R.string.no_videos_found; MediaMode.PHOTOS -> R.string.no_photos_found; MediaMode.ALL -> R.string.no_media_found }),
+                            body = when {
+                                access == MediaAccess.PARTIAL -> str(R.string.only_selected)
+                                hasOther -> str(if (mode == MediaMode.PHOTOS) R.string.no_photos_other_mode else R.string.no_videos_other_mode)
+                                else -> str(R.string.gallery_empty)
+                            },
+                            buttonText = when {
+                                access == MediaAccess.PARTIAL -> str(R.string.select_media)
+                                hasOther -> str(R.string.show_all_media)
+                                else -> null
+                            },
+                            onButton = {
+                                if (access == MediaAccess.PARTIAL) requestAccess()
+                                else vm.setMediaMode(MediaMode.ALL)
+                            },
                         )
-                    },
-                )
-                !vm.loaded -> LoadingScreen()
-                vm.stats.folder == null && !vm.stats.folderPromptDismissed -> FolderSetupScreen(
-                    onPick = pickFolder,
-                    onLater = vm::dismissFolderPrompt,
-                )
-                !vm.stats.mediaModeAsked -> MediaModeSetupScreen(
-                    videoCount = vm.allVideosCount,
-                    photoCount = vm.allPhotosCount,
-                    onSelect = vm::setMediaMode,
-                )
-                vm.totalVideoCount == 0 -> {
-                    val mode = vm.stats.mediaMode
-                    val hasOther = vm.totalAnyMediaCount > 0
-                    MessageScreen(
-                        title = str(when (mode) { MediaMode.VIDEOS -> R.string.no_videos_found; MediaMode.PHOTOS -> R.string.no_photos_found; MediaMode.ALL -> R.string.no_media_found }),
-                        body = when {
-                            access == MediaAccess.PARTIAL -> str(R.string.only_selected)
-                            hasOther -> str(if (mode == MediaMode.PHOTOS) R.string.no_photos_other_mode else R.string.no_videos_other_mode)
-                            else -> str(R.string.gallery_empty)
-                        },
-                        buttonText = when {
-                            access == MediaAccess.PARTIAL -> str(R.string.select_media)
-                            hasOther -> str(R.string.show_all_media)
-                            else -> null
-                        },
-                        onButton = {
-                            if (access == MediaAccess.PARTIAL) requestAccess()
-                            else vm.setMediaMode(MediaMode.ALL)
+                    }
+                    openAlbum != null -> key(openAlbum.id) {
+                        ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
+                    }
+                    showRecap -> RecapScreen(vm = vm, onBack = { showRecap = false })
+                    showAchievements -> AchievementsScreen(vm = vm, onBack = { showAchievements = false })
+                    showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
+                    else -> AlbumsScreen(
+                        vm = vm,
+                        partialAccess = access == MediaAccess.PARTIAL,
+                        onSelectMore = requestAccess,
+                        onOpenSettings = { showSettings = true },
+                        onOpenAchievements = { showAchievements = true },
+                        onOpenRecap = { showRecap = true },
+                    )
+                }
+                // Video izlerken ve ilk kurulum ekranlarında araya girmesin; ana ekrana gelince gösterilir
+                val update = vm.updates.available
+                val onHome = vm.loaded && openAlbum == null && vm.stats.mediaModeAsked &&
+                    (vm.stats.folder != null || vm.stats.folderPromptDismissed)
+                if (update != null && vm.updates.showPrompt && onHome) {
+                    UpdateDialog(update = update, onDismiss = vm.updates::dismissPrompt)
+                }
+                // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar, özet) durum çubuğunun arkası
+                if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
+
+                // Yeni başarım açılınca üstte birkaç saniye kutlama
+                val unlocked = vm.newlyUnlocked
+                var shownUnlocked by remember { mutableStateOf(unlocked) }
+                if (unlocked.isNotEmpty()) shownUnlocked = unlocked
+                LaunchedEffect(unlocked) {
+                    if (unlocked.isNotEmpty()) {
+                        delay(4000)
+                        vm.consumeUnlocked()
+                    }
+                }
+                AnimatedVisibility(
+                    visible = unlocked.isNotEmpty(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp),
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut(),
+                ) {
+                    AchievementBanner(
+                        unlocked = shownUnlocked,
+                        onClick = {
+                            vm.consumeUnlocked()
+                            vm.close()
+                            showSettings = false
+                            showRecap = false
+                            showAchievements = true
                         },
                     )
                 }
-                openAlbum != null -> key(openAlbum.id) {
-                    ReelsScreen(vm = vm, album = openAlbum, onBack = vm::close)
-                }
-                showRecap -> RecapScreen(vm = vm, onBack = { showRecap = false })
-                showAchievements -> AchievementsScreen(vm = vm, onBack = { showAchievements = false })
-                showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
-                else -> AlbumsScreen(
-                    vm = vm,
-                    partialAccess = access == MediaAccess.PARTIAL,
-                    onSelectMore = requestAccess,
-                    onOpenSettings = { showSettings = true },
-                    onOpenAchievements = { showAchievements = true },
-                    onOpenRecap = { showRecap = true },
-                )
-            }
-            // Video izlerken ve ilk kurulum ekranlarında araya girmesin; ana ekrana gelince gösterilir
-            val update = vm.updates.available
-            val onHome = vm.loaded && openAlbum == null && vm.stats.mediaModeAsked &&
-                (vm.stats.folder != null || vm.stats.folderPromptDismissed)
-            if (update != null && vm.updates.showPrompt && onHome) {
-                UpdateDialog(update = update, onDismiss = vm.updates::dismissPrompt)
-            }
-            // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar, özet) durum çubuğunun arkası
-            if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
-
-            // Yeni başarım açılınca üstte birkaç saniye kutlama
-            val unlocked = vm.newlyUnlocked
-            var shownUnlocked by remember { mutableStateOf(unlocked) }
-            if (unlocked.isNotEmpty()) shownUnlocked = unlocked
-            LaunchedEffect(unlocked) {
-                if (unlocked.isNotEmpty()) {
-                    delay(4000)
-                    vm.consumeUnlocked()
-                }
-            }
-            AnimatedVisibility(
-                visible = unlocked.isNotEmpty(),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 8.dp),
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut(),
-            ) {
-                AchievementBanner(
-                    unlocked = shownUnlocked,
-                    onClick = {
-                        vm.consumeUnlocked()
-                        vm.close()
-                        showSettings = false
-                        showRecap = false
-                        showAchievements = true
-                    },
-                )
             }
         }
     }

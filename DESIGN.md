@@ -80,7 +80,6 @@ spacing:
   lg: 20px
   xl: 28px
   margin: 20px
-  rail: 56px
   touch: 44px
 components:
   button-primary:
@@ -210,7 +209,7 @@ Bu bir başka uygulamanın kopyası değildir: Instagram gradyanı, iOS grileri 
 
 ## Layout
 
-- Kenar boşluğu 20 dp; yıl şeridi görünen ekranlarda sağ boşluk 56 dp (şerit altına içerik girmez; yatay kayan şeritler kenardan kenara akabilir).
+- Kenar boşluğu iki yanda 20 dp; içerik her zaman ortalı. Yıl şeridi içeriğe yer ayırmaz: yalnızca kaydırırken (ve kaydırma bittikten ~1,5 sn sonrasına kadar) içeriğin üstünde belirir, sonra kaybolur.
 - Ana ekran sırası: başlık (logo, ara, ayarlar) → medya seçici (VİDEO · FOTO · HEPSİ) → gerekirse uyarı şeridi → **Kaldığın yer** → son izlediklerin sırası → **Bu ay** kutusu (kehribar zemin; izleme süresi + video sayısı; dokununca Aylık özet) ve yanında temizlik kutusu (yalnızca boşaltılacak yer varsa, yoksa Bu ay tam genişlik) → ay sayacı → **ay / tarihte bugün makarası** → **En çok sarılanlar** → **Kutular** (önce Tüm videolar, Favoriler, Beğendiklerin; sonra klasörler).
 - Alt menü yüzer: Makara · Akış · Sevdiklerim · Sen. Sayfa sonunda 110 dp boşluk bırak ki içerik menünün altında kalmasın.
 - "Sen" sekmesi: aylık özet, başarımlar, izleme süresi.
@@ -231,7 +230,7 @@ Derinlik gölgeyle değil **katmanla** verilir: zemin → kare zemini → kehrib
 - **Kaldığın yer kartı**: üst ve alt sırada film delikleri, ortada videonun karesi, altında 4 dp kehribar ilerleme; altında video adı + "Devam et". Sayaç üst etikette: "KALDIĞIN YER · KARE 0214".
 - **Makara şeridi**: yatay kayar, her karenin sol üstünde kehribar numara, sağ altında süre.
 - **En çok sarılanlar**: 3 sütunlu yoğun ızgara; kutu boyutu izlenme sayısına göre (en çok izlenen 2×2, sonra 1×2 / 2×1, gerisi 1×1). 10+ izlenende "×24" büyük ve kehribar.
-- **Yıl şeridi**: sağ kenarda sabit dikey hap ('26 '25 …); aktif yıl kehribar; dokununca Tüm videolar o yıldan açılır.
+- **Yıl şeridi**: sağ kenarda yüzen dikey hap ('26 '25 …), %92 opak kare zemini + gölge; yalnızca kaydırırken görünür; aktif yıl kehribar; dokununca Tüm videolar o yıldan açılır.
 - **Oynatıcı**: üstte "0214 / 1284" + klasör adı; sağda Beğen (aktifken kehribar dolu), Favori, Hız (1×), Kilit; ⋮ menüsünde kırp, uyku, PiP, sil. Altta "12. kez izliyorsun" ve "Sıradaki ↑ 0215".
 - **İlerleme çubuğu**: dinlenirken 10 dp yüksekliğinde 12 parçalı ince şerit (izlenen kısım kehribar, kalan %28 krem); 3 dp kehribar oynatma çizgisi. Parmakla sarılırken film şeridine büyür ve kare önizlemesi gösterir, bırakınca küçülür.
 - **Tanıtım**: ilk açılışta 3 kart (0001 kaydır, 0002 kenar hareketleri ve kilit, 0003 çok izlediğin büyür), her zaman "Geç"; son kartta "Başla". Ayarlar'dan "Tanıtımı tekrar göster".

@@ -38,7 +38,6 @@ val StoryRing = listOf(Makara.Amber, Color(0xFFFFD08A), Makara.Amber)
 /** Uygulamanın renk paleti (2.0'da tek, koyu Makara teması) */
 @Immutable
 data class AppColors(
-    val isDark: Boolean,
     val background: Color,
     val card: Color,
     val cardElevated: Color,
@@ -52,7 +51,6 @@ data class AppColors(
 )
 
 val MakaraAppColors = AppColors(
-    isDark = true,
     background = Makara.Black,
     card = Makara.Surface,
     cardElevated = Makara.SurfaceHigh,
@@ -64,10 +62,6 @@ val MakaraAppColors = AppColors(
     achievementDoneBg = Makara.SurfaceHigh,
     statusBarScrim = Makara.Black.copy(alpha = 0.92f),
 )
-
-// Geçici: Task 3'te kaldırılacak
-val DarkAppColors = MakaraAppColors
-val LightAppColors = MakaraAppColors
 
 val LocalAppColors = staticCompositionLocalOf { MakaraAppColors }
 

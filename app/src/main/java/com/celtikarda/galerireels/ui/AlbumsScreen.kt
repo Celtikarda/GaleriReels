@@ -113,7 +113,6 @@ fun AlbumsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            val isDark = appColors.isDark
             Column(Modifier.statusBarsPadding().padding(start = 4.dp, top = 16.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Büyük yazı / büyük ekran ayarında dört simgenin yanında "Galeri R…" diye
@@ -126,13 +125,6 @@ fun AlbumsScreen(
                         autoSize = TextAutoSize.StepBased(minFontSize = 17.sp, maxFontSize = 26.sp),
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = { vm.toggleDarkLight(isDark) }, modifier = Modifier.size(42.dp)) {
-                        Icon(
-                            painterResource(if (isDark) R.drawable.ic_light_mode else R.drawable.ic_dark_mode),
-                            contentDescription = str(if (isDark) R.string.switch_light else R.string.switch_dark),
-                            tint = appColors.textPrimary,
-                        )
-                    }
                     IconButton(onClick = onOpenRecap, modifier = Modifier.size(42.dp)) {
                         Icon(painterResource(R.drawable.ic_recap), contentDescription = str(R.string.monthly_recap), tint = InstaBlue)
                     }

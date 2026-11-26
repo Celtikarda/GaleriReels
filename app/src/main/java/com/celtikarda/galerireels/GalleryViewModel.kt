@@ -87,15 +87,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (loaded) scanDuplicates()
     }
 
-    fun setThemeMode(mode: ThemeMode) {
-        stats.updateThemeMode(mode)
-    }
-
-    /** Ana ekrandaki güneş/ay simgesiyle Gece ↔ Aydınlık arasında hızlı geçiş yapar */
-    fun toggleDarkLight(currentlyDark: Boolean) {
-        stats.updateThemeMode(if (currentlyDark) ThemeMode.LIGHT else ThemeMode.DARK)
-    }
-
     /** Klasör seçme ekranı geçildi mi (kullanıcı eski kayıt klasörünü seçmeden başarım kontrolü yapılmaz) */
     val setupCompleted: Boolean
         get() = stats.loaded && (stats.folder != null || stats.folderPromptDismissed)

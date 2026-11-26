@@ -8,9 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import com.celtikarda.galerireels.ui.GaleriReelsApp
+import com.celtikarda.galerireels.ui.MakaraTheme
 
 class MainActivity : ComponentActivity() {
     /**
@@ -59,7 +58,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MakaraTheme {
                 GaleriReelsApp(openVideoId = openVideoId, openCleanupIds = openCleanupIds)
             }
         }

@@ -66,7 +66,6 @@ import com.celtikarda.galerireels.MediaActions
 import com.celtikarda.galerireels.MediaMode
 import com.celtikarda.galerireels.MediaRepository
 import com.celtikarda.galerireels.R
-import com.celtikarda.galerireels.ThemeMode
 import com.celtikarda.galerireels.TrashedVideo
 import com.celtikarda.galerireels.VideoItem
 import kotlinx.coroutines.launch
@@ -128,28 +127,6 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
                 Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = str(R.string.back), tint = appColors.textPrimary)
             }
             Text(str(R.string.settings), color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        }
-
-        SectionTitle(str(R.string.appearance), if (appColors.isDark) R.drawable.ic_dark_mode else R.drawable.ic_light_mode)
-        Card {
-            val currentTheme = stats.themeMode
-            Text(
-                str(R.string.theme_explain),
-                color = appColors.textSecondary,
-                fontSize = 14.sp,
-            )
-            Spacer(Modifier.height(10.dp))
-            InfoLine(str(R.string.selected_theme), currentTheme.title)
-            Spacer(Modifier.height(12.dp))
-            ButtonFlow {
-                ThemeMode.entries.forEach { entry ->
-                    if (entry == currentTheme) {
-                        Button(onClick = { vm.setThemeMode(entry) }) { Text(entry.title) }
-                    } else {
-                        OutlinedButton(onClick = { vm.setThemeMode(entry) }) { Text(entry.title) }
-                    }
-                }
-            }
         }
 
         SectionTitle(str(R.string.language), R.drawable.ic_language)

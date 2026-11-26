@@ -124,8 +124,6 @@
     <string name="card_preparing">Kart hazırlanıyor…</string>
     <string name="share_as_card">Özeti kart olarak paylaş</string>
     <string name="recap_empty">Bu ay henüz video izlemedin ya da temizlik yapmadın. İzledikçe en sevdiğin videolar, klasörün ve toplam süren burada birikecek.</string>
-    <string name="switch_light">Aydınlık moda geç</string>
-    <string name="switch_dark">Gece moduna geç</string>
     <string name="limited_access">Sınırlı erişim · Daha fazla video seç</string>
     <string name="not_backed_up">Beğeni ve izlenmelerin yedeklenmiyor · Klasör seç</string>
     <string name="folder_options">Klasör seçenekleri</string>
@@ -196,9 +194,6 @@
     <string name="trim_save_note">Yeni video Filmler/GaleriReels klasörüne kaydedilir; orijinal video silinmez.</string>
     <string name="save_failed">Kaydedilemedi: %1$s</string>
     <string name="saving_pct">Kaydediliyor… %%%1$d</string>
-    <string name="appearance">Görünüm</string>
-    <string name="theme_explain">Ana ekran, ayarlar, başarımlar ve aylık özet sayfalarında gece (koyu), aydınlık (açık) ya da telefonunun sistem temasını kullanabilirsin. Reels oynatıcı ekranı videoların net görünmesi için her zaman sinema siyahı kalır.</string>
-    <string name="selected_theme">Seçili tema</string>
     <string name="media_mode">Medya modu</string>
     <string name="media_mode_explain">Uygulamada sadece videoları, sadece fotoğrafları ya da ikisini birden Reels gibi dikey kaydırarak gezebilir ve sola kaydırarak temizleyebilirsin.</string>
     <string name="selected_mode">Seçili mod</string>

@@ -125,8 +125,6 @@
     <string name="card_preparing">Preparing card…</string>
     <string name="share_as_card">Share recap as a card</string>
     <string name="recap_empty">You haven\'t watched any videos or cleaned up this month yet. As you watch, your favorite videos, folder and total time will show up here.</string>
-    <string name="switch_light">Switch to light mode</string>
-    <string name="switch_dark">Switch to dark mode</string>
     <string name="limited_access">Limited access · Select more videos</string>
     <string name="not_backed_up">Your likes and views aren\'t backed up · Choose folder</string>
     <string name="folder_options">Folder options</string>
@@ -197,9 +195,6 @@
     <string name="trim_save_note">The new video is saved to Movies/GaleriReels; the original isn\'t deleted.</string>
     <string name="save_failed">Couldn\'t save: %1$s</string>
     <string name="saving_pct">Saving… %1$d%%</string>
-    <string name="appearance">Appearance</string>
-    <string name="theme_explain">On the home, settings, achievements and monthly recap screens you can use the dark, light or your phone\'s system theme. The Reels player always stays cinema black so videos look their best.</string>
-    <string name="selected_theme">Theme</string>
     <string name="media_mode">Media mode</string>
     <string name="media_mode_explain">You can browse only videos, only photos or both by swiping vertically like Reels, and swipe left to clean up.</string>
     <string name="selected_mode">Mode</string>

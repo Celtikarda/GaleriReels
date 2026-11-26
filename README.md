@@ -227,6 +227,7 @@ kolaylaştırmak.
   - Ses dengeleme daha yumuşak çalışır; sesler arasındaki geçişler pompalama yapmadan, doğal duyulur.
   - Uygulamaya geri dönünce VLC ile oynayan video birkaç saniye siyah kalmıyor; kapak resmi görünür ve
     video hemen devam eder.
+    Durdurulmuş videoya dönünce de kapak resmi değil, durduğun kare görünür.
 
 ### Sıradaki
 - [ ] **Reels içinden silme modu** · Normal kaydırırken silmek istediğin bir video çıkınca

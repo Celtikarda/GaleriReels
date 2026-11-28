@@ -122,7 +122,7 @@ internal fun ResumeCard(video: VideoItem, positionMs: Long, onClick: () -> Unit,
                     .background(Makara.SurfaceHigh)
             ) {
                 AsyncImage(
-                    model = VideoThumb(video.uri, 720),
+                    model = VideoThumb(video.uri, 720, allowLarge = true),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

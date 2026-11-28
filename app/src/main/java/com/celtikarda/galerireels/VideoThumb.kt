@@ -16,19 +16,24 @@ import coil3.fetch.Fetcher
 import coil3.fetch.ImageFetchResult
 import coil3.key.Keyer
 import coil3.request.Options
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
-/** Coil'e verilen model: videonun küçük resmi, en uzun kenarı en fazla [maxSize] piksel */
-data class VideoThumb(val uri: Uri, val maxSize: Int)
+/**
+ * Coil'e verilen model: videonun küçük resmi, en uzun kenarı en fazla [maxSize] piksel.
+ * [allowLarge] true ise 300 MB üstü dosyalarda da (bir kez, sırayla) içinden kare aranır;
+ * yalnızca "Kaldığın yer" kartı gibi tek ve büyük gösterilen yerlerde açılır.
+ */
+data class VideoThumb(val uri: Uri, val maxSize: Int, val allowLarge: Boolean = false)
 
 /**
  * Videonun siyah olmayan küçük resmini Bitmap olarak döner (Coil ve aylık özet kartı ortak kullanır).
  */
-suspend fun loadThumbBitmap(context: Context, uri: Uri, maxSize: Int): Bitmap? {
+suspend fun loadThumbBitmap(context: Context, uri: Uri, maxSize: Int, allowLarge: Boolean = false): Bitmap? {
     val isImage = uri.toString().contains("/images/")
     val system = if (Build.VERSION.SDK_INT >= 29) {
         runCatching { context.contentResolver.loadThumbnail(uri, Size(maxSize, maxSize), null) }.getOrNull()
@@ -41,7 +46,7 @@ suspend fun loadThumbBitmap(context: Context, uri: Uri, maxSize: Int): Bitmap? {
         }.getOrNull() ?: return null
     } else {
         system?.takeUnless { isNearlyBlack(it) }
-            ?: FrameCache.get(context, uri)?.let { scaleDownBitmap(it, maxSize) }
+            ?: FrameCache.get(context, uri, allowLarge)?.let { scaleDownBitmap(it, maxSize) }
             ?: system
             ?: return null
     }
@@ -68,7 +73,7 @@ class VideoThumbFetcher(private val data: VideoThumb, private val options: Optio
 
     override suspend fun fetch(): FetchResult {
         val context = options.context
-        val bitmap = loadThumbBitmap(context, data.uri, data.maxSize)
+        val bitmap = loadThumbBitmap(context, data.uri, data.maxSize, data.allowLarge)
             ?: throw IOException("Küçük resim alınamadı: ${data.uri}")
         return ImageFetchResult(image = bitmap.asImage(), isSampled = true, dataSource = DataSource.DISK)
     }
@@ -80,7 +85,7 @@ class VideoThumbFetcher(private val data: VideoThumb, private val options: Optio
 }
 
 class VideoThumbKeyer : Keyer<VideoThumb> {
-    override fun key(data: VideoThumb, options: Options): String = "${data.uri}#${data.maxSize}"
+    override fun key(data: VideoThumb, options: Options): String = "${data.uri}#${data.maxSize}" + if (data.allowLarge) "#L" else ""
 }
 
 /**
@@ -90,18 +95,33 @@ class VideoThumbKeyer : Keyer<VideoThumb> {
  */
 private object FrameCache {
     private const val SIZE = 720
+    private const val LARGE_BYTES = 300L * 1024 * 1024
+    /** Büyük dosyada aramaya başlamadan önce ekrandaki diğer küçük resimlere verilen süre */
+    private const val LARGE_HEAD_START_MS = 1500L
     private val locks = ConcurrentHashMap<String, Mutex>()
+    /** Büyük dosyalar aynı anda en fazla bir tane aranır */
+    private val largeLock = Mutex()
 
-    suspend fun get(context: Context, uri: Uri): Bitmap? {
+    suspend fun get(context: Context, uri: Uri, allowLarge: Boolean = false): Bitmap? {
+        val file = File(context.cacheDir, "kareler/${uri.lastPathSegment}.jpg")
+        // Daha önce bulunmuş kare her yerde kullanılır (büyük dosyanınki de)
+        if (file.exists()) BitmapFactory.decodeFile(file.path)?.let { return it }
         // Çok büyük dosyalarda (2 GB'lık .ts dizi bölümleri) ortadan kare çıkarmak dosyanın neredeyse
         // tamamını okumak demek; telefonun kare çıkarma servisi de aynı anda tek iş yaptığı için
-        // bütün diğer küçük resimler onu bekliyordu. Bunlarda aranmaz, sistemin resmi kalır.
-        if (fileSize(context, uri) > 300L * 1024 * 1024) return null
-        val file = File(context.cacheDir, "kareler/${uri.lastPathSegment}.jpg")
+        // bütün diğer küçük resimler onu bekliyordu. Bunlarda yalnızca istenirse ([allowLarge]),
+        // kısa bir beklemeden sonra, tek tek ve yalnızca hızlı anahtar karelerle aranır.
+        val large = fileSize(context, uri) > LARGE_BYTES
+        if (large && !allowLarge) return null
         val lock = locks.getOrPut(file.name) { Mutex() }
         return lock.withLock {
             if (file.exists()) BitmapFactory.decodeFile(file.path)?.let { return@withLock it }
-            findFrame(context, uri)?.also { frame ->
+            val frame = if (large) {
+                delay(LARGE_HEAD_START_MS)
+                largeLock.withLock { findFrame(context, uri, quick = true) }
+            } else {
+                findFrame(context, uri)
+            }
+            frame?.also { frame ->
                 // Hepsi karanlık çıktıysa saklama; bir dahaki sefere yeniden denensin
                 if (!isNearlyBlack(frame)) runCatching {
                     file.parentFile?.mkdirs()
@@ -111,7 +131,7 @@ private object FrameCache {
         }
     }
 
-    private fun findFrame(context: Context, uri: Uri): Bitmap? {
+    private fun findFrame(context: Context, uri: Uri, quick: Boolean = false): Bitmap? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, uri)
@@ -119,7 +139,8 @@ private object FrameCache {
             // Kararmayla açılan videolarda başlangıç birkaç saniye simsiyah olabiliyor (5 sn'yi
             // geçeni de var); videonun üçte birine, yarısına, üçte ikisine ve sonlarına bakılır
             val positions = if (durationUs > 0) {
-                listOf(durationUs / 3, durationUs / 2, durationUs * 2 / 3, durationUs * 85 / 100)
+                if (quick) listOf(durationUs / 3, durationUs / 2)
+                else listOf(durationUs / 3, durationUs / 2, durationUs * 2 / 3, durationUs * 85 / 100)
             } else {
                 listOf(1_000_000L)
             }
@@ -131,8 +152,8 @@ private object FrameCache {
                 fallback = fallback ?: sync
             }
             // Bazı videolarda tek anahtar kare en baştaki siyah kare; o zaman tam o andaki kare
-            // çözülür (daha yavaş)
-            for (atUs in positions.reversed()) {
+            // çözülür (daha yavaş; büyük dosyalarda atlanır)
+            if (!quick) for (atUs in positions.reversed()) {
                 val exact = retriever.getFrameAtTime(atUs, MediaMetadataRetriever.OPTION_CLOSEST) ?: continue
                 if (!isNearlyBlack(exact)) return scale(exact)
             }

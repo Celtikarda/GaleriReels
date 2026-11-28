@@ -10,7 +10,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.celtikarda.galerireels.ui.formatMonth
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.YearMonth
+import java.time.ZoneId
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -332,6 +334,76 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         source = recent
         items = listOf(first) + recent.filter { it.id != first.id }
         openAlbum = Album(Album.RECENT, str(R.string.recent), recent.size, first)
+    }
+
+    // --- Makara ana ekranı
+
+    /** Kaldığın yer kayıtları (oynatıcı kendi örneğini kullanır; aynı SharedPreferences) */
+    val resume = ResumeStore(app)
+
+    /** En son yarıda bırakılan uzun video ve konumu; fotoğraf modunda ya da kayıt yoksa null */
+    fun resumeCandidate(): Pair<VideoItem, Long>? {
+        if (stats.mediaMode == MediaMode.PHOTOS) return null
+        return latestResume(resume.entries(), visibleVideos.associateBy { it.key })
+    }
+
+    /** Kaldığın yerdeki videoyu "Son izlediklerin" listesinin başında açar */
+    fun openResume() {
+        val (video, _) = resumeCandidate() ?: return
+        val recent = recentVideos(200).filter { it.id != video.id }
+        source = listOf(video) + recent
+        items = source
+        openAlbum = Album(Album.RECENT, str(R.string.recent), source.size, video)
+    }
+
+    /** Ay makarası (en yeni ay önce) */
+    fun monthReels(): List<MonthReel> = com.celtikarda.galerireels.monthReels(visibleVideos)
+
+    /** Bir ay makarasını dokunulan videodan başlatır */
+    fun openMonth(reel: MonthReel, first: VideoItem) {
+        if (reel.items.isEmpty()) return
+        source = reel.items
+        items = listOf(first) + reel.items.filter { it.id != first.id }
+        openAlbum = Album(Album.MONTH_REEL, formatMonth(reel.month), reel.items.size, first)
+    }
+
+    /** "En çok sarılanlar" mozaiği */
+    fun mostWatched(): List<MosaicTile> = com.celtikarda.galerireels.mostWatched(visibleVideos, ::viewsOf)
+
+    /** En çok izlenenleri dokunulan videodan başlatır */
+    fun openMostWatched(first: VideoItem) {
+        val list = com.celtikarda.galerireels.mostWatched(visibleVideos, ::viewsOf, limit = 200).map { it.video }
+        if (list.isEmpty()) return
+        source = list
+        items = listOf(first) + list.filter { it.id != first.id }
+        openAlbum = Album(Album.MOST_WATCHED, str(R.string.most_watched), list.size, first)
+    }
+
+    /** Sevdiklerim: en çok beğenilenler */
+    fun mostLiked(limit: Int = 20): List<VideoItem> = com.celtikarda.galerireels.mostLiked(visibleVideos, ::likesOf, limit)
+
+    /** En çok beğenilenleri dokunulan videodan başlatır */
+    fun openMostLiked(first: VideoItem) {
+        val list = mostLiked(200)
+        if (list.isEmpty()) return
+        source = list
+        items = listOf(first) + list.filter { it.id != first.id }
+        openAlbum = Album(Album.LIKED, str(R.string.most_liked), list.size, first)
+    }
+
+    /** Yıl şeridindeki yıllar (tek yıl varsa boş) */
+    fun years(): List<Int> = yearsOf(visibleVideos)
+
+    /** Tüm videoları verilen yılın en yeni videosundan başlatır (daha yeniler sona eklenir) */
+    fun openYear(year: Int) {
+        val visible = visibleVideos
+        if (visible.isEmpty()) return
+        val zone = ZoneId.systemDefault()
+        val start = visible.indexOfFirst { Instant.ofEpochMilli(it.dateMillis).atZone(zone).year <= year }
+        if (start < 0) return
+        source = visible
+        items = visible.drop(start) + visible.take(start)
+        openAlbum = Album(Album.ALL, str(R.string.all_videos), visible.size, visible.first())
     }
 
     // --- Tarihte bugün (Anılar)

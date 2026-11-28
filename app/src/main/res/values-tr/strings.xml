@@ -36,6 +36,7 @@
     <string name="cleanup">Temizlik</string>
     <string name="recent">Son izlediklerin</string>
     <string name="memories">Tarihte bugün</string>
+    <string name="most_watched">En çok sarılanlar</string>
     <string name="folders">Klasörler</string>
     <string name="folder">Klasör</string>
     <string name="untitled">Adsız</string>
@@ -446,4 +447,27 @@
         <item quantity="one">%1$d gün önce</item>
         <item quantity="other">%1$d gün önce</item>
     </plurals>
+
+    <!-- Makara ana ekran (2.0) -->
+    <string name="resume_label">KALDIĞIN YER · KARE %1$s</string>
+    <string name="resume_action">Devam et</string>
+    <string name="this_month">BU AY</string>
+    <string name="freeable_label">boşaltılabilir</string>
+    <string name="month_reel">%1$s MAKARASI</string>
+    <string name="memories_reel">TARİHTE BUGÜN MAKARASI</string>
+    <string name="today_chip">BUGÜN</string>
+    <string name="most_watched_hint">Çok izlediğin büyür</string>
+    <string name="canisters">KUTULAR</string>
+    <string name="tab_reel">Makara</string>
+    <string name="tab_flow">Akış</string>
+    <string name="tab_loved">Sevdiklerim</string>
+    <string name="tab_you">Sen</string>
+    <plurals name="n_frames">
+        <item quantity="one">%1$s kare</item>
+        <item quantity="other">%1$s kare</item>
+    </plurals>
+    <string name="most_liked">En çok beğendiklerin</string>
+    <string name="loved_empty">Beğendiğin videolar burada toplanır.</string>
+    <string name="you_month_line">%1$s aktif · %2$s</string>
+    <string name="achievements_progress">%1$s / %2$s açıldı</string>
 </resources>

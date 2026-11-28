@@ -37,6 +37,7 @@
     <string name="cleanup">Cleanup</string>
     <string name="recent">Recently watched</string>
     <string name="memories">On this day</string>
+    <string name="most_watched">Most replayed</string>
     <string name="folders">Folders</string>
     <string name="folder">Folder</string>
     <string name="untitled">Untitled</string>
@@ -447,4 +448,27 @@
         <item quantity="one">%1$d day ago</item>
         <item quantity="other">%1$d days ago</item>
     </plurals>
+
+    <!-- Makara home (2.0) -->
+    <string name="resume_label">CONTINUE · FRAME %1$s</string>
+    <string name="resume_action">Continue</string>
+    <string name="this_month">THIS MONTH</string>
+    <string name="freeable_label">can be freed</string>
+    <string name="month_reel">%1$s REEL</string>
+    <string name="memories_reel">ON THIS DAY REEL</string>
+    <string name="today_chip">TODAY</string>
+    <string name="most_watched_hint">The more you watch, the bigger it gets</string>
+    <string name="canisters">BOXES</string>
+    <string name="tab_reel">Reel</string>
+    <string name="tab_flow">Flow</string>
+    <string name="tab_loved">Loved</string>
+    <string name="tab_you">You</string>
+    <plurals name="n_frames">
+        <item quantity="one">%1$s frame</item>
+        <item quantity="other">%1$s frames</item>
+    </plurals>
+    <string name="most_liked">Most liked</string>
+    <string name="loved_empty">Videos you like gather here.</string>
+    <string name="you_month_line">%1$s active · %2$s</string>
+    <string name="achievements_progress">%1$s / %2$s unlocked</string>
 </resources>

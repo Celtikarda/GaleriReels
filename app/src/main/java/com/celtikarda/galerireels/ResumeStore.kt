@@ -36,6 +36,14 @@ class ResumeStore(context: Context) {
         }
     }
 
+    /** Bütün kayıtlar: anahtar → (konum ms, kaydedildiği an). Bozuk değerler atlanır. */
+    fun entries(): Map<String, Pair<Long, Long>> = prefs.all.mapNotNull { (key, value) ->
+        val text = value as? String ?: return@mapNotNull null
+        val pos = text.substringBefore(':').toLongOrNull() ?: return@mapNotNull null
+        val at = text.substringAfter(':', "").toLongOrNull() ?: return@mapNotNull null
+        key to (pos to at)
+    }.toMap()
+
     private fun resumable(item: VideoItem) = !item.isPhoto && item.durationMs >= MIN_DURATION_MS
 
     private companion object {
@@ -45,3 +53,12 @@ class ResumeStore(context: Context) {
         const val MAX_ENTRIES = 300
     }
 }
+
+/**
+ * "Kaldığın yer" kartının adayı: en son kaydedilen ve hâlâ görünür olan video ile konumu.
+ * Kaydı olan video silinmiş ya da klasörü gizlenmişse bir öncekine bakılır; hiçbiri yoksa null.
+ */
+internal fun latestResume(entries: Map<String, Pair<Long, Long>>, byKey: Map<String, VideoItem>): Pair<VideoItem, Long>? =
+    entries.entries
+        .sortedByDescending { it.value.second }
+        .firstNotNullOfOrNull { (key, value) -> byKey[key]?.let { it to value.first } }

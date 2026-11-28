@@ -81,5 +81,7 @@ data class Album(
         const val RECENT = "__recent__"
         const val MONTHLY = "__monthly__"
         const val MEMORIES = "__memories__"
+        const val MONTH_REEL = "__month_reel__"
+        const val MOST_WATCHED = "__most_watched__"
     }
 }

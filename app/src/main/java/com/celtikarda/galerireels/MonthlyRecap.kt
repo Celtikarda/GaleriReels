@@ -1,5 +1,6 @@
 package com.celtikarda.galerireels
 
+import androidx.compose.ui.graphics.toArgb
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -70,8 +71,10 @@ internal fun buildMonthlyRecap(
     val byKey = allVideos.associateBy { it.key }
     val folderById = folders.associateBy { it.id }
 
-    val totalViews = viewsByKey.values.sum()
-    val uniqueVideos = viewsByKey.size
+    // Yalnızca listedeki (seçili moddaki, görünen) videolar sayılır; süre de bunlardan hesaplanıyor
+    val counted = viewsByKey.filterKeys { it in byKey }
+    val totalViews = counted.values.sum()
+    val uniqueVideos = counted.size
 
     var watchTimeMs = 0L
     val rankedVideos = ArrayList<RankedVideo>()
@@ -290,7 +293,7 @@ object RecapCardShare {
     }
 
     private fun drawThumb(canvas: Canvas, bitmap: Bitmap?, rect: RectF, radius: Float) {
-        val placeholder = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2C2C2E.toInt() }
+        val placeholder = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = com.celtikarda.galerireels.ui.Makara.SurfaceHigh.toArgb() }
         canvas.drawRoundRect(rect, radius, radius, placeholder)
         if (bitmap == null || bitmap.width <= 0 || bitmap.height <= 0) return
 

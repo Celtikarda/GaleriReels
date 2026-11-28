@@ -138,7 +138,7 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
                 },
                 color = appColors.textPrimary,
                 fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(4.dp))
             Text(
@@ -148,7 +148,7 @@ fun PinDialog(lock: HiddenLock, mode: PinMode, onDone: () -> Unit, onDismiss: ()
                     mode == PinMode.UNLOCK -> str(R.string.pin_enter_to_view)
                     else -> str(R.string.pin_will_ask)
                 },
-                color = if (wait > 0 || message != null) Color(0xFFED4956) else appColors.textSecondary,
+                color = if (wait > 0 || message != null) Makara.Error else appColors.textSecondary,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
             )

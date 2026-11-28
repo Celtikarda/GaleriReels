@@ -131,7 +131,7 @@ fun SettingsScreen(vm: GalleryViewModel, onPickFolder: () -> Unit, onBack: () ->
             IconButton(onClick = onBack) {
                 Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = str(R.string.back), tint = appColors.textPrimary)
             }
-            Text(str(R.string.settings), color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(str(R.string.settings), color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         }
 
         SectionTitle(str(R.string.language), R.drawable.ic_language)

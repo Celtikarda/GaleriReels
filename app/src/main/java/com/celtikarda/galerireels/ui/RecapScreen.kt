@@ -103,7 +103,7 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                 str(R.string.monthly_recap),
                 color = appColors.textPrimary,
                 fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
             if (recap.hasActivity) {
@@ -164,11 +164,11 @@ fun RecapScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(10.dp))
-                    Text(str(R.string.card_preparing), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(str(R.string.card_preparing), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 } else {
                     Icon(painterResource(R.drawable.ic_send), contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text(str(R.string.share_as_card), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(str(R.string.share_as_card), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -201,7 +201,7 @@ private fun RecapCard(
                 str(R.string.recap_card_header),
                 color = FavoriteYellow,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
             )
         }
         Spacer(Modifier.height(10.dp))
@@ -209,7 +209,7 @@ private fun RecapCard(
             formatMonth(recap.month),
             color = Color.White,
             fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
         )
 
         if (!recap.hasActivity) {
@@ -266,7 +266,7 @@ private fun RecapCard(
                 str(R.string.recap_top_folder),
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(8.dp))
             TopAlbumRow(album)
@@ -278,7 +278,7 @@ private fun RecapCard(
                 str(R.string.recap_top_videos),
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -318,7 +318,7 @@ private fun StatBox(label: String, value: String, modifier: Modifier = Modifier)
         Text(
             value,
             color = Color.White,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 20.sp),
         )
@@ -342,7 +342,7 @@ private fun TopAlbumRow(album: RankedAlbum) {
             modifier = Modifier
                 .size(54.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF2C2C2E)),
+                .background(Makara.SurfaceHigh),
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -350,7 +350,7 @@ private fun TopAlbumRow(album: RankedAlbum) {
                 album.name,
                 color = Color.White,
                 fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -384,7 +384,7 @@ private fun TopVideoRow(
             "#$rank",
             color = FavoriteYellow,
             fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.width(30.dp),
         )
         AsyncImage(
@@ -394,7 +394,7 @@ private fun TopVideoRow(
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF2C2C2E)),
+                .background(Makara.SurfaceHigh),
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -419,7 +419,7 @@ private fun TopVideoRow(
             plural(R.plurals.n_times, ranked.views, formatCount(ranked.views)),
             color = FavoriteYellow,
             fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }

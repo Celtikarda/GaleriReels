@@ -1,5 +1,7 @@
 package com.celtikarda.galerireels.ui
 
+import com.celtikarda.galerireels.frameNumber
+
 import com.celtikarda.galerireels.str
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,7 +43,6 @@ import com.celtikarda.galerireels.GalleryViewModel
 import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.achievements
 
-private val GoldYellow = Color(0xFFFFC83D)
 
 @Composable
 fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
@@ -73,12 +74,12 @@ fun AchievementsScreen(vm: GalleryViewModel, onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = str(R.string.back), tint = appColors.textPrimary)
                     }
-                    Text(str(R.string.achievements), color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(str(R.string.achievements), color = appColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Text(
                         "${unlocked.size} / ${achievements.size}",
                         color = appColors.accentGold,
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
@@ -112,13 +113,13 @@ private fun AchievementCard(achievement: Achievement, input: AchievementInput, u
             .background(if (done) appColors.achievementDoneBg else appColors.card)
             .padding(14.dp)
     ) {
-        Text(achievement.emoji, fontSize = 34.sp, modifier = Modifier.alpha(if (done) 1f else 0.35f))
+        AchievementBadge(achievement, done)
         Spacer(Modifier.height(8.dp))
         Text(
             achievement.title,
             color = if (done) appColors.accentGold else appColors.textPrimary,
             fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
         )
         Text(achievement.description, color = appColors.textSecondary, fontSize = 13.sp)
         Spacer(Modifier.height(10.dp))
@@ -170,8 +171,22 @@ fun AchievementBanner(unlocked: List<Achievement>, onClick: () -> Unit, modifier
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(unlocked.take(4).joinToString(" ") { it.emoji }, fontSize = 20.sp)
+        AchievementBadge(unlocked.first(), done = true)
         Spacer(Modifier.width(10.dp))
-        Text(title, color = appColors.accentGold, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = appColors.accentGold, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Başarım rozeti: listedeki sıra numarası ("0007"), açıldıysa kehribar kutu */
+@Composable
+private fun AchievementBadge(achievement: Achievement, done: Boolean) {
+    val number = achievements.indexOfFirst { it.id == achievement.id } + 1
+    Box(
+        Modifier
+            .clip(MakaraShape.Small)
+            .background(if (done) Makara.Amber else Makara.SurfaceHigh)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(frameNumber(number), style = MakaraType.Counter, color = if (done) Makara.OnAmber else Makara.Muted)
     }
 }

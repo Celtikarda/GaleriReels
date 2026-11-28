@@ -9,7 +9,6 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.celtikarda.galerireels.ui.GaleriReelsApp
-import com.celtikarda.galerireels.ui.MakaraTheme
 
 class MainActivity : ComponentActivity() {
     /**
@@ -58,9 +57,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MakaraTheme {
-                GaleriReelsApp(openVideoId = openVideoId, openCleanupIds = openCleanupIds)
-            }
+            GaleriReelsApp(openVideoId = openVideoId, openCleanupIds = openCleanupIds)
         }
     }
 

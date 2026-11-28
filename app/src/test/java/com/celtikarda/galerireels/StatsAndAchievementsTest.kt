@@ -172,6 +172,26 @@ class StatsAndAchievementsTest {
     }
 
     @Test
+    fun `aylik ozet yalnizca listedeki videolari sayar`() {
+        // Fotoğraf modunda ya da gizli klasörde kalan izlemeler süreye girmiyordu ama sayıya giriyordu ("10 sn · 167 fotoğraf")
+        val v1 = sampleVideo(1L, "kedi.mp4", durationMs = 30_000L, albumId = "cam", albumName = "Camera")
+        val recap = buildMonthlyRecap(
+            month = YearMonth.of(2026, 10),
+            allVideos = listOf(v1),
+            folders = listOf(Album("cam", "Camera", 1, v1)),
+            viewsByKey = mapOf(v1.key to 2, "baska-mod-1" to 7, "baska-mod-2" to 3),
+            activeDays = 1,
+            cleanedBytes = 0L,
+            newLikes = 0,
+            lastViewedAtOf = { 1000L },
+            albumNameOf = { it.albumName ?: "Video" },
+        )
+        assertEquals(1, recap.uniqueVideos)
+        assertEquals(2, recap.totalViews)
+        assertEquals(60_000L, recap.watchTimeMs)
+    }
+
+    @Test
     fun `basarimlar kosullar saglaninca acilir`() {
         val input = AchievementInput(
             watchedVideos = 55,

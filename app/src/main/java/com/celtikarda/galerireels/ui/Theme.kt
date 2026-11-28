@@ -48,9 +48,12 @@ fun makaraColorScheme(): ColorScheme = darkColorScheme(
 @Suppress("UNUSED_PARAMETER")
 internal fun paletteFor(mode: ThemeMode): AppColors = MakaraAppColors
 
+/** Bir kez kurulur; her yeniden çizimde yeni ColorScheme oluşmasın */
+private val MakaraColorScheme: ColorScheme = makaraColorScheme()
+
 @Composable
 fun MakaraTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = makaraColorScheme(), typography = MakaraTypography) {
+    MaterialTheme(colorScheme = MakaraColorScheme, typography = MakaraTypography) {
         CompositionLocalProvider(LocalAppColors provides MakaraAppColors, content = content)
     }
 }

@@ -120,7 +120,7 @@ fun TrimDialog(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
-            Text(str(R.string.trim_compress), color = appColors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(str(R.string.trim_compress), color = appColors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Text(item.name, color = appColors.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(14.dp))
 
@@ -174,7 +174,7 @@ fun TrimDialog(
 
             error?.let {
                 Spacer(Modifier.height(8.dp))
-                Text(str(R.string.save_failed, it), color = Color(0xFFED4956), fontSize = 13.sp)
+                Text(str(R.string.save_failed, it), color = Makara.Error, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(16.dp))

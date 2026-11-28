@@ -1,6 +1,9 @@
 package com.celtikarda.galerireels.ui
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -42,4 +45,17 @@ val MakaraTypography: Typography = Typography().let { t ->
         labelMedium = t.labelMedium.copy(fontFamily = f),
         labelSmall = t.labelSmall.copy(fontFamily = f),
     )
+}
+
+/** DESIGN.md `typography` ölçüleri (renk verilmez; kullanan yer seçer) */
+object MakaraType {
+    val Display = TextStyle(fontFamily = MakaraFonts.Display, fontWeight = FontWeight.ExtraBold, fontSize = 30.sp, lineHeight = 32.sp, letterSpacing = 0.01.em)
+    val DisplayLarge = TextStyle(fontFamily = MakaraFonts.Display, fontWeight = FontWeight.ExtraBold, fontSize = 40.sp, lineHeight = 41.sp, letterSpacing = 0.01.em)
+    val Counter = TextStyle(fontFamily = MakaraFonts.Display, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 20.sp)
+    val CounterSmall = TextStyle(fontFamily = MakaraFonts.Display, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 14.sp)
+    val Title = TextStyle(fontFamily = MakaraFonts.Body, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp)
+    val Body = TextStyle(fontFamily = MakaraFonts.Body, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp)
+    val BodySmall = TextStyle(fontFamily = MakaraFonts.Body, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 18.sp)
+    val Label = TextStyle(fontFamily = MakaraFonts.Body, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 18.sp)
+    val Overline = TextStyle(fontFamily = MakaraFonts.Body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.16.em)
 }

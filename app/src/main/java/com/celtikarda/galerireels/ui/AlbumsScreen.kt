@@ -1,5 +1,21 @@
 package com.celtikarda.galerireels.ui
 
+import androidx.compose.runtime.derivedStateOf
+
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.unit.Dp
+import com.celtikarda.galerireels.Strings
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
+
 import com.celtikarda.galerireels.plural
 import com.celtikarda.galerireels.str
 import androidx.compose.animation.AnimatedVisibility
@@ -79,235 +95,256 @@ import com.celtikarda.galerireels.SmartCategory
 import com.celtikarda.galerireels.VideoItem
 import com.celtikarda.galerireels.VideoThumb
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumsScreen(
     vm: GalleryViewModel,
     partialAccess: Boolean,
     onSelectMore: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenAchievements: () -> Unit,
     onOpenRecap: () -> Unit,
+    contentBottomPadding: Dp,
 ) {
-    val tiles = vm.albumTiles()
+    val tiles by remember { derivedStateOf { vm.albumTiles() } }
     val mode = vm.stats.mediaMode
     val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
     var pendingHide by remember { mutableStateOf<Album?>(null) }
+    var cleanupOpen by rememberSaveable { mutableStateOf(false) }
 
-    // Tüm videolar / Favoriler / Beğendiklerin üstte, klasörler ayrı başlık altında
+    // Tüm videolar / Favoriler / Beğendiklerin önce, sonra klasörler
     val collections = tiles.filter { it.id in setOf(Album.ALL, Album.FAVORITES, Album.LIKED) }
     val folders = tiles.filterNot { it in collections }
     val hiddenCount = vm.hiddenFolders.size
-    val currentRecap = remember(vm.stats.historyRevision, vm.videoCount) { vm.monthlyRecap() }
-    val memories = remember(vm.videoCount) { vm.memories() }
+    val revision = vm.stats.historyRevision
+    val currentRecap = remember(revision, vm.videoCount) { vm.monthlyRecap() }
+    val memories = remember(vm.videoCount, mode) { vm.memories() }
+    val resume = remember(revision, vm.videoCount, mode) { vm.resumeCandidate() }
+    val reels = remember(vm.videoCount, mode) { vm.monthReels() }
+    val mosaic = remember(revision, vm.videoCount, mode) { vm.mostWatched() }
+    val years = remember(vm.videoCount, mode) { vm.years() }
+    val recent by remember { derivedStateOf { vm.recentVideos(15) } }
 
-    // Normal ayarda 3 sütun; ekran / yazı büyütülünce klasör adları sığsın diye 2 sütuna iner
-    val tileMin = (104 * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)).dp
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(tileMin),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(Modifier.statusBarsPadding().padding(start = 4.dp, top = 16.dp, bottom = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Büyük yazı / büyük ekran ayarında dört simgenin yanında "Galeri R…" diye
-                    // kesiliyordu: sığmazsa kesilmek yerine küçülür
-                    Text(
-                        "Galeri Reels",
-                        color = appColors.textPrimary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        autoSize = TextAutoSize.StepBased(minFontSize = 17.sp, maxFontSize = 26.sp),
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = onOpenRecap, modifier = Modifier.size(42.dp)) {
-                        Icon(painterResource(R.drawable.ic_recap), contentDescription = str(R.string.monthly_recap), tint = InstaBlue)
-                    }
-                    IconButton(onClick = onOpenAchievements, modifier = Modifier.size(42.dp)) {
-                        Icon(painterResource(R.drawable.ic_trophy), contentDescription = str(R.string.achievements), tint = appColors.accentGold)
-                    }
-                    IconButton(onClick = onOpenSettings, modifier = Modifier.size(42.dp)) {
-                        Icon(painterResource(R.drawable.ic_settings), contentDescription = str(R.string.settings), tint = appColors.textPrimary)
-                    }
-                }
-                Text(
-                    "${mode.count(vm.videoCount)} · ${plural(R.plurals.n_folders, vm.folderCount, formatCount(vm.folderCount))}",
-                    color = appColors.textSecondary,
-                    fontSize = 14.sp,
-                )
-                Spacer(Modifier.height(10.dp))
-                MediaModeSelector(current = mode, onSelect = vm::setMediaMode)
-                if (partialAccess) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        str(R.string.limited_access),
-                        color = InstaBlue,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable(onClick = onSelectMore),
-                    )
-                }
-                if (vm.stats.loaded && vm.stats.folder == null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        str(R.string.not_backed_up),
-                        color = InstaBlue,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable(onClick = onOpenSettings),
-                    )
-                }
-            }
+    // Temizlik kutusu: boşaltılabilecek yer (bir öğe birden çok listede olabilir, bir kez sayılır)
+    val freeable by remember {
+        derivedStateOf {
+            if (MediaActions.trashSupported) {
+                (vm.unwatched() + vm.duplicateCopies + vm.smartGroups().values.flatten()).distinctBy { it.id }.sumOf { it.sizeBytes }
+            } else 0L
         }
+    }
 
-        if (MediaActions.trashSupported) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                val unwatched = vm.unwatched()
-                val duplicates = vm.duplicateCopies
-                CleanupCard(
-                    mode = mode,
-                    unwatchedCount = unwatched.size,
-                    unwatchedBytes = unwatched.sumOf { it.sizeBytes },
-                    cleanedToday = vm.stats.cleanedToday,
-                    duplicateCount = duplicates.size,
-                    duplicateBytes = duplicates.sumOf { it.sizeBytes },
-                    onStart = vm::openCleanup,
-                    onStartDuplicates = vm::openDuplicateCleanup,
-                    smartGroups = vm.smartGroups(),
-                    onStartSmart = vm::openSmartCleanup,
-                )
-            }
-        }
+    // Ay makarası: varsa en başta "BUGÜN" (tarihte bugün), sonra aylar
+    val todayCount = memories.size
+    val chipCount = reels.size + if (todayCount > 0) 1 else 0
+    var selectedChip by rememberSaveable { mutableIntStateOf(0) }
+    if (selectedChip >= chipCount) selectedChip = 0
+    val showingToday = todayCount > 0 && selectedChip == 0
+    val selectedReel = if (showingToday) null else reels.getOrNull(selectedChip - if (todayCount > 0) 1 else 0)
+    val fullMonth = remember(Strings.locale) { DateTimeFormatter.ofPattern("LLLL", Strings.locale) }
 
-        if (currentRecap.hasActivity) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                RecapBannerCard(recap = currentRecap, onClick = onOpenRecap)
-            }
-        }
+    val gridState = rememberLazyGridState()
 
-        if (memories.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    // Sığmazsa özet yazısı bütün halde alt satıra geçer (Row'da ikiye bölünüp
-                    // yarısı başlığın üstüne düşüyordu)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        itemVerticalAlignment = Alignment.Bottom,
-                        modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
-                    ) {
+    // Normal ayarda 3 sütun; yazı büyütülünce kutu adları sığsın diye 2 sütuna iner
+    val tileMin = (96 * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)).dp
+    val full: (LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(it.maxLineSpan) }
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(tileMin),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(span = full) {
+                Column(Modifier.statusBarsPadding().padding(top = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            str(R.string.memories),
-                            color = appColors.textPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                            "GaleriReels".upper(),
+                            style = MakaraType.Display,
+                            color = Makara.Cream,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
                         )
-                        Text(
-                            Memories.summaryText(memories),
-                            color = appColors.accentGold,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(memories.take(20), key = { it.id }) { video ->
-                            MemoryTile(
-                                video = video,
-                                yearsAgo = Memories.yearsAgo(video),
-                                onClick = { vm.openMemories(video) },
-                            )
+                        IconButton(onClick = onOpenSettings, modifier = Modifier.size(44.dp)) {
+                            Icon(painterResource(R.drawable.ic_settings), contentDescription = str(R.string.settings), tint = Makara.Cream)
                         }
                     }
-                }
-            }
-        }
-
-        val recent = vm.recentVideos(15)
-        if (recent.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
                     Text(
-                        str(R.string.recent),
-                        color = appColors.textPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 2.dp, top = 4.dp, bottom = 8.dp),
+                        "${mode.count(vm.videoCount)} · ${plural(R.plurals.n_folders, vm.folderCount, formatCount(vm.folderCount))}",
+                        style = MakaraType.BodySmall,
+                        color = Makara.Muted,
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(recent, key = { it.id }) { video ->
-                            RecentTile(video, views = vm.viewsOf(video), onClick = { vm.openRecent(video) })
+                    Spacer(Modifier.height(10.dp))
+                    MediaModeSelector(current = mode, onSelect = vm::setMediaMode)
+                    if (partialAccess) {
+                        Spacer(Modifier.height(8.dp))
+                        WarningStrip(str(R.string.limited_access), onSelectMore)
+                    }
+                    if (vm.stats.loaded && vm.stats.folder == null) {
+                        Spacer(Modifier.height(8.dp))
+                        WarningStrip(str(R.string.not_backed_up), onOpenSettings)
+                    }
+                }
+            }
+
+            resume?.let { (video, position) ->
+                item(span = full) {
+                    ResumeCard(video, position, onClick = vm::openResume, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+
+            if (recent.isNotEmpty()) {
+                item(span = full) {
+                    Column {
+                        SectionTitle(str(R.string.recent))
+                        Spacer(Modifier.height(8.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(recent, key = { it.id }) { video ->
+                                SmallFrame(video, views = vm.viewsOf(video), onClick = { vm.openRecent(video) })
+                            }
                         }
                     }
                 }
             }
-        }
 
-        items(collections, key = { it.id }) { album ->
-            AlbumTile(album, mode = mode, onClick = { vm.open(album) })
-        }
+            val showMonth = currentRecap.hasActivity
+            val showCleanup = freeable > 0
+            if (showMonth || showCleanup) {
+                item(span = full) {
+                    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (showMonth) {
+                            ThisMonthTile(
+                                watchTimeMs = currentRecap.watchTimeMs,
+                                videoCount = currentRecap.uniqueVideos,
+                                mode = mode,
+                                onClick = onOpenRecap,
+                                modifier = Modifier.weight(2f).fillMaxHeight(),
+                            )
+                        }
+                        if (showCleanup) {
+                            CleanupTile(
+                                bytes = freeable,
+                                onClick = { cleanupOpen = true },
+                                modifier = Modifier.weight(if (showMonth) 1.2f else 1f).fillMaxHeight(),
+                            )
+                        }
+                    }
+                }
+            }
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            // Gizleme bir klasöre basılı tutunca açılan menüde; gizlenenler varsa başlığın ⋮ menüsünden açılır
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 2.dp, top = 6.dp),
-            ) {
+            if (chipCount > 0) {
+                item(span = full) {
+                    Column {
+                        MonthChips(reels = reels, selected = selectedChip, onSelect = { selectedChip = it }, todayCount = todayCount)
+                        Spacer(Modifier.height(14.dp))
+                        if (showingToday) {
+                            FilmStrip(
+                                title = str(R.string.memories_reel),
+                                items = memories,
+                                onPlay = { vm.openMemories(memories.first()) },
+                                onItem = vm::openMemories,
+                            )
+                        } else if (selectedReel != null) {
+                            FilmStrip(
+                                title = str(R.string.month_reel, fullMonth.format(selectedReel.month)),
+                                items = selectedReel.items,
+                                onPlay = { vm.openMonth(selectedReel, selectedReel.items.first()) },
+                                onItem = { vm.openMonth(selectedReel, it) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (mosaic.isNotEmpty()) {
+                item(span = full) {
+                    Column {
+                        SectionTitle(str(R.string.most_watched))
+                        Text(str(R.string.most_watched_hint), style = MakaraType.BodySmall, color = Makara.Muted)
+                        Spacer(Modifier.height(8.dp))
+                        MostWatchedMosaic(mosaic, onItem = vm::openMostWatched)
+                    }
+                }
+            }
+
+            item(span = full) {
+                // Gizleme bir klasöre basılı tutunca açılan menüde; gizlenenler varsa başlığın ⋮ menüsünden açılır
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                    SectionTitle(str(R.string.canisters), modifier = Modifier.weight(1f))
+                    if (hiddenCount > 0) {
+                        var headerMenuOpen by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { headerMenuOpen = true }, modifier = Modifier.size(44.dp)) {
+                                Icon(
+                                    painterResource(R.drawable.ic_more_vert),
+                                    contentDescription = str(R.string.folder_options),
+                                    tint = Makara.Muted,
+                                )
+                            }
+                            DropdownMenu(expanded = headerMenuOpen, onDismissRequest = { headerMenuOpen = false }) {
+                                DropdownMenuItem(
+                                    // PIN varken kaç klasör gizlendiği de görünmez
+                                    text = { Text(if (vm.hiddenLock.hasPin) str(R.string.hidden_folders) else str(R.string.hidden_folders_count, formatCount(hiddenCount))) },
+                                    leadingIcon = {
+                                        Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = Makara.Cream)
+                                    },
+                                    onClick = {
+                                        headerMenuOpen = false
+                                        onOpenSettings()
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            items(collections, key = { it.id }) { album ->
+                Canister(album, mode, onClick = { vm.open(album) }, onLongClick = null)
+            }
+            items(folders, key = { it.id }) { album ->
+                FolderCanister(album, mode, onClick = { vm.open(album) }, onHide = { pendingHide = album })
+            }
+
+            item(span = full) {
                 Text(
-                    str(R.string.folders),
-                    color = appColors.textPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
+                    "GaleriReels $version",
+                    style = MakaraType.BodySmall,
+                    color = Makara.Muted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = contentBottomPadding),
                 )
-                if (hiddenCount > 0) {
-                    var headerMenuOpen by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { headerMenuOpen = true }, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                painterResource(R.drawable.ic_more_vert),
-                                contentDescription = str(R.string.folder_options),
-                                tint = appColors.textSecondary,
-                            )
-                        }
-                        DropdownMenu(expanded = headerMenuOpen, onDismissRequest = { headerMenuOpen = false }) {
-                            DropdownMenuItem(
-                                // PIN varken kaç klasör gizlendiği de görünmez
-                                text = { Text(if (vm.hiddenLock.hasPin) str(R.string.hidden_folders) else str(R.string.hidden_folders_count, formatCount(hiddenCount))) },
-                                leadingIcon = {
-                                    Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = appColors.textPrimary)
-                                },
-                                onClick = {
-                                    headerMenuOpen = false
-                                    onOpenSettings()
-                                },
-                            )
-                        }
-                    }
-                }
             }
         }
 
-        items(folders, key = { it.id }) { album ->
-            AlbumTile(
-                album = album,
+        YearRail(
+            years = years,
+            activeYear = selectedReel?.month?.year,
+            scrolling = { gridState.isScrollInProgress },
+            onPick = vm::openYear,
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
+        )
+    }
+
+    if (cleanupOpen) {
+        ModalBottomSheet(onDismissRequest = { cleanupOpen = false }, containerColor = Makara.Surface) {
+            val unwatched = vm.unwatched()
+            val duplicates = vm.duplicateCopies
+            CleanupCard(
                 mode = mode,
-                onClick = { vm.open(album) },
-                onHide = { pendingHide = album },
+                unwatchedCount = unwatched.size,
+                unwatchedBytes = unwatched.sumOf { it.sizeBytes },
+                cleanedToday = vm.stats.cleanedToday,
+                duplicateCount = duplicates.size,
+                duplicateBytes = duplicates.sumOf { it.sizeBytes },
+                onStart = { cleanupOpen = false; vm.openCleanup() },
+                onStartDuplicates = { cleanupOpen = false; vm.openDuplicateCleanup() },
+                smartGroups = vm.smartGroups(),
+                onStartSmart = { cleanupOpen = false; vm.openSmartCleanup(it) },
             )
-        }
-
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Text(
-                "Galeri Reels $version",
-                color = appColors.textMuted,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.navigationBarsPadding().padding(top = 12.dp, bottom = 16.dp),
-            )
+            Spacer(Modifier.navigationBarsPadding().height(16.dp))
         }
     }
 
@@ -317,7 +354,7 @@ fun AlbumsScreen(
             containerColor = appColors.card,
             titleContentColor = appColors.textPrimary,
             textContentColor = appColors.textSecondary,
-            title = { Text(str(R.string.hide_folder_q, folder.name), fontWeight = FontWeight.Bold) },
+            title = { Text(str(R.string.hide_folder_q, folder.name), fontWeight = FontWeight.SemiBold) },
             text = {
                 Text(
                     str(R.string.hide_folder_body, plural(R.plurals.n_videos, folder.count, formatCount(folder.count)))
@@ -335,20 +372,62 @@ fun AlbumsScreen(
                         pendingHide = null
                     }
                 ) {
-                    Text(str(R.string.hide), color = InstaBlue, fontWeight = FontWeight.Bold)
+                    Text(str(R.string.hide), color = Makara.Amber, fontWeight = FontWeight.SemiBold)
                 }
             },
         )
     }
 }
 
-/** Ana ekranda Videolar / Fotoğraflar / Tümü arasında hızlı geçiş sekmesi */
+/** Sınırlı erişim / yedeklenmiyor uyarısı: ince kehribar kenarlı şerit */
+@Composable
+private fun WarningStrip(text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        style = MakaraType.Label,
+        color = Makara.Cream,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp)
+            .clip(MakaraShape.Default)
+            .border(1.dp, Makara.Amber, MakaraShape.Default)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+    )
+}
+
+/** Klasör kutusu: basılı tutunca "Klasörü gizle" menüsü */
+@Composable
+private fun FolderCanister(album: Album, mode: MediaMode, onClick: () -> Unit, onHide: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    Box {
+        Canister(album, mode, onClick = onClick, onLongClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            menuOpen = true
+        })
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(str(R.string.hide_folder)) },
+                leadingIcon = {
+                    Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = Makara.Cream)
+                },
+                onClick = {
+                    menuOpen = false
+                    onHide()
+                },
+            )
+        }
+    }
+}
+
 /** Medya seçici sekmesinin zemin ve yazı rengi */
 internal data class TabColors(val background: Color, val text: Color)
 
 internal fun mediaModeTabColors(selected: Boolean, palette: AppColors): TabColors =
     if (selected) TabColors(Makara.Amber, Makara.OnAmber) else TabColors(Color.Transparent, palette.textSecondary)
 
+/** Ana ekranda Videolar / Fotoğraflar / Tümü arasında hızlı geçiş sekmesi */
 @Composable
 private fun MediaModeSelector(current: MediaMode, onSelect: (MediaMode) -> Unit) {
     Row(
@@ -375,54 +454,10 @@ private fun MediaModeSelector(current: MediaMode, onSelect: (MediaMode) -> Unit)
                     entry.title,
                     color = colors.text,
                     fontSize = 13.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 )
             }
         }
-    }
-}
-
-/** Aylık özet kartının ana ekrandaki kısa girişi */
-@Composable
-private fun RecapBannerCard(recap: MonthlyRecap, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(appColors.card)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(painterResource(R.drawable.ic_recap), contentDescription = null, tint = FavoriteYellow, modifier = Modifier.size(24.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(str(R.string.month_recap, formatMonth(recap.month)), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            val details = buildList {
-                if (recap.totalViews > 0) add(plural(R.plurals.n_views, recap.totalViews, formatCount(recap.totalViews)))
-                recap.topAlbum?.let { add(str(R.string.top_folder, it.name)) }
-                if (recap.cleanedBytes > 0 && recap.topAlbum == null) add(str(R.string.size_cleaned, formatSize(recap.cleanedBytes)))
-            }.joinToString(" · ")
-            if (details.isNotEmpty()) {
-                Text(
-                    details,
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(str(R.string.see_recap), color = FavoriteYellow, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -504,7 +539,7 @@ private fun CleanupCard(
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(12.dp))
-                Text(str(R.string.review_duplicates), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(str(R.string.review_duplicates), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         // Akıllı öneriler kapalı başlar: tek satırda özet, dokununca kategoriler açılır
@@ -561,158 +596,11 @@ private fun CleanupCard(
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(str(R.string.review), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(str(R.string.review), color = InstaBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             }
         }
-    }
-}
-
-/** Geçmiş yıllarda bu hafta çekilmiş anı videosu: hikâye çerçevesi ve kaç yıl önce olduğu */
-@Composable
-private fun MemoryTile(video: VideoItem, yearsAgo: Int, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .width(92.dp)
-            .aspectRatio(9f / 16f)
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.5.dp, Makara.Amber, RoundedCornerShape(12.dp))
-            .background(Color(0xFF1C1C1E))
-            .clickable(onClick = onClick)
-    ) {
-        AsyncImage(
-            model = VideoThumb(video.uri, 320),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f)))
-        )
-        Text(
-            plural(R.plurals.n_years_ago, yearsAgo, yearsAgo),
-            color = FavoriteYellow,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.BottomStart).padding(7.dp),
-        )
-    }
-}
-
-/** Son izlenen video: dikey küçük resim, köşede kaç kez izlendiği */
-@Composable
-private fun RecentTile(video: VideoItem, views: Int, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .width(88.dp)
-            .aspectRatio(9f / 16f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF1C1C1E))
-            .clickable(onClick = onClick)
-    ) {
-        AsyncImage(
-            model = VideoThumb(video.uri, 320),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f)))
-        )
-        Row(
-            Modifier.align(Alignment.BottomStart).padding(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(painterResource(R.drawable.ic_eye), contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
-            Spacer(Modifier.width(3.dp))
-            Text(formatCount(views), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-/** Telefonun galerisindeki gibi: kare kapak, altında klasör adı ve içerik sayısı */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun AlbumTile(album: Album, mode: MediaMode = MediaMode.VIDEOS, onClick: () -> Unit, onHide: (() -> Unit)? = null) {
-    // Basılı tutunca klasörün menüsü (şimdilik: Klasörü gizle)
-    var menuOpen by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onHide?.let {
-                    {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        menuOpen = true
-                    }
-                },
-            )
-    ) {
-        if (onHide != null) {
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(str(R.string.hide_folder)) },
-                    leadingIcon = {
-                        Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = appColors.textPrimary)
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onHide()
-                    },
-                )
-            }
-        }
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(appColors.card)
-        ) {
-            AsyncImage(
-                model = VideoThumb(album.cover.uri, 360),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-            when (album.id) {
-                Album.LIKED -> TileBadge(R.drawable.ic_heart_filled, LikeRed)
-                Album.FAVORITES -> TileBadge(R.drawable.ic_star, FavoriteYellow)
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            album.name,
-            color = appColors.textPrimary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(mode.count(album.count), color = appColors.textSecondary, fontSize = 12.sp)
-    }
-}
-
-/** Kapağın köşesinde koyu daire içinde simge (kapak parlak olsa da görünsün) */
-@Composable
-private fun TileBadge(icon: Int, tint: Color) {
-    Box(
-        Modifier
-            .padding(6.dp)
-            .size(26.dp)
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.5f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(painterResource(icon), contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
     }
 }

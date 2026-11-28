@@ -54,3 +54,6 @@ val achievements: List<Achievement> = listOf(
     Achievement("clean_1gb", "🧽", R.string.ach_1gb_t, R.string.ach_1gb_d, GB, { it.cleanedBytes }, ::megabytes),
     Achievement("clean_10gb", "🚛", R.string.ach_10gb_t, R.string.ach_10gb_d, 10 * GB, { it.cleanedBytes }, ::megabytes),
 )
+
+/** Açılmış başarım sayısı; listeden çıkarılmış eski rozetlerin kayıtta kalan id'leri sayılmaz */
+fun unlockedCount(unlocked: Map<String, Long>): Int = achievements.count { it.id in unlocked }

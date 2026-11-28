@@ -1,5 +1,15 @@
 package com.celtikarda.galerireels.ui
 
+import androidx.compose.foundation.layout.asPaddingValues
+
+import androidx.compose.foundation.layout.navigationBars
+
+import androidx.compose.foundation.layout.WindowInsets
+
+import androidx.compose.foundation.layout.navigationBarsPadding
+
+import com.celtikarda.galerireels.Album
+
 import com.celtikarda.galerireels.R
 import com.celtikarda.galerireels.str
 import android.app.Activity
@@ -86,6 +96,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showAchievements by rememberSaveable { mutableStateOf(false) }
     var showRecap by rememberSaveable { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf(HomeTab.REEL) }
     val scope = rememberCoroutineScope()
     // Android'in klasör seçme penceresi; seçilen klasöre beğeni ve izlenmeler yazılır
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
@@ -146,6 +157,10 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     BackHandler(enabled = openAlbum == null && showSettings) { showSettings = false }
     BackHandler(enabled = openAlbum == null && showAchievements) { showAchievements = false }
     BackHandler(enabled = openAlbum == null && showRecap) { showRecap = false }
+    // Sevdiklerim / Sen sekmesindeyken geri tuşu önce Makara'ya döner
+    BackHandler(enabled = openAlbum == null && !showSettings && !showAchievements && !showRecap && tab != HomeTab.REEL) {
+        tab = HomeTab.REEL
+    }
 
     // Tek koyu tema: durum ve gezinme çubuğu simgeleri her zaman açık renk
     val view = LocalView.current
@@ -156,6 +171,7 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
         controller.isAppearanceLightNavigationBars = false
     }
 
+    val bottomSpace = BottomBarSpace + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     MakaraTheme {
         CompositionLocalProvider(LocalAppColors provides MakaraAppColors) {
             Box(Modifier.fillMaxSize().background(if (openAlbum != null) Color.Black else MakaraAppColors.background)) {
@@ -206,13 +222,20 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                     showRecap -> RecapScreen(vm = vm, onBack = { showRecap = false })
                     showAchievements -> AchievementsScreen(vm = vm, onBack = { showAchievements = false })
                     showSettings -> SettingsScreen(vm = vm, onPickFolder = pickFolder, onBack = { showSettings = false })
+                    tab == HomeTab.LOVED -> LovedScreen(vm = vm, contentBottomPadding = bottomSpace)
+                    tab == HomeTab.YOU -> YouScreen(
+                        vm = vm,
+                        onOpenRecap = { showRecap = true },
+                        onOpenAchievements = { showAchievements = true },
+                        contentBottomPadding = bottomSpace,
+                    )
                     else -> AlbumsScreen(
                         vm = vm,
                         partialAccess = access == MediaAccess.PARTIAL,
                         onSelectMore = requestAccess,
                         onOpenSettings = { showSettings = true },
-                        onOpenAchievements = { showAchievements = true },
                         onOpenRecap = { showRecap = true },
+                        contentBottomPadding = bottomSpace,
                     )
                 }
                 // Video izlerken ve ilk kurulum ekranlarında araya girmesin; ana ekrana gelince gösterilir
@@ -224,6 +247,26 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
                 }
                 // Kaydırılan sayfalarda (ana ekran, ayarlar, başarımlar, özet) durum çubuğunun arkası
                 if (vm.loaded && openAlbum == null) StatusBarScrim(Modifier.align(Alignment.TopCenter))
+
+                // Yüzen alt menü yalnızca ana ekran sekmelerinde; oynatıcı, ayarlar, özet ve başarımlarda gizli
+                val onTabs = onHome && access != MediaAccess.NONE && vm.totalVideoCount > 0 &&
+                    !showSettings && !showRecap && !showAchievements
+                if (onTabs) {
+                    FloatingBottomBar(
+                        current = tab,
+                        onSelect = { picked ->
+                            if (picked.opensPlayer()) {
+                                vm.albumTiles().firstOrNull { it.id == Album.ALL }?.let(vm::open)
+                            } else {
+                                tab = picked
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(bottom = 16.dp),
+                    )
+                }
 
                 // Yeni başarım açılınca üstte birkaç saniye kutlama
                 val unlocked = vm.newlyUnlocked
@@ -260,6 +303,9 @@ fun GaleriReelsApp(openVideoId: Long? = null, openCleanupIds: List<Long>? = null
     }
 }
 
+/** Sayfa sonunda bırakılan boşluk: menü (16 + 64 dp) + nefes payı, üstüne gezinme çubuğu */
+private val BottomBarSpace = 110.dp
+
 /** Videolar galeriden okunurken (çok videoda bir iki saniye sürebiliyor) */
 @Composable
 private fun LoadingScreen() {
@@ -270,7 +316,7 @@ private fun LoadingScreen() {
     ) {
         AppLogo(size = 96.dp)
         Spacer(Modifier.height(18.dp))
-        Text("Galeri Reels", color = appColors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Galeri Reels", color = appColors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         Text(str(R.string.preparing), color = appColors.textSecondary, fontSize = 15.sp)
         Spacer(Modifier.height(24.dp))
@@ -317,7 +363,7 @@ private fun MediaModeSetupScreen(videoCount: Int, photoCount: Int, onSelect: (Me
     ) {
         AppLogo(size = 72.dp)
         Spacer(Modifier.height(20.dp))
-        Text(str(R.string.what_browse), color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(str(R.string.what_browse), color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         Text(
             str(R.string.mode_explain),
@@ -356,7 +402,7 @@ private fun MessageScreen(
     ) {
         AppLogo(size = 72.dp)
         Spacer(Modifier.height(20.dp))
-        Text(title, color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(title, color = appColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         Text(body, color = appColors.textSecondary, fontSize = 16.sp, textAlign = TextAlign.Center)
         if (buttonText != null) {
@@ -379,7 +425,7 @@ fun UpdateDialog(update: AppUpdate, onDismiss: () -> Unit) {
         containerColor = appColors.card,
         titleContentColor = appColors.textPrimary,
         textContentColor = appColors.textSecondary,
-        title = { Text(str(R.string.new_version, update.version), fontWeight = FontWeight.Bold) },
+        title = { Text(str(R.string.new_version, update.version), fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                 Text(update.title, color = appColors.textPrimary, fontWeight = FontWeight.SemiBold)
@@ -404,7 +450,7 @@ fun UpdateDialog(update: AppUpdate, onDismiss: () -> Unit) {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl)))
                 }
             ) {
-                Text(str(R.string.download), color = InstaBlue, fontWeight = FontWeight.Bold)
+                Text(str(R.string.download), color = InstaBlue, fontWeight = FontWeight.SemiBold)
             }
         },
     )
